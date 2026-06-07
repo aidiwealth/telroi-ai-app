@@ -1,0 +1,31 @@
+# DigitalOcean App Platform spec for the Telroi dashboard.
+name: telroi-dashboard
+region: nyc
+services:
+  - name: web
+    instance_size_slug: basic-xs
+    instance_count: 1
+    http_port: 3000
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      repo: your-org/telroi-dashboard
+      branch: main
+      deploy_on_push: true
+    health_check:
+      http_path: /api/auth/me
+    envs:
+      - { key: NODE_ENV, value: production }
+      - { key: APP_BASE_URL, value: "${APP_URL}" }
+      - { key: ROOT_DOMAIN, value: telroi.ai }
+      - { key: DATABASE_URL, value: "${db.DATABASE_URL}", type: SECRET }
+      - { key: JWT_SECRET, type: SECRET }
+      - { key: ENCRYPTION_KEY, type: SECRET }
+      - { key: EMAIL_PROVIDER, value: resend }
+      - { key: RESEND_API_KEY, type: SECRET }
+      - { key: EMAIL_FROM, value: "Telroi <hello@telroi.ai>" }
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    production: false

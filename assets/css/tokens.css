@@ -1,0 +1,154 @@
+/* ============================================================
+   Telroi — Design tokens (ported verbatim from marketing site)
+   ============================================================ */
+
+:root {
+  --container: 1140px;
+
+  /* neutral ink */
+  --ink:        #0A0A0B;
+  --ink-soft:   #5b5b62;
+  --ink-mute:   #8b8b93;
+
+  /* paper / surfaces */
+  --paper:      #ffffff;
+  --paper-2:    #f7f6f3;
+  --paper-3:    #f1efea;
+  --rule:       #e7e5e0;
+  --rule-2:     #ebe9e4;
+
+  /* Telroi signal blue */
+  --signal:        #1a4b72;
+  --signal-2:      #123857;
+  --signal-soft:   #e7eef4;
+  --signal-bright: #4d83b3;
+
+  /* live / success accent */
+  --live:       #00d28a;
+
+  /* status */
+  --danger:     #c0392b;
+  --warn:       #b7791f;
+
+  /* typography */
+  --font-display: "Fraunces", "Times New Roman", serif;
+  --font-sans:    "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:    "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+
+  /* shape & motion */
+  --radius:       12px;
+  --radius-lg:    20px;
+  --radius-sm:    8px;
+  --shadow-card:  0 1px 0 rgba(10,10,11,0.03), 0 10px 30px -12px rgba(10,10,11,0.08);
+  --shadow-pop:   0 24px 60px -20px rgba(10,10,11,0.18), 0 1px 0 rgba(10,10,11,0.04);
+  --motion-ease:  cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* app shell */
+  --sidebar-w:    240px;
+  --topbar-h:     60px;
+}
+
+/* ============================================================
+   Dark theme ("Lights off"). Activated by the topbar toggle, which adds
+   `.dark` to <html>. Because the entire app reads these CSS variables, we only
+   need to remap the tokens here — no component changes — so this can't affect
+   any unrelated feature. Signal blue is brightened slightly for contrast on
+   dark surfaces; brand hues are preserved.
+   ============================================================ */
+html.dark {
+  /* ink becomes light on dark */
+  --ink:        #f3f3f5;
+  --ink-soft:   #b5b5be;
+  --ink-mute:   #8a8a94;
+
+  /* surfaces invert to deep neutrals */
+  --paper:      #1b1b21;
+  --paper-2:    #141417;
+  --paper-3:    #26262c;
+  /* rules lifted so borders are visible against the dark surfaces (the old
+     values sat too close to the background and disappeared) */
+  --rule:       #3a3a44;
+  --rule-2:     #45454f;
+
+  /* signal blue: brighter for legibility on dark */
+  --signal:        #5b9bd0;
+  --signal-2:      #7db0dd;
+  --signal-soft:   #1f3242;
+  --signal-bright: #7db0dd;
+
+  /* accents tuned for dark backgrounds */
+  --live:       #1fdd9a;
+  --danger:     #e0685c;
+  --warn:       #d9a441;
+
+  /* shadows need more presence on dark */
+  --shadow-card:  0 1px 0 rgba(0,0,0,0.4), 0 10px 30px -12px rgba(0,0,0,0.6);
+  --shadow-pop:   0 24px 60px -20px rgba(0,0,0,0.7), 0 1px 0 rgba(0,0,0,0.5);
+
+  color-scheme: dark;
+}
+
+/* Let the page background follow the theme (the body uses --paper-2). */
+html.dark body { background: var(--paper-2); }
+
+/* ============================================================
+   Dark-mode surface overrides. Much of the app (especially admin) hardcodes
+   `background:#fff` and a few literal inks/borders that predate theming, so
+   they don't follow the token remap above. Rather than touch every file, remap
+   the shared class patterns to theme-aware surfaces in one place. Applies on
+   BOTH client and admin since they share these class names.
+   ============================================================ */
+html.dark .shell-panel,
+html.dark .set-card,
+html.dark .ad-panel,
+html.dark .modal,
+html.dark .tb-ws-pop,
+html.dark .tb-menu-pop,
+html.dark .ad-policy-modal,
+html.dark .idle-modal,
+html.dark .em-preview-bar,
+html.dark .card,
+html.dark .panel,
+html.dark .pop,
+html.dark .menu-pop,
+html.dark .sheet,
+html.dark .box {
+  background: var(--paper) !important;
+  color: var(--ink);
+}
+
+/* Inputs / selects / textareas + segment buttons that hardcode white. */
+html.dark .ad-input,
+html.dark .ad-ctl,
+html.dark input,
+html.dark select,
+html.dark textarea,
+html.dark .pay-mode-btn,
+html.dark .input,
+html.dark .field input,
+html.dark .fin-seg button {
+  background: var(--paper-3) !important;
+  color: var(--ink);
+  border-color: var(--rule);
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder { color: var(--ink-mute); }
+
+/* The email PREVIEW iframe shows a real (light) email — keep its frame white
+   intentionally; only the surrounding bar follows the theme. */
+html.dark .em-frame { background: #fff !important; }
+
+/* Admin topbar + any explicitly light strips. */
+html.dark .admin-topbar { background: var(--paper); border-color: var(--rule); }
+
+/* Tables that zebra/hover with near-white tints. */
+html.dark table tbody tr:hover { background: var(--paper-3); }
+html.dark thead th { color: var(--ink-soft); border-color: var(--rule); }
+
+/* Logo: the marks are dark ink on transparent, which vanishes on dark.
+   Invert + brightness flips a dark logo to light without needing a 2nd asset. */
+html.dark .sb-brand img,
+html.dark .al-logo,
+html.dark .signin-logo,
+html.dark .brand-logo img,
+html.dark .tb-logo img { filter: brightness(0) invert(1); }

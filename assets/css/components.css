@@ -1,0 +1,270 @@
+/* ============================================================
+   Telroi — Component primitives (dashboard)
+   Buttons & kickers match the marketing site; the rest are
+   dashboard UI built from the same tokens.
+   ============================================================ */
+
+/* ============ Buttons ============ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s var(--motion-ease), border-color 0.18s var(--motion-ease), transform 0.18s var(--motion-ease), opacity 0.18s;
+  white-space: nowrap;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn .arrow { transition: transform 0.18s var(--motion-ease); }
+.btn:hover .arrow { transform: translateX(3px); }
+.btn-block { width: 100%; }
+.btn-sm { padding: 8px 14px; font-size: 13px; }
+
+.btn-dark   { background: var(--ink); color: #fff; }
+.btn-dark:hover { background: #25252b; }
+.btn-signal { background: var(--signal); color: #fff; }
+.btn-signal:hover { background: var(--signal-2); }
+.btn-ghost  { background: transparent; color: var(--ink); border: 1px solid var(--rule); }
+.btn-ghost:hover { background: var(--paper-2); border-color: var(--ink); }
+.btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--rule); }
+.btn-danger:hover { background: rgba(192,57,43,0.06); border-color: var(--danger); }
+
+/* ============ Kicker / section head ============ */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--signal);
+  margin-bottom: 14px;
+}
+
+/* ============ Cards & surfaces ============ */
+.card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+.card-pad { padding: 24px; }
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.card-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: -0.015em;
+}
+
+/* ============ Form fields ============ */
+.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+.field label {
+  font-size: 13px; font-weight: 500; color: var(--ink);
+}
+.field .hint { font-size: 12.5px; color: var(--ink-soft); }
+.input, .select, .textarea {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font-size: 14.5px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+}
+.input:focus, .select:focus, .textarea:focus {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-soft);
+}
+.textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
+.input.is-error { border-color: var(--danger); }
+.field-error { font-size: 12.5px; color: var(--danger); }
+
+/* Floating-label fields: the label sits faded INSIDE the box as placeholder
+   text, then shrinks and floats to the top border when the field is focused
+   or filled. Markup: <div class="field-float"><input placeholder=" "><label></div> */
+.field-float { position: relative; margin-bottom: 18px; }
+.field-float .input { padding: 18px 14px 6px; height: 54px; }
+.field-float label {
+  position: absolute; left: 14px; top: 16px;
+  font-size: 14.5px; color: var(--ink-mute);
+  pointer-events: none; transition: all 0.15s var(--motion-ease);
+  background: transparent;
+}
+/* float up when focused or when the input has content (placeholder shown = empty) */
+.field-float .input:focus + label,
+.field-float .input:not(:placeholder-shown) + label {
+  top: 7px; font-size: 11px; color: var(--ink-soft); letter-spacing: 0.01em;
+}
+.field-float .input:focus + label { color: var(--signal); }
+.field-float.is-error .input { border-color: var(--danger); }
+.field-float .field-error { margin-top: 6px; display: block; }
+
+/* ============ Tables ============ */
+/* Mercury/Column-style data tables: dense, calm, hairline dividers,
+   low-contrast headers, tabular figures, right-aligned amounts. */
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th {
+  text-align: left;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-mute);
+  font-weight: 400;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.table td {
+  padding: 15px 16px;
+  border-bottom: 1px solid var(--rule-2);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+.table tbody tr { transition: background 0.1s; cursor: default; }
+.table tbody tr:hover { background: var(--paper-2); }
+.table tbody tr.clickable { cursor: pointer; }
+.table tbody tr:last-child td { border-bottom: none; }
+/* numeric / amount columns right-align and use tabular figures */
+.table .num, .table .amount { text-align: right; font-variant-numeric: tabular-nums; }
+.table th.num, .table th.amount { text-align: right; }
+
+/* ============ Money formatting (superscript cents) ============ */
+.money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.money .cents { font-size: 0.72em; vertical-align: 0.32em; margin-left: 0.5px; }
+.money.pos { color: #0a8a5c; }   /* money in  */
+.money.neg { color: var(--ink); } /* money out */
+.money.muted { color: var(--ink-mute); }
+
+/* ============ Transfer / status timeline (Column-style) ============ */
+.timeline { display: flex; flex-direction: column; }
+.timeline-step { display: flex; gap: 14px; padding-bottom: 22px; position: relative; }
+.timeline-step:not(:last-child)::before {
+  content: ''; position: absolute; left: 9px; top: 20px; bottom: -4px; width: 1.5px; background: var(--rule);
+}
+.timeline-step.done:not(:last-child)::before { background: var(--live); }
+.timeline-dot {
+  width: 19px; height: 19px; border-radius: 50%; flex-shrink: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--rule); background: var(--paper); color: var(--ink-mute); font-size: 10px;
+}
+.timeline-step.done .timeline-dot { border-color: var(--live); color: #0a8a5c; }
+.timeline-step.current .timeline-dot { border-color: var(--signal); color: var(--signal); }
+.timeline-label { font-size: 14px; font-weight: 500; line-height: 1.3; }
+.timeline-time { font-size: 12.5px; color: var(--ink-mute); margin-top: 2px; }
+
+/* ============ Chips & badges ============ */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--rule);
+  background: var(--paper-2);
+  color: var(--ink-soft);
+}
+.chip--in    { color: var(--signal); border-color: rgba(26,75,114,0.25); background: var(--signal-soft); }
+.chip--out   { color: var(--ink); }
+.chip--missed{ color: var(--danger); border-color: rgba(192,57,43,0.25); background: rgba(192,57,43,0.06); }
+.chip--ok    { color: #0a8a5c; border-color: rgba(0,210,138,0.35); background: rgba(0,210,138,0.1); }
+.chip--bad   { color: var(--danger); border-color: rgba(192,57,43,0.3); background: rgba(192,57,43,0.08); }
+
+.live-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 10px;
+  background: rgba(0, 210, 138, 0.12);
+  border: 1px solid rgba(0, 210, 138, 0.35);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #0a8a5c;
+}
+.live-chip .pulse {
+  width: 6px; height: 6px; background: var(--live); border-radius: 999px;
+  animation: livepulse 1.5s ease-in-out infinite;
+}
+.live-chip.sandbox {
+  background: rgba(183, 121, 31, 0.1);
+  border-color: rgba(183, 121, 31, 0.35);
+  color: var(--warn);
+}
+.live-chip.sandbox .pulse { background: var(--warn); }
+@keyframes livepulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(1.3); }
+}
+
+/* ============ Page header (inside app shell) ============ */
+.page-head { margin-bottom: 26px; }
+.page-title {
+  font-family: var(--font-sans);
+  font-size: clamp(22px, 2.4vw, 27px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.page-sub { font-size: 14px; color: var(--ink-soft); max-width: 620px; }
+
+/* ============ Empty / loading states ============ */
+.empty {
+  text-align: center;
+  padding: 60px 24px;
+  color: var(--ink-soft);
+}
+.empty h3 { font-family: var(--font-display); font-size: 20px; color: var(--ink); margin-bottom: 8px; }
+.skeleton {
+  background: linear-gradient(90deg, var(--paper-2) 25%, var(--paper-3) 50%, var(--paper-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s infinite;
+  border-radius: var(--radius-sm);
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ============ Stat / money cards (Mercury-style) ============ */
+.stat {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+}
+.stat-label {
+  font-family: var(--font-sans);
+  font-size: 13px; letter-spacing: 0; text-transform: none;
+  color: var(--ink-soft); margin-bottom: 10px;
+}
+.stat-value {
+  font-family: var(--font-sans);
+  font-size: 30px; line-height: 1; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; font-weight: 500;
+}
+.stat-meta { font-size: 12.5px; color: var(--ink-soft); margin-top: 8px; }
+/* divider + footer variant for money-in / money-out cards */
+.stat-divider { border-top: 1px solid var(--rule-2); margin: 16px -20px 0; padding: 14px 20px 0; }
+
+/* ============ Toast ============ */
+.toast-stack {
+  position: fixed; bottom: 24px; right: 24px; z-index: 500;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.toast {
+  background: var(--ink); color: #fff;
+  padding: 12px 16px; border-radius: var(--radius);
+  font-size: 13.5px; box-shadow: var(--shadow-pop);
+  max-width: 340px;
+}
+.toast--err { background: var(--danger); }
+.toast--ok  { background: #0a8a5c; }

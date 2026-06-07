@@ -1,0 +1,134 @@
+// server/utils/call-router.ts
+// Routes an outbound call to the correct carrier based on the FROM number's
+// provisioned provider. The number already exists on the carrier's side (admin
+// provisioned it on Telroi's MASTER account), so we just pass it through.
+//
+// Routes, each with its own MASTER credentials held by Telroi (the platform) —
+// never per-tenant:
+//   'telroi'   -> Telroi's own customized Digidite PBX (its subdomain + key)
+//   'twilio'   -> Twilio master account
+//   'telnyx'   -> Telnyx master account
+//   'sotel'    -> Sotel direct SIP trunk (Nigeria)
+//   'asterisk' -> Core Asterisk SIP trunk + ARI (global)
+//   'ruach'    -> Ruach SIP trunk via sip.ruach.ng (Nigeria)
+import { and, eq } from 'drizzle-orm';
+import { useDb, schema } from '../db';
+import { apiError } from './api';
+import { masterCarrierCreds } from './platform';
+import { TelroiClient } from './telroi/client';
+import { twilio, telnyx } from './providers';
+
+export interface PlaceCallArgs {
+  tenantId: string;
+  fromTelnum: string;
+  to: string;
+  user?: string;
+  group?: string;
+}
+
+async function providerForNumber(tenantId: string, telnum: string): Promise<string | null> {
+  const db = useDb();
+  // Prefer a subscription the tenant holds; fall back to the inventory record
+  // (admin support numbers may be provisioned in inventory without a subscription).
+  const [sub] = await db.select().from(schema.numberSubscriptions)
+    .where(and(eq(schema.numberSubscriptions.telnum, telnum), eq(schema.numberSubscriptions.tenantId, tenantId)))
+    .limit(1);
+  if (sub?.provider) return sub.provider;
+  const [inv] = await db.select().from(schema.numberInventory)
+    .where(eq(schema.numberInventory.telnum, telnum)).limit(1);
+  return inv?.provider || null;
+}
+
+export async function placeCall(args: PlaceCallArgs) {
+  const provider = await providerForNumber(args.tenantId, args.fromTelnum);
+  if (!provider) throw apiError('not_owned', 'That number is not on your account', 400);
+
+  const master = await masterCarrierCreds();
+  if (!master) throw apiError('not_configured', 'No master carrier credentials configured', 503);
+  const base = useRuntimeConfig().public.appBaseUrl;
+
+  switch (provider) {
+    case 'telroi': {
+      // Telroi's OWN Digitide PBX (master subdomain + key) — its own route.
+      if (!master.telroiPbx) throw apiError('no_carrier', 'Telroi PBX is not configured', 503);
+      const client = new TelroiClient({ domain: master.telroiPbx.domain, apiKey: master.telroiPbx.apiKey });
+      return await client.makeCall({ phone: args.to, user: args.user, group: args.group, clid: args.fromTelnum });
+    }
+    case 'twilio': {
+      if (!master.twilio) throw apiError('no_carrier', 'Twilio master account is not configured', 503);
+      return await twilio.makeCall({ ...master.twilio, fromNumber: args.fromTelnum }, args.to, `${base}/api/webhooks/twilio/voice`);
+    }
+    case 'telnyx': {
+      if (!master.telnyx) throw apiError('no_carrier', 'Telnyx master account is not configured', 503);
+      return await telnyx.makeCall({ ...master.telnyx, fromNumber: args.fromTelnum }, args.to);
+    }
+    case 'sotel': {
+      // Sotel is a direct, IP-authenticated SIP trunk. Origination runs on the
+      // live media gateway peered with Sotel; here we build the dial intent
+      // (gateway/transport/caller-id) the gateway executes. Same control-plane
+      // pattern as the other carriers — actual audio bridges on live infra.
+      if (!master.sotel || !master.sotel.sipGateway) throw apiError('no_carrier', 'Sotel SIP trunk is not configured', 503);
+      return {
+        provider: 'sotel',
+        status: 'originating',
+        dial: {
+          to: args.to,
+          from: args.fromTelnum,
+          sipGateway: master.sotel.sipGateway,
+          sipPort: master.sotel.sipPort || 5060,
+          transport: master.sotel.transport || 'udp',
+          sipDomain: master.sotel.sipDomain || master.sotel.sipGateway,
+          authUser: master.sotel.authUser || '',
+          authPass: master.sotel.authPass || ''
+        }
+      };
+    }
+    case 'asterisk': {
+      // Core Asterisk: global, IP-authenticated SIP trunk on a separate server,
+      // with an optional AMI/ARI REST API. Origination runs on the live Asterisk
+      // server; here we build the dial intent it executes. Control-plane only —
+      // actual audio bridges on live infra.
+      if (!(master as any).asterisk || !(master as any).asterisk.sipGateway) throw apiError('no_carrier', 'Asterisk SIP trunk is not configured', 503);
+      const a = (master as any).asterisk;
+      return {
+        provider: 'asterisk',
+        status: 'originating',
+        dial: {
+          to: args.to,
+          from: args.fromTelnum,
+          sipGateway: a.sipGateway,
+          sipPort: a.sipPort || 5060,
+          transport: a.transport || 'udp',
+          sipDomain: a.sipDomain || a.sipGateway,
+          authUser: a.authUser || '',
+          authPass: a.authPass || '',
+          // API origination details (ARI) when present; the bridge may use these
+          // instead of raw SIP signaling.
+          apiBaseUrl: a.apiBaseUrl || '',
+          ariAppName: a.ariAppName || ''
+        }
+      };
+    }
+    case 'ruach': {
+      // Ruach: Nigeria-only SIP trunk via sip.ruach.ng, account+password login,
+      // IP-whitelisted. Origination runs on the live media gateway peered with
+      // Ruach; here we build the dial intent. Control-plane only.
+      if (!(master as any).ruach || !(master as any).ruach.sipAccount) throw apiError('no_carrier', 'Ruach SIP trunk is not configured', 503);
+      const r = (master as any).ruach;
+      return {
+        provider: 'ruach',
+        status: 'originating',
+        dial: {
+          to: args.to,
+          from: args.fromTelnum,
+          sipDomain: r.sipDomain || 'sip.ruach.ng',
+          sipAccount: r.sipAccount,
+          authUser: r.sipAccount,
+          authPass: r.sipPassword || ''
+        }
+      };
+    }
+    default:
+      throw apiError('unsupported', `Unknown provider ${provider}`, 400);
+  }
+}
