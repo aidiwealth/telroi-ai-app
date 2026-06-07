@@ -24,7 +24,7 @@ export async function logEvent(input: LogInput): Promise<void> {
       tenantId: input.tenantId ?? null,
       kind: input.kind,
       action: input.action,
-      summary: input.summary?.slice(0, 240) ?? null,
+      summary: input.summary == null ? null : String(input.summary).slice(0, 240),
       level: input.level ?? 'info',
       ref: input.ref ?? null,
       expiresAt
