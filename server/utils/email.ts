@@ -35,7 +35,20 @@ async function sendViaTermii(to: string, otp: string): Promise<boolean> {
   }
 }
 
+
+// Provider-agnostic email logging: logs EVERY send attempt (success and failure)
+// for all providers (Resend, Termii, console) and all email types.
 async function sendVia(args: SendArgs) {
+  try {
+    await sendViaImpl(args);
+    console.log("[email] sent", { to: args.to, subject: args.subject, otp: !!args.otp });
+  } catch (e: any) {
+    console.error("[email] send FAILED", { to: args.to, subject: args.subject, otp: !!args.otp, error: e?.message || e });
+    throw e;
+  }
+}
+
+async function sendViaImpl(args: SendArgs) {
   // Preview capture: when rendering a template for the admin UI, intercept the
   // payload instead of delivering it.
   if (__captureMode) { __capture = { subject: args.subject, html: args.html }; return; }
@@ -66,7 +79,9 @@ async function sendVia(args: SendArgs) {
   if (cfg.resendApiKey && cfg.emailProvider !== 'console') {
     const { Resend } = await import('resend');
     const resend = new Resend(cfg.resendApiKey);
-    await resend.emails.send({ from: cfg.emailFrom, to: args.to, subject: args.subject, html: args.html, text: args.text });
+    const __r = await resend.emails.send({ from: cfg.emailFrom, to: args.to, subject: args.subject, html: args.html, text: args.text });
+    if ((__r as any)?.error) console.error("[email/resend] rejected", { to: args.to, from: cfg.emailFrom, error: (__r as any).error });
+    else console.log("[email/resend] accepted", { to: args.to, id: (__r as any)?.data?.id });
     return;
   }
   // console fallback — visible in dev (or when no Resend key is set yet)
