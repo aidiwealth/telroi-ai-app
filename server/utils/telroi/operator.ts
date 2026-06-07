@@ -9,17 +9,21 @@ import { eq } from 'drizzle-orm';
 import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 
-export interface OperatorCreds { domain: string; apiKey: string }
+export interface OperatorCreds { domain: string; apiKey: string; username?: string; password?: string }
 
 export class OperatorClient {
   private base: string;
   private apiKey: string;
+  private username?: string;
+  private password?: string;
 
   constructor(creds: OperatorCreds) {
     const mock = useRuntimeConfig().telroiMockUrl;
     // In mock mode, reuse the local mock under a boss path.
     this.base = mock ? mock.replace('/crmapi/v1', '/sys/boss/v1') : `https://${creds.domain}/sys/boss/v1`;
     this.apiKey = creds.apiKey;
+    this.username = creds.username;
+    this.password = creds.password;
   }
 
   /** Build from the single platform_settings row. Throws if not configured. */
@@ -29,13 +33,27 @@ export class OperatorClient {
     if (!s?.operatorDomain || !s?.operatorApiKeyEnc) {
       throw createError({ statusCode: 409, message: 'Operator API not configured' });
     }
-    return new OperatorClient({ domain: s.operatorDomain, apiKey: decrypt(s.operatorApiKeyEnc) });
+    return new OperatorClient({
+      domain: s.operatorDomain,
+      apiKey: decrypt(s.operatorApiKeyEnc),
+      username: s.operatorUsername || undefined,
+      password: s.operatorPasswordEnc ? decrypt(s.operatorPasswordEnc) : undefined
+    });
   }
 
   private async req<T>(method: string, path: string, opts: { body?: any } = {}): Promise<T> {
+    const headers: Record<string, string> = {
+      'X-API-KEY': this.apiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json'
+    };
+    if (this.username && this.password) {
+      const basic = Buffer.from(`${this.username}:${this.password}`).toString('base64');
+      headers['Authorization'] = `Basic ${basic}`;
+    }
     const res = await fetch(this.base.replace(/\/$/, '') + path, {
       method,
-      headers: { 'X-API-KEY': this.apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers,
       body: opts.body ? JSON.stringify(opts.body) : undefined
     });
     if (!res.ok) {

@@ -18,6 +18,8 @@ const Body = z.object({
   // Single Digidite account (provisioning + default NG carrier)
   operatorDomain: z.string().min(3).optional(),
   operatorApiKey: z.string().min(8).optional(),
+  operatorUsername: z.string().optional(),
+  operatorPassword: z.string().optional(),
   clientDomainSuffix: z.string().optional(),
   // Optional separate Digidite carrier override
   telroiPbxDomain: z.string().optional(),
@@ -79,6 +81,8 @@ export default defineEventHandler(async (event) => {
   if (d.operatorDomain) patch.operatorDomain = d.operatorDomain;
   if (d.clientDomainSuffix) patch.clientDomainSuffix = d.clientDomainSuffix;
   if (d.operatorApiKey) patch.operatorApiKeyEnc = encrypt(d.operatorApiKey);
+  if (d.operatorUsername !== undefined) patch.operatorUsername = d.operatorUsername;
+  if (d.operatorPassword) patch.operatorPasswordEnc = encrypt(d.operatorPassword);
   if (d.telroiPbxDomain) patch.telroiPbxDomain = d.telroiPbxDomain;
   if (d.telroiPbxKey) patch.telroiPbxKeyEnc = encrypt(d.telroiPbxKey);
   if (d.twilioAccountSid && d.twilioAuthToken) patch.twilioCredsEnc = encrypt(JSON.stringify({ accountSid: d.twilioAccountSid, authToken: d.twilioAuthToken }));

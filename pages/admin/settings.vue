@@ -26,6 +26,13 @@
           <input v-model="clientDomainSuffix" class="ad-input mono" placeholder="digitaltide.io" />
           <span class="ad-hint">New clients become <em>subdomain</em>.{{ clientDomainSuffix }}</span>
         </div>
+        <div class="ad-field"><label>Digidite username</label>
+          <input v-model="operatorUsername" class="ad-input mono" placeholder="operator login" />
+          <span class="ad-hint">Operator account login (sent as Basic auth).</span>
+        </div>
+        <div class="ad-field"><label>Digidite password {{ pwSet ? '· set, leave blank to keep' : '' }}</label>
+          <input v-model="operatorPassword" class="ad-input mono" type="password" :placeholder="pwSet ? '••••••••••••' : 'operator password'" />
+        </div>
         <div class="ad-field set-span"><label>Digidite API key {{ keySet ? '· set, leave blank to keep' : '' }}</label>
           <input v-model="operatorApiKey" class="ad-input mono" type="password" :placeholder="keySet ? '••••••••••••' : 'boss / X-API-KEY'" />
         </div>
@@ -771,8 +778,11 @@ const emailStatus = computed(() => {
 
 const operatorDomain = ref('');
 const operatorApiKey = ref('');
+const operatorUsername = ref('');
+const operatorPassword = ref('');
 const clientDomainSuffix = ref('digitaltide.io');
 const keySet = ref(false);
+const pwSet = ref(false);
 const saving = ref(false);
 const saved = ref(false);
 
@@ -992,6 +1002,8 @@ onMounted(async () => {
     operatorDomain.value = s.operatorDomain;
     clientDomainSuffix.value = s.clientDomainSuffix;
     keySet.value = s.operatorKeySet;
+    operatorUsername.value = s.operatorUsername || '';
+    pwSet.value = !!s.operatorPasswordSet;
     cfg.value = s;
     hydrateSpeech(s);
     docsDomain.value = s.docsDomain || '';
@@ -1098,6 +1110,8 @@ async function save() {
   try {
     const body: any = { operatorDomain: operatorDomain.value, clientDomainSuffix: clientDomainSuffix.value };
     if (operatorApiKey.value) body.operatorApiKey = operatorApiKey.value;
+    body.operatorUsername = operatorUsername.value;
+    if (operatorPassword.value) body.operatorPassword = operatorPassword.value;
     await $fetch<any>('/api/admin/settings', { method: 'POST', body });
     keySet.value = true;
     operatorApiKey.value = '';

@@ -11,6 +11,8 @@ export default defineEventHandler(async (event) => {
     operatorDomain: s?.operatorDomain || '',
     clientDomainSuffix: s?.clientDomainSuffix || 'digitaltide.io',
     operatorKeySet: !!s?.operatorApiKeyEnc,
+    operatorUsername: s?.operatorUsername || '',
+    operatorPasswordSet: !!s?.operatorPasswordEnc,
     // Master carrier config state (booleans only — never return secrets)
     telroiPbxDomain: s?.telroiPbxDomain || '',
     telroiPbxKeySet: !!s?.telroiPbxKeyEnc,
