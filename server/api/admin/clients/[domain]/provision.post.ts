@@ -19,7 +19,10 @@ export default defineEventHandler(async (event) => {
   if (!t) throw apiError('not_found', 'Workspace not found', 404);
 
   const r = await provisionTenant(t.id);
-  if (!r.ok) throw apiError('provision_failed', provisionMessage(r.reason), 502);
+  if (!r.ok) {
+    console.error('[admin provision] failed for', t.slug, '->', JSON.stringify(r.reason));
+    throw apiError('provision_failed', provisionMessage(r.reason), 502);
+  }
   return { ok: true, domain: r.domain };
 });
 
