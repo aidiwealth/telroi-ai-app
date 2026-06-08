@@ -102,6 +102,26 @@ export class OperatorClient {
   listDialplans() { return this.req<Array<{ id: string; name: string }>>('GET', '/dialplans'); }
   listGateways() { return this.req<Array<{ id: string; name: string }>>('GET', '/gateways'); }
 
+  /* ---------------- Phone numbers (telnums) — §6 ----------------
+   * Inbound DID lifecycle. Under the Asterisk-hub model, DIDs are allocated on
+   * the platform's Digidite account and assigned to the platform's domain/trunk
+   * that bridges to our Asterisk; Telroi maps DID -> client as source of truth.
+   */
+  listTelnums() { return this.req<string[]>('GET', '/telnums'); }
+  getTelnum(telnum: string) { return this.req<any>('GET', `/telnums/${encodeURIComponent(telnum)}`); }
+  allocateTelnum(telnum: string) { return this.req<void>('PUT', `/telnums/${encodeURIComponent(telnum)}/allocate`); }
+  deallocateTelnum(telnum: string) { return this.req<void>('PUT', `/telnums/${encodeURIComponent(telnum)}/deallocate`); }
+  assignTelnumToDomain(domain: string, telnum: string) {
+    return this.req<void>('PUT', `/domains/${encodeURIComponent(domain)}/telnums/${encodeURIComponent(telnum)}/assign`);
+  }
+  listDomainTelnums(domain: string) { return this.req<string[]>('GET', `/domains/${encodeURIComponent(domain)}/telnums`); }
+  enableDomainTelnum(domain: string, telnum: string) {
+    return this.req<void>('PUT', `/domains/${encodeURIComponent(domain)}/telnums/${encodeURIComponent(telnum)}/enable`);
+  }
+  disableDomainTelnum(domain: string, telnum: string) {
+    return this.req<void>('PUT', `/domains/${encodeURIComponent(domain)}/telnums/${encodeURIComponent(telnum)}/disable`);
+  }
+
   /* ---------------- Employees — §4 ---------------- */
   listEmployees(domain: string) { return this.req<OperatorUser[]>('GET', `/domains/${encodeURIComponent(domain)}/users`); }
   createEmployee(domain: string, login: string, body: CreateEmployeeBody) {

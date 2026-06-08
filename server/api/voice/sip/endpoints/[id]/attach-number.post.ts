@@ -5,8 +5,9 @@ import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
-import { masterCarrierCreds } from '~/server/utils/platform';
+import { masterCarrierCreds, platformSettings } from '~/server/utils/platform';
 import { twilio, telnyx } from '~/server/utils/providers';
+import { OperatorClient } from '~/server/utils/telroi/operator';
 import { logEvent } from '~/server/utils/logs';
 
 const Body = z.object({ telnum: z.string().min(3) });
@@ -37,6 +38,24 @@ export default defineEventHandler(async (event) => {
     const res = await telnyx.attachNumberToConnection(creds.telnyx, ep.externalId, p.data.telnum);
     await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'sip.attach_number', summary: `Routed ${p.data.telnum} to Telnyx connection` });
     return { ok: true, ...res };
+  }
+  if (ep.provider === 'telroi') {
+    const settings = await platformSettings().catch(() => null);
+    const platformDomain = (settings as any)?.operatorDomain || (creds as any)?.telroiPbx?.domain;
+    if (!platformDomain) throw apiError('not_configured', 'Platform voice domain is not configured.', 503);
+    try {
+      const op = await OperatorClient.fromPlatform();
+      await op.allocateTelnum(p.data.telnum).catch(() => {});
+      await op.assignTelnumToDomain(platformDomain, p.data.telnum);
+      await op.enableDomainTelnum(platformDomain, p.data.telnum).catch(() => {});
+    } catch (e: any) {
+      throw apiError('operator_failed', e?.data?.error?.message || e?.message || 'Could not assign the number on the voice platform.', 502);
+    }
+    await db.update(schema.numberSubscriptions)
+      .set({ provider: 'telroi' })
+      .where(and(eq(schema.numberSubscriptions.telnum, p.data.telnum), eq(schema.numberSubscriptions.tenantId, s.tenantId)));
+    await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'sip.attach_number', summary: `Routed ${p.data.telnum} to voice platform for SIP delivery` });
+    return { ok: true, provider: 'telroi', telnum: p.data.telnum };
   }
   throw apiError('unsupported', `Routing a number over ${ep.provider} from here isn’t wired yet — assign it in your number settings.`, 400);
 });
