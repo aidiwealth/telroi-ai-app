@@ -139,9 +139,9 @@
             <button class="btn btn-ghost btn-sm" :disabled="savingSip" @click="saveSipVendors(true)">Clear (auto)</button>
           </div>
 
-          <div class="ad-adv-sip" style="margin-top:16px;border-top:1px solid var(--ad-border,#e5e5e5);padding-top:12px">
-            <button class="btn btn-ghost btn-sm" @click="showAdvSip = !showAdvSip">{{ showAdvSip ? '▾' : '▸' }} Advanced SIP (Digidite account)</button>
-            <div v-if="showAdvSip" style="margin-top:12px">
+          <div class="ad-adv-sip" style="margin-top:16px;border-top:1px solid var(--ad-border,#e5e5e5);padding-top:14px">
+            <h4 style="margin:0 0 4px;font-size:14px">Digidite SIP account (per client)</h4>
+            <div style="margin-top:4px">
               <p class="ad-none" style="margin-bottom:10px">Client-specific Digidite SIP account, set manually from the Digidite portal. Needed only when this client uses Telroi (Digidite) for calls.</p>
               <div class="ad-field"><label>Host / Domain / Registrar</label>
                 <input v-model="digSipHost" class="ad-input mono" placeholder="e.g. client.example.io" />
