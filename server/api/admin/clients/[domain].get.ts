@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
       voice.recentCount = (voice.recentCount || 0) + localRecent.length;
     }
   } catch { /* local merge best-effort */ }
-  return {
+  const __payload = {
     tenant: { id: tid, name: tenant.name, slug: tenant.slug, domain: tenant.telroiDomain || `${tenant.slug}.telroi.ai`, provisioned: !!tenant.telroiDomain, createdAt: tenant.createdAt,
       plan: tenant.plan, trialPlan: tenant.trialPlan, trialEndsAt: tenant.trialEndsAt, trialDays: tenant.trialDays,
       paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null, requiresProvisioning: requiresProvisioning(tenant.country) },
@@ -113,6 +113,10 @@ export default defineEventHandler(async (event) => {
     } : null,
     info, employees, voice
   };
+  try { JSON.stringify(__payload); } catch (se: any) {
+    console.error('[detail serialize check] payload not serializable ->', se?.message);
+  }
+  return __payload;
   } catch (e: any) {
     if (e?.statusCode === 404 || e?.statusCode === 403 || e?.statusCode === 401) throw e;
     console.error('[client detail] load failed for', getRouterParam(event, 'domain'), '->', e?.message, e?.stack);
