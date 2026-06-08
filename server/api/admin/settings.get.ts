@@ -13,6 +13,8 @@ export default defineEventHandler(async (event) => {
     operatorKeySet: !!s?.operatorApiKeyEnc,
     operatorUsername: s?.operatorUsername || '',
     operatorPasswordSet: !!s?.operatorPasswordEnc,
+    operatorDialplanId: s?.operatorDialplanId || '',
+    operatorRouteId: s?.operatorRouteId || '',
     // Master carrier config state (booleans only — never return secrets)
     telroiPbxDomain: s?.telroiPbxDomain || '',
     telroiPbxKeySet: !!s?.telroiPbxKeyEnc,

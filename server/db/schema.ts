@@ -24,6 +24,8 @@ export const platformSettings = pgTable('platform_settings', {
   operatorApiKeyEnc: text('operator_api_key_enc'),   // AES-256-GCM
   operatorUsername: text('operator_username'),        // Digidite operator login (Basic auth)
   operatorPasswordEnc: text('operator_password_enc'), // AES-256-GCM (Basic auth)
+  operatorDialplanId: text('operator_dialplan_id'),   // Digidite dialplan UUID (from portal)
+  operatorRouteId: text('operator_route_id'),         // Digidite route UUID (from portal)
   clientDomainSuffix: text('client_domain_suffix').default('digitaltide.io'),
   // ── Master carrier credentials (platform-level, held by Telroi, never per-tenant) ──
   // Digidite is the default NG carrier and is the SAME account as the operator

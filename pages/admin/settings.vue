@@ -36,6 +36,14 @@
         <div class="ad-field set-span"><label>Digidite API key {{ keySet ? '· set, leave blank to keep' : '' }}</label>
           <input v-model="operatorApiKey" class="ad-input mono" type="password" :placeholder="keySet ? '••••••••••••' : 'boss / X-API-KEY'" />
         </div>
+        <div class="ad-field"><label>Digidite route ID</label>
+          <input v-model="operatorRouteId" class="ad-input mono" placeholder="route UUID from Digidite portal" />
+          <span class="ad-hint">From your Digidite portal's route list. Leave blank to auto-pick the first available route.</span>
+        </div>
+        <div class="ad-field"><label>Digidite dialplan ID</label>
+          <input v-model="operatorDialplanId" class="ad-input mono" placeholder="dialplan UUID from Digidite portal" />
+          <span class="ad-hint">From your Digidite portal's dialplan list. Leave blank to auto-pick the first available dialplan.</span>
+        </div>
       </div>
       <div class="set-actions">
         <button class="btn btn-signal" :disabled="saving || !operatorDomain" @click="save">{{ saving ? 'Saving…' : 'Save Digidite account' }}</button>
@@ -781,6 +789,8 @@ const operatorApiKey = ref('');
 const operatorUsername = ref('');
 const operatorPassword = ref('');
 const clientDomainSuffix = ref('digitaltide.io');
+const operatorDialplanId = ref('');
+const operatorRouteId = ref('');
 const keySet = ref(false);
 const pwSet = ref(false);
 const saving = ref(false);
@@ -1004,6 +1014,8 @@ onMounted(async () => {
     keySet.value = s.operatorKeySet;
     operatorUsername.value = s.operatorUsername || '';
     pwSet.value = !!s.operatorPasswordSet;
+    operatorDialplanId.value = s.operatorDialplanId || '';
+    operatorRouteId.value = s.operatorRouteId || '';
     cfg.value = s;
     hydrateSpeech(s);
     docsDomain.value = s.docsDomain || '';
@@ -1112,6 +1124,8 @@ async function save() {
     if (operatorApiKey.value) body.operatorApiKey = operatorApiKey.value;
     body.operatorUsername = operatorUsername.value;
     if (operatorPassword.value) body.operatorPassword = operatorPassword.value;
+    body.operatorDialplanId = operatorDialplanId.value;
+    body.operatorRouteId = operatorRouteId.value;
     await $fetch<any>('/api/admin/settings', { method: 'POST', body });
     keySet.value = true;
     operatorApiKey.value = '';
