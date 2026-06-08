@@ -5,6 +5,7 @@ import { inArray, sql, desc, ilike, or, and, eq, count } from 'drizzle-orm';
 import { requirePlatformAdmin } from '~/server/utils/platform';
 import { OperatorClient } from '~/server/utils/telroi/operator';
 import { useDb, schema } from '~/server/db';
+import { requiresProvisioning } from '~/server/utils/regions';
 
 export default defineEventHandler(async (event) => {
   await requirePlatformAdmin(event);
@@ -72,6 +73,7 @@ export default defineEventHandler(async (event) => {
       domain: t.telroiDomain || `${t.slug}.telroi.ai`,
       createdAt: t.createdAt,
       provisioned: t.telroiDomain ? provisioned.has(t.telroiDomain) : false,
+      requiresProvisioning: requiresProvisioning(t.country),
       plan: effectivePlan, basePlan: t.plan, onTrial: trialActive,
       sandbox: t.sandboxMode,
       walletMinor: wallet?.balanceMinor ?? 0, walletCurrency: wallet?.currency ?? 'USD',

@@ -44,7 +44,7 @@
             <td class="ad-c ad-dim mono">{{ c.counts.numbers || '–' }}</td>
             <td class="ad-c ad-dim mono">{{ c.walletCurrency === 'NGN' ? '₦' : '$' }}{{ (c.walletMinor / 100).toFixed(2) }}</td>
             <td>
-              <span v-if="c.provisioned" class="ad-status-pill ok">Live</span>
+              <span v-if="c.provisioned || !c.requiresProvisioning" class="ad-status-pill ok">Live</span>
               <span v-else class="ad-status-pill pending">Activating</span>
             </td>
             <td class="ad-row-actions">

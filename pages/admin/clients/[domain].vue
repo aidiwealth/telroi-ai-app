@@ -9,7 +9,8 @@
         <div>
           <h1 class="ad-title">{{ data.tenant.name }}</h1>
           <p class="ad-sub mono">{{ data.tenant.domain }}
-            <span v-if="!data.tenant.provisioned" class="ad-tag warn">not provisioned</span>
+            <span v-if="!data.tenant.requiresProvisioning" class="ad-tag on">Live</span>
+            <span v-else-if="!data.tenant.provisioned" class="ad-tag warn">not provisioned</span>
             <span v-else class="ad-tag on">live on Digitide</span>
             <span class="ad-tag" :class="data.tenant.sandbox ? 'sandbox' : 'mode-live'">{{ data.tenant.sandbox ? 'Sandbox mode' : 'Live mode' }}</span>
           </p>
@@ -139,7 +140,7 @@
         </section>
       </div>
 
-      <div v-if="!data.tenant.provisioned" class="ad-provision-note">
+      <div v-if="data.tenant.requiresProvisioning && !data.tenant.provisioned" class="ad-provision-note">
         <p>This workspace isn't provisioned on the Digidite PBX yet. Provisioning normally happens automatically at signup — if it didn't, the Operator/Digidite API may not have been configured at the time.</p>
         <button class="btn btn-signal btn-sm" :disabled="provisioning" @click="provisionNow">{{ provisioning ? 'Provisioning…' : 'Provision now' }}</button>
       </div>

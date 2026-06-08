@@ -7,6 +7,7 @@ import { OperatorClient } from '~/server/utils/telroi/operator';
 import { TelroiClient } from '~/server/utils/telroi/client';
 import { useDb, schema } from '~/server/db';
 import { apiError } from '~/server/utils/api';
+import { requiresProvisioning } from '~/server/utils/regions';
 
 export default defineEventHandler(async (event) => {
   await requirePlatformAdmin(event);
@@ -89,7 +90,7 @@ export default defineEventHandler(async (event) => {
   return {
     tenant: { id: tid, name: tenant.name, slug: tenant.slug, domain: tenant.telroiDomain || `${tenant.slug}.telroi.ai`, provisioned: !!tenant.telroiDomain, createdAt: tenant.createdAt,
       plan: tenant.plan, trialPlan: tenant.trialPlan, trialEndsAt: tenant.trialEndsAt, trialDays: tenant.trialDays,
-      paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null },
+      paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null, requiresProvisioning: requiresProvisioning(tenant.country) },
     wallet: wallet ? { balanceMinor: wallet.balanceMinor, currency: wallet.currency, plan: wallet.plan } : null,
     numbers: subs.map((n) => ({ id: n.id, telnum: n.telnum, region: n.region, provider: n.provider, channels: n.channels, status: n.status, departmentId: n.departmentId })),
     vans: vans.map((v) => ({ id: v.id, name: v.name, telnum: v.telnum, status: v.status, provider: v.provider, escalateTo: v.escalateTo })),

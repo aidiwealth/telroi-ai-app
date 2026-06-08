@@ -29,6 +29,23 @@ export function regionLabel(region: string): string {
   return ({ NG: 'Nigeria', US: 'United States', CA: 'Canada', GB: 'United Kingdom' } as Record<string, string>)[region] || region;
 }
 
+// Map a stored client country (free-text label) to a routing region code.
+export function countryToRegion(country?: string | null): string {
+  switch ((country || '').trim()) {
+    case 'Nigeria': return 'NG';
+    case 'United States': return 'US';
+    case 'Canada': return 'CA';
+    case 'United Kingdom': return 'GB';
+    default: return 'NG';
+  }
+}
+
+// A client needs Digidite (telroi) provisioning only if its region routes
+// through the 'telroi' provider. Country-derived but not hardcoded to Nigeria.
+export function requiresProvisioning(country?: string | null): boolean {
+  return providersForRegion(countryToRegion(country)).includes('telroi');
+}
+
 // Validate that a chosen provider is allowed for a number's region.
 export function providerAllowed(region: string, provider: string): boolean {
   return providersForRegion(region).includes(provider);
