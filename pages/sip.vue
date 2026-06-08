@@ -32,9 +32,9 @@
               <tr v-for="e in data.endpoints" :key="e.id">
                 <td class="mono">{{ e.sipServer || '—' }}<button v-if="e.sipServer" class="sip-copy" @click="copy(e.sipServer)">Copy</button></td>
                 <td class="mono">{{ e.sipUsername || '—' }}<button v-if="e.sipUsername" class="sip-copy" @click="copy(e.sipUsername)">Copy</button></td>
-                <td><span v-if="e.hasPassword" class="sip-secret-tag">set at creation</span><span v-else class="muted">—</span></td>
+                <td class="mono"><template v-if="e.password"><span v-if="shown[e.id]">{{ e.password }}</span><span v-else>••••••••</span><button class="sip-copy" @click="copy(e.password)">Copy</button><button class="sip-copy" @click="shown[e.id] = !shown[e.id]">{{ shown[e.id] ? 'Hide' : 'Show' }}</button></template><span v-else-if="e.hasPassword" class="sip-secret-tag">set at creation</span><span v-else class="muted">—</span></td>
                 <td class="row-actions">
-                  <button class="btn btn-ghost btn-sm" @click="openAttach(e)">Route a number</button>
+                  <button v-if="e.canRouteNumber" class="btn btn-ghost btn-sm" @click="openAttach(e)">Route a number</button>
                   <button class="btn btn-danger btn-sm" @click="remove(e)">Remove</button>
                 </td>
               </tr>
@@ -64,8 +64,14 @@
       <div class="modal card">
         <div class="card-head"><span class="card-title">Route a number over SIP</span><button class="modal-x" @click="attachEp = null">✕</button></div>
         <div class="card-pad">
-          <p class="sip-setup-note">Inbound calls to this number will be delivered over your SIP endpoint, then flow through your AI routing. Only do this for a number you're ready to move.</p>
-          <div class="field-float"><input v-model="attachNum" class="input mono" placeholder=" " id="att-num" /><label for="att-num">Phone number (E.164, e.g. +14155550123)</label></div>
+          <p class="sip-setup-note">Inbound calls to the selected number will be delivered over your SIP endpoint, then flow through your AI routing. Pick one of your numbers below.</p>
+          <div v-if="myNumbers.length" class="field-float">
+            <select v-model="attachNum" class="input mono" id="att-num">
+              <option value="">Select a number…</option>
+              <option v-for="n in myNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }}</option>
+            </select>
+          </div>
+          <p v-else class="sip-setup-note muted">You don't have any numbers yet. Numbers you purchase will appear here.</p>
           <button class="btn btn-signal btn-block" :disabled="attaching || !attachNum" @click="attachNumber">{{ attaching ? 'Routing…' : 'Route this number' }}</button>
         </div>
       </div>
@@ -86,6 +92,8 @@ const secret = ref<string | null>(null);
 const attachEp = ref<any>(null);
 const attachNum = ref('');
 const attaching = ref(false);
+const shown = ref<Record<string, boolean>>({});
+const myNumbers = ref<any[]>([]);
 
 async function load() {
   pending.value = true;
@@ -111,7 +119,11 @@ async function remove(e: any) {
   catch (e2: any) { toast.err(e2.message); }
 }
 
-function openAttach(e: any) { attachEp.value = e; attachNum.value = ''; }
+async function openAttach(e: any) {
+  attachEp.value = e; attachNum.value = '';
+  try { myNumbers.value = await api.get('/api/numbers/subscriptions') || []; }
+  catch { myNumbers.value = []; }
+}
 async function attachNumber() {
   attaching.value = true;
   try {

@@ -32,9 +32,11 @@ export default defineEventHandler(async (event) => {
   // device must reach (unavoidable for registration) but unbranded.
   const safeEndpoints = endpoints.map((e) => ({
     id: e.id,
-    sipServer: proxy || e.domain || null,   // masked host when proxy is set
+    sipServer: proxy || e.domain || null,
     sipUsername: e.sipUsername || null,
+    password: e.secretEnc ? (() => { try { return decrypt(e.secretEnc); } catch { return null; } })() : null,
     hasPassword: !!e.secretEnc,
+    canRouteNumber: ['twilio', 'telnyx'].includes(e.provider as string),
     createdAt: e.createdAt
   }));
 
@@ -42,7 +44,7 @@ export default defineEventHandler(async (event) => {
     try {
       const c = JSON.parse(decrypt(tenant.tenantDigiditeSipEnc));
       if (c.host || c.authId) {
-        safeEndpoints.push({ id: 'digidite-sip', sipServer: proxy || c.host || null, sipUsername: c.authId || null, hasPassword: !!c.password, createdAt: tenant.createdAt } as any);
+        safeEndpoints.push({ id: 'digidite-sip', sipServer: proxy || c.host || null, sipUsername: c.authId || null, password: c.password || null, hasPassword: !!c.password, canRouteNumber: false, createdAt: tenant.createdAt } as any);
       }
     } catch { /* */ }
   }
