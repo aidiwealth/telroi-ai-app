@@ -141,7 +141,8 @@
 
       <div v-if="!data.tenant.provisioned" class="ad-provision-note">
         <p>This workspace isn't provisioned on the Digidite PBX yet. Provisioning normally happens automatically at signup — if it didn't, the Operator/Digidite API may not have been configured at the time.</p>
-        <button class="btn btn-signal btn-sm" :disabled="provisioning" @click="provisionNow">{{ provisioning ? 'Provisioning…' : 'Provision now' }}</button>
+        <button v-if="(data.tenant.country || '') !== 'Nigeria'" class="btn btn-signal btn-sm" :disabled="provisioning" @click="provisionNow">{{ provisioning ? 'Provisioning…' : 'Provision now' }}</button>
+        <p v-else class="ad-hint">Runs on Digidite — provisions automatically at go-live. No manual carrier provisioning needed for this region.</p>
       </div>
 
       <!-- Tab: Teams & Roles -->
