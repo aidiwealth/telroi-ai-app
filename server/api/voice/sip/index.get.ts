@@ -7,17 +7,19 @@
 import { eq } from 'drizzle-orm';
 import { requireTenant } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
-import { availableSipVendors } from '~/server/utils/sip';
 import { platformSettings } from '~/server/utils/platform';
+import { decrypt } from '~/server/utils/crypto';
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   const db = useDb();
+  const [tenant] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
 
-  // Is SIP available for this client at all? (region ∩ platform creds ∩ admin
-  // override) — but we expose only the boolean, never the vendor list.
-  const { vendors } = await availableSipVendors(s.tenantId);
-  const available = vendors.length > 0;
+  // SIP availability is driven by the dedicated SIP vendor set by admin
+  // (separate from calling/routing vendors). null = no BYOD SIP.
+  const sipVendor = (tenant?.sipDeviceVendor as string | null) || null;
+  const available = !!sipVendor;
+  const selfServe = available && ['twilio', 'telnyx'].includes(sipVendor as string);
   // Self-serve provisioning only works for fully-automated carriers (twilio/telnyx).
   // Other vendors (telroi/Digidite, sotel, ruach, asterisk) are arranged by admin.
   const selfServe = available && ['twilio', 'telnyx'].includes(vendors[0].id);
@@ -39,8 +41,18 @@ export default defineEventHandler(async (event) => {
     createdAt: e.createdAt
   }));
 
+  if (sipVendor === 'telroi' && tenant?.tenantDigiditeSipEnc) {
+    try {
+      const c = JSON.parse(decrypt(tenant.tenantDigiditeSipEnc));
+      if (c.host || c.authId) {
+        safeEndpoints.push({ id: 'digidite-sip', sipServer: proxy || c.host || null, sipUsername: c.authId || null, hasPassword: !!c.password, createdAt: tenant.createdAt } as any);
+      }
+    } catch { /* */ }
+  }
+
   return {
     available,
+    selfServe,
     selfServe,
     proxyConfigured: !!proxy,
     endpoints: safeEndpoints
