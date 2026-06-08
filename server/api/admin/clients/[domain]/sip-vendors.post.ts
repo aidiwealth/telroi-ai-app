@@ -8,14 +8,17 @@ import { apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { logEvent } from '~/server/utils/logs';
 
-const Body = z.object({ vendors: z.array(z.enum(['twilio', 'telnyx', 'telroi', 'sotel', 'ruach', 'asterisk'])).nullable() });
+const Body = z.object({
+  vendors: z.array(z.enum(['twilio', 'telnyx', 'telroi', 'sotel', 'ruach', 'asterisk'])).nullable().optional(),
+  sipDeviceVendor: z.enum(['telroi', 'twilio', 'telnyx']).nullable().optional()
+});
 
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
   if (admin.role !== 'superadmin') throw apiError('forbidden', 'Superadmin required', 403);
   const domain = getRouterParam(event, 'domain')!;
   const p = Body.safeParse(await readBody(event));
-  if (!p.success) throw apiError('invalid', 'vendors must be an array or null');
+  if (!p.success) throw apiError('invalid', 'Invalid SIP vendor fields');
 
   const slug = domain.replace(/\.telroi\.ai$/, '').split('.')[0];
   const db = useDb();
@@ -23,7 +26,15 @@ export default defineEventHandler(async (event) => {
     .where(or(eq(schema.tenants.telroiDomain, domain), eq(schema.tenants.slug, slug))).limit(1);
   if (!tenant) throw apiError('not_found', 'Client not found', 404);
 
-  await db.update(schema.tenants).set({ sipVendorOverride: p.data.vendors }).where(eq(schema.tenants.id, tenant.id));
-  await logEvent({ tenantId: tenant.id, kind: 'system', action: 'admin.sip_vendors', summary: `${admin.email} set SIP vendors: ${p.data.vendors ? p.data.vendors.join(',') : 'auto'}` });
+  const patch: any = {};
+  if (p.data.vendors !== undefined) patch.sipVendorOverride = p.data.vendors;
+  if (p.data.sipDeviceVendor !== undefined) patch.sipDeviceVendor = p.data.sipDeviceVendor;
+  if (Object.keys(patch).length === 0) throw apiError('invalid', 'Nothing to update');
+  await db.update(schema.tenants).set(patch).where(eq(schema.tenants.id, tenant.id));
+  const summary = [
+    p.data.vendors !== undefined ? `calling vendors: ${p.data.vendors ? p.data.vendors.join(',') : 'auto'}` : null,
+    p.data.sipDeviceVendor !== undefined ? `SIP vendor: ${p.data.sipDeviceVendor || 'none'}` : null
+  ].filter(Boolean).join('; ');
+  await logEvent({ tenantId: tenant.id, kind: 'system', action: 'admin.sip_vendors', summary: `${admin.email} updated ${summary}` });
   return { ok: true };
 });

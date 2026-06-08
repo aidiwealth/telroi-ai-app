@@ -26,6 +26,8 @@ export default defineEventHandler(async (event) => {
     region, overridden,
     override: (tenant.sipVendorOverride as string[] | null) ?? null,
     effective: vendors.map((v) => v.id),
-    candidates: ALL.map((id) => ({ id, label: LABELS[id] || id, regionMatch: regionSet.has(id) }))
+    candidates: ALL.map((id) => ({ id, label: LABELS[id] || id, regionMatch: regionSet.has(id) })),
+    sipDeviceVendor: (tenant.sipDeviceVendor as string | null) ?? null,
+    sipDeviceOptions: ['telroi', 'twilio', 'telnyx'].map((id) => ({ id, label: LABELS[id] || id }))
   };
 });

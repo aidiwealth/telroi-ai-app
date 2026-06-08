@@ -189,6 +189,10 @@ export const tenants = pgTable('tenants', {
   // Admin override for which SIP vendors this client may use. null = derive from
   // region automatically; otherwise a JSON array like ["twilio","telnyx"].
   sipVendorOverride: jsonb('sip_vendor_override').$type<string[] | null>(),
+  // Per-client dedicated-SIP vendor: which carrier issues this client's own SIP
+  // device credentials (telroi/twilio/telnyx). Separate from sipVendorOverride
+  // (the calling/routing allow-list). null = no BYOD SIP for this client.
+  sipDeviceVendor: text('sip_device_vendor'),
   // Per-client Digidite SIP account (set manually from the Digidite portal).
   // Encrypted JSON: {host, authId, password}. Client-specific.
   tenantDigiditeSipEnc: text('tenant_digidite_sip_enc'),
