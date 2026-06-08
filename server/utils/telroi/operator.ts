@@ -126,7 +126,7 @@ export class OperatorClient {
 }
 
 export async function resolveDomainDefaults(op: OperatorClient, settings: any): Promise<{
-  extDigits: number; dialplan: string; route: string[]; services: string[]; allowedCallDirections: string[];
+  extDigits: number; dialplan: string; route: string; services: string[]; allowedCallDirections: string[];
 }> {
   let dialplan: string | undefined = settings?.operatorDialplanId || undefined;
   let route: string | undefined = settings?.operatorRouteId || undefined;
@@ -136,7 +136,7 @@ export async function resolveDomainDefaults(op: OperatorClient, settings: any): 
   if (!route) throw createError({ statusCode: 422, message: 'No route available on the operator account.' });
   const extDigits = Number(settings?.operatorExtDigits) || 3;
   const services: string[] = Array.isArray(settings?.operatorServices) && settings.operatorServices.length ? settings.operatorServices : ['autocaller'];
-  return { extDigits, dialplan, route: [route], services, allowedCallDirections: ['LOCAL'] };
+  return { extDigits, dialplan, route, services, allowedCallDirections: ['LOCAL'] };
 }
 
 /* ---------------- Types ---------------- */

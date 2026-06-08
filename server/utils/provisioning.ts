@@ -43,8 +43,9 @@ export async function provisionTenant(tenantId: string): Promise<ProvisionResult
     const defaults = await resolveDomainDefaults(op, settings);
     await op.createDomain(domain, {
       name: t.name,
-      language: 'en',
+      language: 'en-US',
       client: t.slug,
+      accountsLimit: 10,
       ownRegion: t.country || undefined,
       ...defaults
     });
