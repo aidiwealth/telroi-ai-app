@@ -10,6 +10,7 @@ import { apiError } from '~/server/utils/api';
 import { requiresProvisioning } from '~/server/utils/regions';
 
 export default defineEventHandler(async (event) => {
+  try {
   await requirePlatformAdmin(event);
   const domain = decodeURIComponent(getRouterParam(event, 'domain')!);
   const slug = domain.replace(/\.telroi\.ai$/, '').split('.')[0];
@@ -112,4 +113,9 @@ export default defineEventHandler(async (event) => {
     } : null,
     info, employees, voice
   };
+  } catch (e: any) {
+    if (e?.statusCode === 404 || e?.statusCode === 403 || e?.statusCode === 401) throw e;
+    console.error('[client detail] load failed for', getRouterParam(event, 'domain'), '->', e?.message, e?.stack);
+    throw e;
+  }
 });
