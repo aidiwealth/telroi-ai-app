@@ -97,6 +97,11 @@ export class OperatorClient {
   blockDomain(domain: string) { return this.req<void>('POST', `/domains/${encodeURIComponent(domain)}/frozen`); }
   unblockDomain(domain: string) { return this.req<void>('DELETE', `/domains/${encodeURIComponent(domain)}/frozen`); }
 
+  /* ---------------- Routes / Dialplans / Gateways — §7 ---------------- */
+  listRoutes() { return this.req<Array<{ id: string; name: string }>>('GET', '/routes'); }
+  listDialplans() { return this.req<Array<{ id: string; name: string }>>('GET', '/dialplans'); }
+  listGateways() { return this.req<Array<{ id: string; name: string }>>('GET', '/gateways'); }
+
   /* ---------------- Employees — §4 ---------------- */
   listEmployees(domain: string) { return this.req<OperatorUser[]>('GET', `/domains/${encodeURIComponent(domain)}/users`); }
   createEmployee(domain: string, login: string, body: CreateEmployeeBody) {
@@ -118,6 +123,20 @@ export class OperatorClient {
   userSession(domain: string, login: string) {
     return this.req<{ link: string }>('GET', `/domains/${encodeURIComponent(domain)}/users/${encodeURIComponent(login)}/session`);
   }
+}
+
+export async function resolveDomainDefaults(op: OperatorClient, settings: any): Promise<{
+  extDigits: number; dialplan: string; route: string[]; services: string[]; allowedCallDirections: string[];
+}> {
+  let dialplan: string | undefined = settings?.operatorDialplanId || undefined;
+  let route: string | undefined = settings?.operatorRouteId || undefined;
+  if (!dialplan) { const dps = await op.listDialplans().catch(() => []); dialplan = dps?.[0]?.id; }
+  if (!route) { const rs = await op.listRoutes().catch(() => []); route = rs?.[0]?.id; }
+  if (!dialplan) throw createError({ statusCode: 422, message: 'No dialplan available on the operator account.' });
+  if (!route) throw createError({ statusCode: 422, message: 'No route available on the operator account.' });
+  const extDigits = Number(settings?.operatorExtDigits) || 3;
+  const services: string[] = Array.isArray(settings?.operatorServices) && settings.operatorServices.length ? settings.operatorServices : ['autocaller'];
+  return { extDigits, dialplan, route: [route], services, allowedCallDirections: ['LOCAL'] };
 }
 
 /* ---------------- Types ---------------- */

@@ -10,7 +10,7 @@
 import { eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 import { encrypt } from './crypto';
-import { OperatorClient } from './telroi/operator';
+import { OperatorClient, resolveDomainDefaults } from './telroi/operator';
 import { platformSettings } from './platform';
 import { logEvent } from './logs';
 
@@ -40,11 +40,13 @@ export async function provisionTenant(tenantId: string): Promise<ProvisionResult
 
   try {
     const op = await OperatorClient.fromPlatform();
+    const defaults = await resolveDomainDefaults(op, settings);
     await op.createDomain(domain, {
       name: t.name,
       language: 'en',
       client: t.slug,
-      ownRegion: t.country || undefined
+      ownRegion: t.country || undefined,
+      ...defaults
     });
 
     // Digidite is one shared account (operator credential), so the tenant's CPBX

@@ -87,19 +87,28 @@ export default defineEventHandler(async (event) => {
   let provisionError: string | null = null;
   if (p.data.provisionNow) {
     try {
-      const { OperatorClient } = await import('~/server/utils/telroi/operator');
+      const { OperatorClient, resolveDomainDefaults } = await import('~/server/utils/telroi/operator');
       const op = await OperatorClient.fromPlatform();
-      await op.createDomain(fullDomain, {
-        name: fullDomain, accessURL: `https://${fullDomain}`,
-        client: p.data.client, language: p.data.language,
-        accountsLimit: p.data.accountsLimit, maxLines: p.data.maxLines, billingType: 'demo'
-      });
+      const defaults = await resolveDomainDefaults(op, settings);
+      try {
+        await op.createDomain(fullDomain, {
+          name: fullDomain, accessURL: `https://${fullDomain}`,
+          client: p.data.client, language: p.data.language,
+          accountsLimit: p.data.accountsLimit, maxLines: p.data.maxLines, billingType: 'demo',
+          ...defaults
+        });
+      } catch (e: any) {
+        const msg = e?.data?.error?.message || e?.message || '';
+        const exists = e?.statusCode === 409 || /exist/i.test(typeof msg === 'string' ? msg : JSON.stringify(msg));
+        if (!exists) throw e;
+      }
       await db.update(schema.tenants)
         .set({ telroiApiKeyEnc: settings?.operatorApiKeyEnc ?? null, provisionState: 'provisioned', wentLiveAt: new Date() })
         .where(eq(schema.tenants.id, tenant.id));
       provisioned = true;
     } catch (e: any) {
-      provisionError = e?.message || String(e);
+      const m = e?.data?.error?.message || e?.message || String(e);
+      provisionError = typeof m === 'string' ? m : JSON.stringify(m);
       console.error('[admin create] eager provisioning failed (client still created locally)', e);
     }
   }
