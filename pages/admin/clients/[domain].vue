@@ -130,12 +130,29 @@
         <section class="ad-panel">
           <h3 class="ad-panel-h">SIP vendors</h3>
           <p class="ad-none" style="margin-bottom:10px">Region default: <strong>{{ (sipVendors.region || '—') }}</strong>. {{ sipOverride === null ? 'Using automatic region-based vendors.' : 'Overridden for this client.' }}</p>
-          <label v-for="v in sipVendorChoices" :key="v" class="ad-sip-row">
-            <input type="checkbox" :value="v" v-model="sipChecked" /> {{ sipVendorLabel(v) }}
+          <label v-for="v in sipCandidates" :key="v.id" class="ad-sip-row">
+            <input type="checkbox" :value="v.id" v-model="sipChecked" /> {{ v.label }}
+            <span v-if="v.regionMatch" class="ad-tag on" style="margin-left:6px;font-size:11px">region default</span>
           </label>
           <div class="ad-sip-actions">
             <button class="btn btn-signal btn-sm" :disabled="savingSip" @click="saveSipVendors(false)">{{ savingSip ? 'Saving…' : 'Save override' }}</button>
             <button class="btn btn-ghost btn-sm" :disabled="savingSip" @click="saveSipVendors(true)">Clear (auto)</button>
+          </div>
+
+          <div class="ad-adv-sip" style="margin-top:16px;border-top:1px solid var(--rule);padding-top:14px">
+            <h4 style="margin:0 0 4px;font-size:14px">Digidite SIP account (per client)</h4>
+            <p class="ad-none" style="margin-bottom:10px">Client-specific Digidite SIP account, set manually from the Digidite portal. Needed only when this client uses Telroi (Digidite) for calls.</p>
+            <div class="ad-field"><label>Host / Domain / Registrar</label>
+              <input v-model="digSipHost" class="ad-input mono" placeholder="e.g. client.example.io" />
+            </div>
+            <div class="ad-field"><label>Authentication ID</label>
+              <input v-model="digSipAuthId" class="ad-input mono" placeholder="e.g. pbx_sip_0" />
+            </div>
+            <div class="ad-field"><label>Password {{ digSipPwSet ? '· set, leave blank to keep' : '' }}</label>
+              <input v-model="digSipPassword" class="ad-input mono" type="password" :placeholder="digSipPwSet ? '••••••••' : 'SIP password'" />
+            </div>
+            <button class="btn btn-signal btn-sm" :disabled="savingDigSip" @click="saveDigiditeSip">{{ savingDigSip ? 'Saving…' : 'Save SIP account' }}</button>
+            <span v-if="digSipMsg" class="ad-hint" style="margin-left:8px">{{ digSipMsg }}</span>
           </div>
         </section>
       </div>
@@ -588,7 +605,14 @@ const supportStatus = ref<any>({ ready: false, wallet: null });
 const sipVendors = ref<any>({ region: '', overridden: false });
 const sipOverride = ref<string[] | null>(null);
 const sipChecked = ref<string[]>([]);
-const sipCandidates = ref<{ id: string; label: string }[]>([]);
+const sipCandidates = ref<{ id: string; label: string; regionMatch?: boolean }[]>([]);
+const showAdvSip = ref(false);
+const digSipHost = ref('');
+const digSipAuthId = ref('');
+const digSipPassword = ref('');
+const digSipPwSet = ref(false);
+const savingDigSip = ref(false);
+const digSipMsg = ref('');
 const savingSip = ref(false);
 const sipVendorChoices = computed(() => sipCandidates.value.map((c) => c.id));
 function sipVendorLabel(id: string) { return sipCandidates.value.find((c) => c.id === id)?.label || id; }
@@ -610,6 +634,22 @@ async function saveSipVendors(clear: boolean) {
     await loadSipVendors();
   } catch (e: any) { alert(e?.data?.error?.message || 'Could not save'); }
   finally { savingSip.value = false; }
+}
+async function loadDigiditeSip() {
+  try {
+    const r = await $fetch<any>(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}/digidite-sip`);
+    digSipHost.value = r.host || ''; digSipAuthId.value = r.authId || ''; digSipPwSet.value = !!r.passwordSet;
+  } catch { /* */ }
+}
+async function saveDigiditeSip() {
+  savingDigSip.value = true; digSipMsg.value = '';
+  try {
+    await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}/digidite-sip`, {
+      method: 'POST', body: { host: digSipHost.value, authId: digSipAuthId.value, password: digSipPassword.value }
+    });
+    digSipPassword.value = ''; digSipMsg.value = '✓ Saved'; await loadDigiditeSip();
+  } catch (e: any) { digSipMsg.value = e?.data?.error?.message || 'Could not save'; }
+  finally { savingDigSip.value = false; }
 }
 async function openCall() {
   showCall.value = true;
