@@ -18,6 +18,9 @@ export default defineEventHandler(async (event) => {
   // override) — but we expose only the boolean, never the vendor list.
   const { vendors } = await availableSipVendors(s.tenantId);
   const available = vendors.length > 0;
+  // Self-serve provisioning only works for fully-automated carriers (twilio/telnyx).
+  // Other vendors (telroi/Digidite, sotel, ruach, asterisk) are arranged by admin.
+  const selfServe = available && ['twilio', 'telnyx'].includes(vendors[0].id);
 
   const settings = await platformSettings().catch(() => null);
   const proxy = settings?.sipProxyDomain || null;
@@ -38,6 +41,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     available,
+    selfServe,
     proxyConfigured: !!proxy,
     endpoints: safeEndpoints
   };

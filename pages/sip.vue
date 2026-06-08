@@ -14,8 +14,8 @@
       </div>
 
       <template v-else>
-        <!-- Set up -->
-        <div v-if="data.available" class="card sip-setup card-pad">
+        <!-- Set up (self-serve carriers only: twilio/telnyx) -->
+        <div v-if="data.selfServe" class="card sip-setup card-pad">
           <div>
             <h3 class="sip-setup-h">Set up a SIP endpoint</h3>
             <p class="sip-setup-note">We'll create a secure SIP login for your devices. You'll get a server, username and password to configure your softphone or PBX.</p>
@@ -40,7 +40,7 @@
               </tr>
             </tbody>
           </table>
-          <div v-else class="card-pad"><EmptyState icon="generic" title="No endpoints yet" description="Set up a SIP endpoint above to connect your devices." /></div>
+          <div v-else class="card-pad"><EmptyState icon="generic" title="No endpoints yet" :description="data.selfServe ? 'Set up a SIP endpoint above to connect your devices.' : 'SIP is arranged by our team for your account. Contact support to have your SIP endpoint set up.'" /></div>
         </div>
 
         <p class="sip-help muted">Point your SIP device at the server above using the username and password. Need help configuring a specific device? Contact support.</p>
