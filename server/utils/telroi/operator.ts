@@ -51,11 +51,26 @@ export class OperatorClient {
       const basic = Buffer.from(`${this.username}:${this.password}`).toString('base64');
       headers['Authorization'] = `Basic ${basic}`;
     }
-    const res = await fetch(this.base.replace(/\/$/, '') + path, {
-      method,
-      headers,
-      body: opts.body ? JSON.stringify(opts.body) : undefined
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    let res: Response;
+    try {
+      res = await fetch(this.base.replace(/\/$/, '') + path, {
+        method,
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        signal: controller.signal
+      });
+    } catch (e: any) {
+      const aborted = e?.name === 'AbortError';
+      throw createError({
+        statusCode: 504,
+        data: { error: { code: aborted ? 'operator_timeout' : 'operator_unreachable', message: aborted ? 'Operator API did not respond within 20s' : `Operator API unreachable: ${e?.message || 'connection failed'}` } },
+        message: aborted ? 'Operator API timed out (20s)' : `Operator API unreachable: ${e?.message || 'connection failed'}`
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) {
       let detail: any = null;
       try { detail = await res.json(); } catch { /* */ }
