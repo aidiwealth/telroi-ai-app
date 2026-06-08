@@ -130,12 +130,31 @@
         <section class="ad-panel">
           <h3 class="ad-panel-h">SIP vendors</h3>
           <p class="ad-none" style="margin-bottom:10px">Region default: <strong>{{ (sipVendors.region || '—') }}</strong>. {{ sipOverride === null ? 'Using automatic region-based vendors.' : 'Overridden for this client.' }}</p>
-          <label v-for="v in sipVendorChoices" :key="v" class="ad-sip-row">
-            <input type="checkbox" :value="v" v-model="sipChecked" /> {{ sipVendorLabel(v) }}
+          <label v-for="v in sipCandidates" :key="v.id" class="ad-sip-row">
+            <input type="checkbox" :value="v.id" v-model="sipChecked" /> {{ v.label }}
+            <span v-if="v.regionMatch" class="ad-tag on" style="margin-left:6px;font-size:11px">region default</span>
           </label>
           <div class="ad-sip-actions">
             <button class="btn btn-signal btn-sm" :disabled="savingSip" @click="saveSipVendors(false)">{{ savingSip ? 'Saving…' : 'Save override' }}</button>
             <button class="btn btn-ghost btn-sm" :disabled="savingSip" @click="saveSipVendors(true)">Clear (auto)</button>
+          </div>
+
+          <div class="ad-adv-sip" style="margin-top:16px;border-top:1px solid var(--ad-border,#e5e5e5);padding-top:12px">
+            <button class="btn btn-ghost btn-sm" @click="showAdvSip = !showAdvSip">{{ showAdvSip ? '▾' : '▸' }} Advanced SIP (Digidite account)</button>
+            <div v-if="showAdvSip" style="margin-top:12px">
+              <p class="ad-none" style="margin-bottom:10px">Client-specific Digidite SIP account, set manually from the Digidite portal. Needed only when this client uses Telroi (Digidite) for calls.</p>
+              <div class="ad-field"><label>Host / Domain / Registrar</label>
+                <input v-model="digSipHost" class="ad-input mono" placeholder="e.g. client.example.io" />
+              </div>
+              <div class="ad-field"><label>Authentication ID</label>
+                <input v-model="digSipAuthId" class="ad-input mono" placeholder="e.g. pbx_sip_0" />
+              </div>
+              <div class="ad-field"><label>Password {{ digSipPwSet ? '· set, leave blank to keep' : '' }}</label>
+                <input v-model="digSipPassword" class="ad-input mono" type="password" :placeholder="digSipPwSet ? '••••••••••••' : 'SIP password'" />
+              </div>
+              <button class="btn btn-signal btn-sm" :disabled="savingDigSip" @click="saveDigiditeSip">{{ savingDigSip ? 'Saving…' : 'Save SIP account' }}</button>
+              <span v-if="digSipMsg" class="ad-hint" style="margin-left:8px">{{ digSipMsg }}</span>
+            </div>
           </div>
         </section>
       </div>
@@ -776,6 +795,7 @@ onMounted(async () => {
     await loadWallet();
     await loadPlan();
     await loadSipVendors();
+    await loadDigiditeSip();
     await loadDepts();
     await loadBlacklist();
     await loadIntegrations();

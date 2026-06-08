@@ -8,7 +8,7 @@
 import { eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 import { masterCarrierCreds } from './platform';
-import { detectRegion, providersForRegion } from './regions';
+import { detectRegion, providersForRegion, countryToRegion } from './regions';
 
 export interface SipVendor { id: string; label: string; }
 
@@ -23,7 +23,7 @@ export async function availableSipVendors(tenantId: string): Promise<{ vendors: 
   if (!tenant) return { vendors: [], region: 'NG', overridden: false };
 
   // Region from the client's country (fallback NG, matching regions.ts default).
-  const region = detectRegion(tenant.country || '+234');
+  const region = countryToRegion(tenant.country);
   const regionVendors = providersForRegion(region);
 
   // Which carriers does the platform actually have credentials for?

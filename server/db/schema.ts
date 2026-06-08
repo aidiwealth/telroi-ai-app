@@ -189,6 +189,9 @@ export const tenants = pgTable('tenants', {
   // Admin override for which SIP vendors this client may use. null = derive from
   // region automatically; otherwise a JSON array like ["twilio","telnyx"].
   sipVendorOverride: jsonb('sip_vendor_override').$type<string[] | null>(),
+  // Per-client Digidite SIP account (set manually from the Digidite portal).
+  // Encrypted JSON: {host, authId, password}. Client-specific.
+  tenantDigiditeSipEnc: text('tenant_digidite_sip_enc'),
   // Inactivity follow-up tracking: timestamps of the nudge emails already sent,
   // so the cron never double-sends. lastActivityAt is bumped on any real system
   // action (top-up, number, VAN, etc.). emailUnsubscribedAt opts the workspace

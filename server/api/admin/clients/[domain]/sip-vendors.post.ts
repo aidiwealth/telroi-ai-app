@@ -2,7 +2,7 @@
 // Admin override of which SIP vendors a client may use. null clears the override
 // (revert to automatic region-based gating). Superadmin only.
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { requirePlatformAdmin } from '~/server/utils/platform';
 import { apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
@@ -17,9 +17,10 @@ export default defineEventHandler(async (event) => {
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'vendors must be an array or null');
 
+  const slug = domain.replace(/\.telroi\.ai$/, '').split('.')[0];
   const db = useDb();
   const [tenant] = await db.select().from(schema.tenants)
-    .where(eq(schema.tenants.telroiDomain, domain)).limit(1);
+    .where(or(eq(schema.tenants.telroiDomain, domain), eq(schema.tenants.slug, slug))).limit(1);
   if (!tenant) throw apiError('not_found', 'Client not found', 404);
 
   await db.update(schema.tenants).set({ sipVendorOverride: p.data.vendors }).where(eq(schema.tenants.id, tenant.id));
