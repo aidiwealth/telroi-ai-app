@@ -22,8 +22,9 @@ export const useAuthStore = defineStore('auth', {
       // when the middleware finds the store not yet loaded.
       try {
         const data = await $fetch<{ user: MeUser | null; tenant: MeTenant | null }>('/api/auth/me');
-        this.user = data.user;
-        this.tenant = data.tenant ?? null;
+        // Normalize to plain-prototype objects (see plugins/auth.ts).
+        this.user = data.user ? { ...data.user } : null;
+        this.tenant = data.tenant ? { ...data.tenant } : null;
       } catch {
         this.user = null;
         this.tenant = null;

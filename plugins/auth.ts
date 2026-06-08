@@ -11,8 +11,10 @@ export default defineNuxtPlugin(async () => {
   try {
     const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined;
     const data = await $fetch<{ user: any; tenant: any }>('/api/auth/me', headers ? { headers } : {});
-    auth.user = data.user;
-    auth.tenant = data.tenant ?? null;
+    // Plain-prototype copies: a null-prototype object crashes Pinia's
+    // shouldHydrate during SSR payload serialization (notably on the error page).
+    auth.user = data.user ? { ...data.user } : null;
+    auth.tenant = data.tenant ? { ...data.tenant } : null;
   } catch {
     auth.user = null;
     auth.tenant = null;
