@@ -128,8 +128,8 @@
         </section>
 
         <section class="ad-panel">
-          <h3 class="ad-panel-h">SIP vendors</h3>
-          <p class="ad-none" style="margin-bottom:10px">Region default: <strong>{{ (sipVendors.region || '—') }}</strong>. {{ sipOverride === null ? 'Using automatic region-based vendors.' : 'Overridden for this client.' }}</p>
+          <h3 class="ad-panel-h">Calling vendors</h3>
+          <p class="ad-none" style="margin-bottom:10px">Carriers that can power this client's calls &amp; numbers. Region default: <strong>{{ (sipVendors.region || '—') }}</strong>. {{ sipOverride === null ? 'Using automatic region-based vendors.' : 'Overridden for this client.' }}</p>
           <label v-for="v in sipCandidates" :key="v.id" class="ad-sip-row">
             <input type="checkbox" :value="v.id" v-model="sipChecked" /> {{ v.label }}
             <span v-if="v.regionMatch" class="ad-tag on" style="margin-left:6px;font-size:11px">region default</span>
@@ -137,6 +137,17 @@
           <div class="ad-sip-actions">
             <button class="btn btn-signal btn-sm" :disabled="savingSip" @click="saveSipVendors(false)">{{ savingSip ? 'Saving…' : 'Save override' }}</button>
             <button class="btn btn-ghost btn-sm" :disabled="savingSip" @click="saveSipVendors(true)">Clear (auto)</button>
+          </div>
+
+          <div style="margin-top:16px;border-top:1px solid var(--rule);padding-top:14px">
+            <h4 style="margin:0 0 4px;font-size:14px">SIP vendor (dedicated)</h4>
+            <p class="ad-none" style="margin-bottom:10px">Which carrier issues this client's own dedicated SIP credentials. Only these vendors provide per-client SIP. "None" = this client has no BYOD SIP.</p>
+            <select v-model="sipDeviceVendor" class="ad-input" style="max-width:260px">
+              <option :value="null">None</option>
+              <option v-for="o in sipDeviceOptions" :key="o.id" :value="o.id">{{ o.label }}</option>
+            </select>
+            <button class="btn btn-signal btn-sm" style="margin-left:8px" :disabled="savingSipDevice" @click="saveSipDevice">{{ savingSipDevice ? 'Saving…' : 'Save SIP vendor' }}</button>
+            <span v-if="sipDeviceMsg" class="ad-hint" style="margin-left:8px">{{ sipDeviceMsg }}</span>
           </div>
 
           <div class="ad-adv-sip" style="margin-top:16px;border-top:1px solid var(--rule);padding-top:14px">
@@ -614,6 +625,10 @@ const digSipPwSet = ref(false);
 const savingDigSip = ref(false);
 const digSipMsg = ref('');
 const savingSip = ref(false);
+const sipDeviceVendor = ref<string | null>(null);
+const sipDeviceOptions = ref<{ id: string; label: string }[]>([]);
+const savingSipDevice = ref(false);
+const sipDeviceMsg = ref('');
 const sipVendorChoices = computed(() => sipCandidates.value.map((c) => c.id));
 function sipVendorLabel(id: string) { return sipCandidates.value.find((c) => c.id === id)?.label || id; }
 async function loadSipVendors() {
@@ -623,7 +638,19 @@ async function loadSipVendors() {
     sipOverride.value = r.override ?? null;
     sipChecked.value = r.effective || [];
     sipCandidates.value = r.candidates || [];
+    sipDeviceVendor.value = r.sipDeviceVendor ?? null;
+    sipDeviceOptions.value = r.sipDeviceOptions || [];
   } catch { /* */ }
+}
+async function saveSipDevice() {
+  savingSipDevice.value = true; sipDeviceMsg.value = '';
+  try {
+    await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}/sip-vendors`, {
+      method: 'POST', body: { sipDeviceVendor: sipDeviceVendor.value || null }
+    });
+    sipDeviceMsg.value = '✓ Saved';
+  } catch (e: any) { sipDeviceMsg.value = e?.data?.error?.message || 'Could not save'; }
+  finally { savingSipDevice.value = false; }
 }
 async function saveSipVendors(clear: boolean) {
   savingSip.value = true;
