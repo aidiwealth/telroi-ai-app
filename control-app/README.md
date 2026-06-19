@@ -116,3 +116,43 @@ add a routing column in the main app that the control app needs, mirror it there
 For inbound calls, pass the dialed DID to the app as the first Stasis arg, e.g.
 in extensions.conf:  `exten => _X.,1,Stasis(telroi,${EXTEN})`
 The app reads `event.args[0]` as the DID (falling back to the channel exten).
+
+---
+
+## Deployment note: control app on the NYC box (not co-located with Asterisk)
+
+Current deployment: control app runs on the **NYC droplet**; Asterisk is on the
+**London PBX droplet**. So the control app reaches ARI over the public TLS
+endpoint instead of localhost.
+
+`.env` on the NYC box:
+```
+ARI_URL=https://sip.telroi.ai:8089      # protocol+host only; client adds /ari + /ari/events
+ARI_USERNAME=telroi
+ARI_PASSWORD=<your ARI password>
+ARI_APP_NAME=telroi
+DATABASE_URL=<same as main app — local/fast on NYC>
+```
+
+### Prerequisites for this cross-box setup
+1. **Firewall:** the London PBX firewall must allow inbound TCP **8089** from the
+   NYC droplet's IP. (You already opened 8089 to All IPv4 for the main app, so
+   this works — optionally tighten to the NYC droplet's IP later.)
+2. **DB trusted sources:** the NYC droplet must be allowed on the DB (likely
+   already is, since the main app is on NYC too).
+
+### Verify ARI reachability from the NYC box first
+Before running the app, confirm the NYC droplet can reach ARI over TLS:
+```bash
+curl -u telroi:YOUR_ARI_PASSWORD https://sip.telroi.ai:8089/ari/asterisk/info
+```
+Should return Asterisk info JSON. If it does, the REST path works. The app also
+opens a WebSocket (wss://sip.telroi.ai:8089/ari/events) — if the app logs
+"Connected" on startup, the WS path works too.
+
+### Latency caveat (why London co-location is better long-term)
+With the control app on NYC, every ARI command during a call (answer, play,
+bridge) crosses NYC<->London (~80ms). That's noticeable on the live call path.
+The cleaner placement is the **London PBX box** (ARI over localhost, DB via the
+cache). To move it there later: set `ARI_URL=http://127.0.0.1:8088` and run it on
+the London droplet. No code change — just the env var and the host.
