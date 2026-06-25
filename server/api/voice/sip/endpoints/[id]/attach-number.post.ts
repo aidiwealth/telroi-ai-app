@@ -40,6 +40,19 @@ export default defineEventHandler(async (event) => {
     return { ok: true, ...res };
   }
   if (ep.provider === 'telroi') {
+    // Agent-provisioned endpoints (tnt_ username) live on our own Asterisk. Routing
+    // a number to one just points that number's person-route at this endpoint
+    // (Option B): route_target = the sip_endpoints.id, which the control app
+    // resolves to PJSIP/<sip_username> and bridges to.
+    if (ep.externalId && /^tnt_[a-f0-9]{8}$/.test(ep.externalId)) {
+      const upd = await db.update(schema.numberSubscriptions)
+        .set({ provider: 'telroi', routeType: 'person', routeTarget: ep.id })
+        .where(and(eq(schema.numberSubscriptions.telnum, p.data.telnum), eq(schema.numberSubscriptions.tenantId, s.tenantId)))
+        .returning();
+      if (!upd.length) throw apiError('not_found', 'That number is not on your account, or is not active.', 404);
+      await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'sip.attach_number', summary: `Routed ${p.data.telnum} to SIP device` });
+      return { ok: true, provider: 'telroi', telnum: p.data.telnum };
+    }
     const settings = await platformSettings().catch(() => null);
     const platformDomain = (settings as any)?.operatorDomain || (creds as any)?.telroiPbx?.domain;
     if (!platformDomain) throw apiError('not_configured', 'Platform voice domain is not configured.', 503);

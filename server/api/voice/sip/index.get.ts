@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     sipUsername: e.sipUsername || null,
     password: e.secretEnc ? (() => { try { return decrypt(e.secretEnc); } catch { return null; } })() : null,
     hasPassword: !!e.secretEnc,
-    canRouteNumber: ['twilio', 'telnyx'].includes(e.provider as string),
+    canRouteNumber: ['twilio', 'telnyx', 'telroi'].includes(e.provider as string),
     createdAt: e.createdAt
   }));
 
