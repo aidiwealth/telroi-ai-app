@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
   const { isNigeria } = await import('~/server/utils/countries');
   const callerIsNG = isNigeria(visitorCountry);
   // NG carriers vs international carriers, for matching a VAN to the caller's region.
-  const NG_PROVIDERS = ['telroi', 'sotel'];
+  const NG_PROVIDERS = ['telroi'];
 
   // Resolve the concrete routing target so the call can actually be handled.
   let routeTarget: any = { mode: cfg.routeTo };

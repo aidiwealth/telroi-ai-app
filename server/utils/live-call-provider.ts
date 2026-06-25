@@ -11,7 +11,7 @@ import { masterCarrierCreds } from './platform';
 import { voiceCredentials } from './voice-credentials';
 import { isNigeria } from './countries';
 
-export type VoiceProvider = 'digidite' | 'telnyx' | 'twilio' | 'sotel' | 'asterisk' | 'ruach';
+export type VoiceProvider = 'digidite' | 'telnyx' | 'twilio' | 'asterisk';
 
 export interface DialIntent {
   provider: VoiceProvider;
@@ -26,9 +26,7 @@ function normalize(p: string): VoiceProvider {
   if (p === 'telroi' || p === 'digidite' || p === 'pbx') return 'digidite';
   if (p === 'telnyx') return 'telnyx';
   if (p === 'twilio') return 'twilio';
-  if (p === 'sotel') return 'sotel';
   if (p === 'asterisk') return 'asterisk';
-  if (p === 'ruach') return 'ruach';
   return 'telnyx';
 }
 
@@ -50,7 +48,7 @@ async function resolveFromNumber(tenantId: string, teamId?: string | null): Prom
 
 export async function resolveLiveCallProvider(opts: {
   tenantId: string;
-  configuredProvider?: string;   // from live_call settings (auto|digidite|telnyx|twilio|sotel)
+  configuredProvider?: string;   // from live_call settings (auto|digidite|telnyx|twilio)
   visitorCountry?: string | null;
   teamId?: string | null;
   toRoute?: any;
@@ -65,28 +63,17 @@ export async function resolveLiveCallProvider(opts: {
   let reason: string;
   const cfg = (opts.configuredProvider || 'auto').toLowerCase();
   const ng = isNigeria(opts.visitorCountry);
-  if (cfg === 'sotel') {
-    // Admin explicitly chose Sotel — honor it exactly.
-    provider = 'sotel'; reason = 'admin override (sotel)';
-  } else if (cfg === 'ruach') {
-    // Admin explicitly chose Ruach — honor it exactly. No automated fallback:
-    // the admin decides which vendor powers this number/region.
-    provider = 'ruach'; reason = 'admin override (ruach)';
-  } else if (cfg === 'asterisk') {
+
+  if (cfg === 'asterisk') {
     // Admin explicitly chose Asterisk (global).
     provider = 'asterisk'; reason = 'admin override (asterisk)';
   } else if (cfg === 'digidite' || cfg === 'telnyx' || cfg === 'twilio') {
     provider = cfg as VoiceProvider; reason = `admin override (${cfg})`;
   } else {
-    // auto: Nigeria -> Sotel if its trunk is configured, else Digidite; non-NG -> Telnyx.
+    // auto: Nigeria -> Digidite; non-NG -> Telnyx.
     // If the from-number's own provider is known, prefer that (number already on it).
     if (from.provider) { provider = from.provider; reason = `number's carrier (${from.provider})`; }
-    else if (ng) {
-      let sotelReady = false;
-      try { const c = await voiceCredentials(); sotelReady = !!c?.sotel?.sipGateway; } catch { /* */ }
-      if (sotelReady) { provider = 'sotel'; reason = 'auto: Nigeria -> Sotel (trunk configured)'; }
-      else { provider = 'digidite'; reason = 'auto: Nigeria -> Digidite'; }
-    }
+    else if (ng) { provider = 'digidite'; reason = 'auto: Nigeria -> Digidite'; }
     else { provider = 'telnyx'; reason = 'auto: non-Nigeria -> Telnyx'; }
   }
 
@@ -97,9 +84,7 @@ export async function resolveLiveCallProvider(opts: {
     if (provider === 'digidite') ready = !!creds?.telroiPbx;
     else if (provider === 'telnyx') ready = !!creds?.telnyx;
     else if (provider === 'twilio') ready = !!creds?.twilio;
-    else if (provider === 'sotel') { const c = await voiceCredentials(); ready = !!c?.sotel?.sipGateway; }
     else if (provider === 'asterisk') { const c = await voiceCredentials(); ready = !!c?.asterisk?.sipGateway; }
-    else if (provider === 'ruach') { const c = await voiceCredentials(); ready = !!c?.ruach?.sipAccount; }
   } catch { ready = false; }
 
   return { provider, ready, fromNumber: from.telnum, toRoute: opts.toRoute || null, reason };

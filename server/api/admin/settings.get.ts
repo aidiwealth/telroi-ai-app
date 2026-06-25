@@ -23,15 +23,7 @@ export default defineEventHandler(async (event) => {
     twilioVoiceSet: !!s?.twilioVoiceCredsEnc,
     telnyxVoiceSet: !!s?.telnyxVoiceCredsEnc,
     digiditeVoiceSet: !!s?.digiditeVoiceCredsEnc,
-    sotelVoiceSet: !!s?.sotelVoiceCredsEnc,
     // Non-secret Sotel trunk values for the form to pre-fill (auth password omitted).
-    sotelVoice: (() => {
-      if (!s?.sotelVoiceCredsEnc) return null;
-      try {
-        const v = JSON.parse(decrypt(s.sotelVoiceCredsEnc));
-        return { sipGateway: v.sipGateway, sipPort: v.sipPort, transport: v.transport, sipDomain: v.sipDomain, authUser: v.authUser, callerId: v.callerId, dids: v.dids || [] };
-      } catch { return null; }
-    })(),
     asteriskVoiceSet: !!s?.asteriskVoiceCredsEnc,
     asteriskVoice: (() => {
       if (!s?.asteriskVoiceCredsEnc) return null;
@@ -39,15 +31,6 @@ export default defineEventHandler(async (event) => {
         const v = JSON.parse(decrypt(s.asteriskVoiceCredsEnc));
         // Secrets (authPass, apiPassword) omitted from the response.
         return { sipGateway: v.sipGateway, sipPort: v.sipPort, transport: v.transport, sipDomain: v.sipDomain, authUser: v.authUser, callerId: v.callerId, dids: v.dids || [], apiBaseUrl: v.apiBaseUrl, apiUsername: v.apiUsername, ariAppName: v.ariAppName };
-      } catch { return null; }
-    })(),
-    ruachVoiceSet: !!s?.ruachVoiceCredsEnc,
-    ruachVoice: (() => {
-      if (!s?.ruachVoiceCredsEnc) return null;
-      try {
-        const v = JSON.parse(decrypt(s.ruachVoiceCredsEnc));
-        // sipPassword omitted.
-        return { sipAccount: v.sipAccount, sipDomain: v.sipDomain, callerId: v.callerId, dids: v.dids || [] };
       } catch { return null; }
     })(),
     // Our outbound IP for vendors to whitelist (admin override, else env default).

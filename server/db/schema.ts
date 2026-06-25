@@ -5,7 +5,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'member']);export const platformRoleEnum = pgEnum('platform_role', ['superadmin', 'staff']);
-export const providerKindEnum = pgEnum('provider_kind', ['telroi', 'twilio', 'telnyx', 'sotel']);
+export const providerKindEnum = pgEnum('provider_kind', ['telroi', 'twilio', 'telnyx']);
 export const aiProviderEnum = pgEnum('ai_provider', ['openai', 'anthropic', 'deepgram', 'elevenlabs', 'vapi', 'google']);
 export const tokenPurposeEnum = pgEnum('token_purpose', ['login']);
 export const vanStatusEnum = pgEnum('van_status', ['draft', 'live', 'paused']);
@@ -47,15 +47,12 @@ export const platformSettings = pgTable('platform_settings', {
   // a fixed gateway IP:port over UDP/TCP/TLS, with a set of assigned DIDs. Used
   // when Telroi connects to Sotel directly instead of via a hosted platform.
   // {sipGateway, sipPort, transport, sipDomain, authUser, authPass, callerId, dids[]}
-  sotelVoiceCredsEnc: text('sotel_voice_creds_enc'),
   // Core Asterisk integration (GLOBAL, all countries). Self-hosted on a separate
   // server, IP-authenticated. Has BOTH a SIP trunk and an AMI/ARI REST API.
   // {sipGateway, sipPort, transport, sipDomain, authUser, authPass, callerId, dids[],
   //  apiBaseUrl, apiUsername, apiPassword, ariAppName}
   asteriskVoiceCredsEnc: text('asterisk_voice_creds_enc'),
   // Ruach SIP trunk (Nigeria only). Logs in with a SIP account number + password
-  // against sip.ruach.ng; IP-whitelisted. {sipAccount, sipPassword, sipDomain, callerId, dids[]}
-  ruachVoiceCredsEnc: text('ruach_voice_creds_enc'),
   // Our outbound/signaling IP that SIP vendors must whitelist. Sourced from env
   // OUTBOUND_SIP_IP by default; this column lets ops override without a redeploy.
   outboundSipIp: text('outbound_sip_ip'),
@@ -93,10 +90,8 @@ export const platformSettings = pgTable('platform_settings', {
   twilioWebhookSecretEnc: text('twilio_webhook_secret_enc'), // Twilio auth token is used to sign; stored if separate
   telnyxWebhookSecretEnc: text('telnyx_webhook_secret_enc'), // Telnyx public key / signing secret
   pbxWebhookSecretEnc: text('pbx_webhook_secret_enc'),       // shared secret for PBX inbound posts
-  sotelWebhookSecretEnc: text('sotel_webhook_secret_enc'),   // shared secret for Sotel SIP gateway inbound posts
   asteriskWebhookSecretEnc: text('asterisk_webhook_secret_enc'), // shared secret for Asterisk inbound posts
-  ruachWebhookSecretEnc: text('ruach_webhook_secret_enc'),   // shared secret for Ruach inbound posts
-  inboundWebhooksEnabled: jsonb('inbound_webhooks_enabled').$type<{ twilio?: boolean; telnyx?: boolean; pbx?: boolean; sotel?: boolean; asterisk?: boolean; ruach?: boolean }>().default({}),
+  inboundWebhooksEnabled: jsonb('inbound_webhooks_enabled').$type<{ twilio?: boolean; telnyx?: boolean; pbx?: boolean; asterisk?: boolean }>().default({}),
   // Admin-editable email content. A JSON map of templateKey -> overrides
   // ({ subject?, heading?, intro?, body? }) layered over the built-in designs,
   // so operators can tweak copy without code. Social links power the email

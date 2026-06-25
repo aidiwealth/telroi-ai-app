@@ -9,7 +9,7 @@ import { useDb, schema } from '~/server/db';
 import { logEvent } from '~/server/utils/logs';
 
 const Body = z.object({
-  vendors: z.array(z.enum(['twilio', 'telnyx', 'telroi', 'sotel', 'ruach', 'asterisk'])).nullable().optional(),
+  vendors: z.array(z.enum(['twilio', 'telnyx', 'telroi', 'asterisk'])).nullable().optional(),
   sipDeviceVendor: z.enum(['telroi', 'twilio', 'telnyx']).nullable().optional()
 });
 

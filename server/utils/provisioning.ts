@@ -9,9 +9,6 @@
 // (the operator can retry from the admin client page).
 import { eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
-import { encrypt } from './crypto';
-import { OperatorClient, resolveDomainDefaults } from './telroi/operator';
-import { platformSettings } from './platform';
 import { logEvent } from './logs';
 
 export interface ProvisionResult {
@@ -24,51 +21,15 @@ export async function provisionTenant(tenantId: string): Promise<ProvisionResult
   const db = useDb();
   const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
   if (!t) return { ok: false, reason: 'tenant_not_found' };
-
-  // Already provisioned — no-op (idempotent).
-  if (t.telroiDomain && t.telroiApiKeyEnc) return { ok: true, domain: t.telroiDomain };
-
-  const settings = await platformSettings();
-  if (!settings?.operatorDomain || !settings?.operatorApiKeyEnc) {
-    await logEvent({ tenantId, kind: 'system', action: 'provision.skipped', level: 'warn', summary: 'Operator/Digidite API not configured' });
-    return { ok: false, reason: 'operator_not_configured' };
-  }
-
-  // The client's subdomain: <slug>.<clientDomainSuffix>.
-  const suffix = settings.clientDomainSuffix || 'digitaltide.io';
-  const domain = `${t.slug}.${suffix}`;
-
+  if (t.provisionState === 'provisioned') return { ok: true, domain: t.slug };
   try {
-    const op = await OperatorClient.fromPlatform();
-    const defaults = await resolveDomainDefaults(op, settings);
-    await op.createDomain(domain, {
-      name: t.name,
-      language: 'en-US',
-      client: t.slug,
-      accountsLimit: 10,
-      ownRegion: t.country || undefined,
-      ...defaults
-    });
-
-    // Digidite is one shared account (operator credential), so the tenant's CPBX
-    // calls authenticate with the same operator key, scoped to its subdomain.
-    const apiKeyEnc = settings.operatorApiKeyEnc; // already encrypted in settings
     await db.update(schema.tenants)
-      .set({ telroiDomain: domain, telroiApiKeyEnc: apiKeyEnc })
+      .set({ provisionState: 'provisioned', wentLiveAt: new Date() })
       .where(eq(schema.tenants.id, tenantId));
-
-    await logEvent({ tenantId, kind: 'system', action: 'provision.success', summary: `Provisioned ${domain}` });
-    return { ok: true, domain };
+    await logEvent({ tenantId, kind: 'system', action: 'provision.success', summary: `Workspace ${t.slug} marked live` });
+    return { ok: true, domain: t.slug };
   } catch (e: any) {
-    // If the domain already exists on the carrier, treat it as provisioned.
-    const msg = e?.data?.error?.message || e?.message || 'unknown error';
-    if (/exist/i.test(msg)) {
-      await db.update(schema.tenants)
-        .set({ telroiDomain: domain, telroiApiKeyEnc: settings.operatorApiKeyEnc })
-        .where(eq(schema.tenants.id, tenantId));
-      await logEvent({ tenantId, kind: 'system', action: 'provision.exists', summary: `Domain ${domain} already existed; linked` });
-      return { ok: true, domain };
-    }
+    const msg = e?.message || 'unknown error';
     await logEvent({ tenantId, kind: 'system', action: 'provision.failed', level: 'error', summary: msg });
     return { ok: false, reason: msg };
   }

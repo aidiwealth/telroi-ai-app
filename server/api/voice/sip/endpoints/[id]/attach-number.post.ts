@@ -5,9 +5,8 @@ import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
-import { masterCarrierCreds, platformSettings } from '~/server/utils/platform';
+import { masterCarrierCreds } from '~/server/utils/platform';
 import { twilio, telnyx } from '~/server/utils/providers';
-import { OperatorClient } from '~/server/utils/telroi/operator';
 import { logEvent } from '~/server/utils/logs';
 
 const Body = z.object({ telnum: z.string().min(3) });
@@ -53,21 +52,15 @@ export default defineEventHandler(async (event) => {
       await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'sip.attach_number', summary: `Routed ${p.data.telnum} to SIP device` });
       return { ok: true, provider: 'telroi', telnum: p.data.telnum };
     }
-    const settings = await platformSettings().catch(() => null);
-    const platformDomain = (settings as any)?.operatorDomain || (creds as any)?.telroiPbx?.domain;
-    if (!platformDomain) throw apiError('not_configured', 'Platform voice domain is not configured.', 503);
-    try {
-      const op = await OperatorClient.fromPlatform();
-      await op.allocateTelnum(p.data.telnum).catch(() => {});
-      await op.assignTelnumToDomain(platformDomain, p.data.telnum);
-      await op.enableDomainTelnum(platformDomain, p.data.telnum).catch(() => {});
-    } catch (e: any) {
-      throw apiError('operator_failed', e?.data?.error?.message || e?.message || 'Could not assign the number on the voice platform.', 502);
-    }
-    await db.update(schema.numberSubscriptions)
-      .set({ provider: 'telroi' })
-      .where(and(eq(schema.numberSubscriptions.telnum, p.data.telnum), eq(schema.numberSubscriptions.tenantId, s.tenantId)));
-    await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'sip.attach_number', summary: `Routed ${p.data.telnum} to voice platform for SIP delivery` });
+    // Non-tnt_ telroi endpoints are legacy; all current endpoints are Asterisk-backed
+    // (tnt_) and handled above. Fall back to a local route update pointing the number
+    // at this endpoint, so routing stays consistent on our own PBX.
+    const upd = await db.update(schema.numberSubscriptions)
+      .set({ provider: 'telroi', routeType: 'person', routeTarget: ep.id })
+      .where(and(eq(schema.numberSubscriptions.telnum, p.data.telnum), eq(schema.numberSubscriptions.tenantId, s.tenantId)))
+      .returning();
+    if (!upd.length) throw apiError('not_found', 'That number is not on your account, or is not active.', 404);
+    await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'sip.attach_number', summary: `Routed ${p.data.telnum} to SIP device` });
     return { ok: true, provider: 'telroi', telnum: p.data.telnum };
   }
   throw apiError('unsupported', `Routing a number over ${ep.provider} from here isn’t wired yet — assign it in your number settings.`, 400);

@@ -8,7 +8,6 @@
 
 export interface TwilioCreds { accountSid: string; authToken: string; fromNumber?: string }
 export interface TelnyxCreds { apiKey: string; connectionId?: string; fromNumber?: string }
-export interface SotelCreds { sipGateway: string; sipPort?: number; transport?: 'udp' | 'tcp' | 'tls'; sipDomain?: string; authUser?: string; authPass?: string; fromNumber?: string }
 
 /* ---------------- Twilio ---------------- */
 export const twilio = {
@@ -185,32 +184,9 @@ export const telnyx = {
 export async function testProvider(kind: string, creds: any) {
   if (kind === 'twilio') return twilio.testCreds(creds);
   if (kind === 'telnyx') return telnyx.testCreds(creds);
-  if (kind === 'sotel') return sotel.testCreds(creds);
   return { ok: false, detail: 'Unsupported provider' };
 }
 
-// Sotel direct SIP trunk. IP-authenticated; origination runs on the live media
-// gateway peered with Sotel, so makeCall returns a dial intent the gateway
-// executes (control plane), and testCreds validates the trunk config shape.
-export const sotel = {
-  async testCreds(c: SotelCreds) {
-    const ok = !!(c && c.sipGateway && String(c.sipGateway).trim());
-    return { ok, detail: ok ? undefined : 'A SIP gateway (IP or host) is required' };
-  },
-  async makeCall(c: SotelCreds, to: string) {
-    if (!c?.sipGateway) throw createError({ statusCode: 503, message: 'Sotel SIP trunk not configured' });
-    return {
-      callid: `sotel_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      status: 'originating',
-      provider: 'sotel',
-      dial: {
-        to, from: c.fromNumber || '',
-        sipGateway: c.sipGateway, sipPort: c.sipPort || 5060, transport: c.transport || 'udp',
-        sipDomain: c.sipDomain || c.sipGateway, authUser: c.authUser || '', authPass: c.authPass || ''
-      }
-    };
-  }
-};
 
 // ── Number provisioning (allocate a number on the carrier) ──
 // Built to each carrier's documented API. Unverified against live accounts from

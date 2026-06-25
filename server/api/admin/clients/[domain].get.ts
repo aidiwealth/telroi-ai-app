@@ -3,8 +3,6 @@
 // Resolves by telroiDomain OR by synthetic slug.telroi.ai for unprovisioned ones.
 import { eq, or } from 'drizzle-orm';
 import { requirePlatformAdmin } from '~/server/utils/platform';
-import { OperatorClient } from '~/server/utils/telroi/operator';
-import { TelroiClient } from '~/server/utils/telroi/client';
 import { useDb, schema } from '~/server/db';
 import { apiError } from '~/server/utils/api';
 import { requiresProvisioning } from '~/server/utils/regions';
@@ -35,38 +33,18 @@ export default defineEventHandler(async (event) => {
     db.select().from(schema.paymentMethods).where(eq(schema.paymentMethods.tenantId, tid)).then((r) => r[0] || null)
   ]);
 
-  // Live Digitide data if this tenant is provisioned and operator is reachable.
-  let info: any = null, employees: any[] = [];
-  if (tenant.telroiDomain) {
-    try {
-      const op = await OperatorClient.fromPlatform();
-      [info, employees] = await Promise.all([
-        op.getDomain(tenant.telroiDomain).catch(() => null),
-        op.listEmployees(tenant.telroiDomain).catch(() => [])
-      ]);
-    } catch { /* operator unreachable */ }
-  }
+  // Employees come from our own membership records (the source of truth).
+  let info: any = null;
+  let employees: any[] = [];
+  try {
+    const mems = await db.select().from(schema.memberships).where(eq(schema.memberships.tenantId, tenant.id));
+    employees = mems.map((m: any) => ({ login: m.pbxLogin || m.userId, email: undefined, role: m.role }));
+  } catch { /* best-effort */ }
 
   // Voice activity summary — best-effort recent calls from the client's PBX.
   // Lets the operator see whether voice is actually flowing for this client.
+  // Voice activity is sourced from our own call-events table (merged below).
   let voice: any = { available: false, recentCount: 0, recent: [] as any[] };
-  if (tenant.telroiDomain && tenant.telroiApiKeyEnc) {
-    try {
-      const tc = TelroiClient.forTenant(tenant);
-      const calls = await tc.historyJson({ period: 'week', limit: 5, processMissed: true });
-      const list = Array.isArray(calls) ? calls : ((calls as any)?.items || []);
-      voice = {
-        available: true,
-        recentCount: list.length,
-        recent: list.slice(0, 5).map((c: any) => ({
-          from: c.caller || c.from || c.src || '—',
-          to: c.callee || c.to || c.dst || '—',
-          when: c.start || c.time || c.date || null,
-          status: c.status || c.disposition || '—'
-        }))
-      };
-    } catch { /* voice not reachable — leave unavailable */ }
-  }
 
   // Merge locally-recorded call attempts (failures + non-PBX carrier calls) so
   // the operator sees a complete picture per client, not just PBX history.
@@ -89,7 +67,7 @@ export default defineEventHandler(async (event) => {
     }
   } catch { /* local merge best-effort */ }
   const __payload = {
-    tenant: { id: tid, name: tenant.name, slug: tenant.slug, domain: tenant.telroiDomain || `${tenant.slug}.telroi.ai`, provisioned: !!tenant.telroiDomain, createdAt: tenant.createdAt,
+    tenant: { id: tid, name: tenant.name, slug: tenant.slug, domain: `${tenant.slug}.telroi.ai`, provisioned: tenant.provisionState === 'provisioned', createdAt: tenant.createdAt,
       plan: tenant.plan, trialPlan: tenant.trialPlan, trialEndsAt: tenant.trialEndsAt, trialDays: tenant.trialDays,
       paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null, requiresProvisioning: requiresProvisioning(tenant.country) },
     wallet: wallet ? { balanceMinor: wallet.balanceMinor, currency: wallet.currency, plan: wallet.plan } : null,

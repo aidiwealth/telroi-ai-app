@@ -13,7 +13,7 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
   // gateway credentials to be configured; without them this honestly reports
   // that the service isn't available (rather than pretending a call placed).
   const all = await voiceCredentials().catch(() => null);
-  const creds = all?.digidite || all?.sotel || all?.asterisk || all?.ruach || all?.telnyx || null;
+  const creds = all?.digidite || all?.asterisk || all?.telnyx || null;
   if (!creds) {
     return { ok: false, reason: 'No Telroi voice gateway is configured for OTP. Configure a carrier in admin Settings, or select an external OTP vendor.' };
   }

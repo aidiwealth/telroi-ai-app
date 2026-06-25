@@ -13,7 +13,7 @@ import { detectRegion, providersForRegion, countryToRegion } from './regions';
 export interface SipVendor { id: string; label: string; }
 
 const LABELS: Record<string, string> = {
-  telroi: 'Telroi (Digidite)', twilio: 'Twilio', telnyx: 'Telnyx', sotel: 'Sotel', ruach: 'Ruach', asterisk: 'Core Asterisk'
+  telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice'
 };
 
 /** Which SIP vendors this tenant may use, after region + credential + override gating. */
@@ -36,9 +36,7 @@ export async function availableSipVendors(tenantId: string): Promise<{ vendors: 
   try {
     const { voiceCredentials } = await import('./voice-credentials');
     const vc = await voiceCredentials();
-    if (vc?.sotel?.sipGateway) configured.add('sotel');
     if (vc?.asterisk?.sipGateway) configured.add('asterisk');
-    if (vc?.ruach?.sipAccount) configured.add('ruach');
   } catch { /* */ }
 
   // Base list = region ∩ configured.

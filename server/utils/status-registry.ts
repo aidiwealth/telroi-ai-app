@@ -34,7 +34,7 @@ async function probeVoiceGateway(label: string): Promise<ProbeResult> {
   try {
     const { voiceCredentials } = await import('./voice-credentials');
     const all = await voiceCredentials().catch(() => null);
-    const configured = !!(all && (all.digidite || all.sotel || all.telnyx || all.twilio));
+    const configured = !!(all && (all.digidite || all.telnyx || all.twilio));
     if (!configured) return { ok: false, state: 'unknown', detail: `${label}: no voice gateway configured` };
     // Live infra present — a real reachability check runs here against the
     // gateway in production. We treat "configured" as operational at the

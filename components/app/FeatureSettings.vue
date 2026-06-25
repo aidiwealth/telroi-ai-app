@@ -84,8 +84,6 @@ function optionsFor(key: string) {
     return [
       { value: 'auto', label: 'Automatic (recommended)' },
       { value: 'asterisk', label: 'Core Asterisk (global)' },
-      { value: 'ruach', label: 'Ruach (Nigeria only)' },
-      { value: 'sotel', label: 'Sotel (Nigeria only)' },
       { value: 'digidite', label: 'Digidite (Nigeria)' },
       { value: 'telnyx', label: 'Telnyx (international)' },
       { value: 'twilio', label: 'Twilio (international)' }

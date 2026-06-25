@@ -10,7 +10,7 @@ import { platformSettings } from './platform';
 import { ensureSupportWorkspace } from './support';
 import { isNigeria } from './countries';
 
-const NG_PROVIDERS = ['telroi', 'sotel'];
+const NG_PROVIDERS = ['telroi'];
 
 // Region bucket for support routing: Nigeria vs International.
 export function supportRegionFor(country?: string | null): 'NG' | 'INTL' {

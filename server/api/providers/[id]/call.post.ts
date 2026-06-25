@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { decrypt } from '~/server/utils/crypto';
-import { twilio, telnyx, sotel } from '~/server/utils/providers';
+import { twilio, telnyx } from '~/server/utils/providers';
 
 const Body = z.object({ to: z.string().min(3) });
 
@@ -32,6 +32,5 @@ export default defineEventHandler(async (event) => {
   const base = useRuntimeConfig().public.appBaseUrl;
   if (prov.kind === 'twilio') return await twilio.makeCall(creds, p.data.to, `${base}/api/webhooks/twilio/voice`);
   if (prov.kind === 'telnyx') return await telnyx.makeCall(creds, p.data.to);
-  if (prov.kind === 'sotel') return await sotel.makeCall(creds, p.data.to);
   throw apiError('unsupported', 'Outbound not supported for this carrier');
 });

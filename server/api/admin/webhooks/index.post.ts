@@ -8,13 +8,11 @@ import { useDb, schema } from '~/server/db';
 import { encrypt } from '~/server/utils/crypto';
 
 const Body = z.object({
-  enabled: z.object({ twilio: z.boolean().optional(), telnyx: z.boolean().optional(), pbx: z.boolean().optional(), sotel: z.boolean().optional(), asterisk: z.boolean().optional(), ruach: z.boolean().optional() }).optional(),
+  enabled: z.object({ twilio: z.boolean().optional(), telnyx: z.boolean().optional(), pbx: z.boolean().optional(), asterisk: z.boolean().optional() }).optional(),
   telnyxSecret: z.string().optional(),
   pbxSecret: z.string().optional(),
   twilioSecret: z.string().optional(),
-  sotelSecret: z.string().optional(),
   asteriskSecret: z.string().optional(),
-  ruachSecret: z.string().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -30,9 +28,7 @@ export default defineEventHandler(async (event) => {
   if (p.data.telnyxSecret) patch.telnyxWebhookSecretEnc = encrypt(p.data.telnyxSecret);
   if (p.data.pbxSecret) patch.pbxWebhookSecretEnc = encrypt(p.data.pbxSecret);
   if (p.data.twilioSecret) patch.twilioWebhookSecretEnc = encrypt(p.data.twilioSecret);
-  if (p.data.sotelSecret) patch.sotelWebhookSecretEnc = encrypt(p.data.sotelSecret);
   if (p.data.asteriskSecret) patch.asteriskWebhookSecretEnc = encrypt(p.data.asteriskSecret);
-  if (p.data.ruachSecret) patch.ruachWebhookSecretEnc = encrypt(p.data.ruachSecret);
 
   if (s) await db.update(schema.platformSettings).set(patch).where(eq(schema.platformSettings.id, s.id));
   else await db.insert(schema.platformSettings).values({ id: 'singleton', ...patch });

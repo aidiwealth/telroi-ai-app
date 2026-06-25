@@ -66,7 +66,7 @@ const SELECT_OPTIONS: Record<string, { value: string; label: string }[]> = {
   defaultStatus: [ { value: 'lead', label: 'Lead' }, { value: 'active', label: 'Active' }, { value: 'customer', label: 'Customer' } ],
   bubblePosition: [ { value: 'middle-right', label: 'Middle right' }, { value: 'middle-left', label: 'Middle left' }, { value: 'bottom-right', label: 'Bottom right' }, { value: 'bottom-left', label: 'Bottom left' } ],
   routeTo: [ { value: 'agent', label: 'A live agent' }, { value: 'ai', label: 'AI agent' } ],
-  callProvider: [ { value: 'auto', label: 'Automatic (Nigeria → Sotel/Digidite, others → Telnyx/Twilio)' }, { value: 'digidite', label: 'Digidite' }, { value: 'telnyx', label: 'Telnyx' }, { value: 'twilio', label: 'Twilio' }, { value: 'sotel', label: 'Sotel (Nigeria only)' } ],
+  callProvider: [ { value: 'auto', label: 'Automatic (Nigeria → Telroi Voice, others → Telnyx/Twilio)' }, { value: 'digidite', label: 'Digidite' }, { value: 'telnyx', label: 'Telnyx' }, { value: 'twilio', label: 'Twilio' } ],
   allowedIntegrations: [ { value: 'zapier', label: 'Zapier' }, { value: 'pipedrive', label: 'Pipedrive' }, { value: 'hubspot', label: 'HubSpot' }, { value: 'zoho', label: 'Zoho CRM' } ]
 };
 function optionsFor(k: string) { return SELECT_OPTIONS[k] || []; }

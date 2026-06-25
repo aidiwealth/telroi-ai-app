@@ -203,41 +203,11 @@
           </div>
         </div>
 
-        <div class="set-subcard">
-          <div class="set-carrier-name">Sotel (Nigeria) direct SIP trunk <span class="set-pill" :class="{ on: cfg.sotelVoiceSet }">{{ cfg.sotelVoiceSet ? 'Configured' : 'Not set' }}</span></div>
-          <p class="set-card-desc" style="margin:4px 0 12px">A direct, IP-authenticated SIP trunk for Nigeria. Configure the gateway here; assign the actual phone numbers to Sotel under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>. Sotel is Nigeria-only.</p>
-          <div class="set-grid">
-            <div class="ad-field"><label>SIP gateway (IP or host)</label><input v-model="sotelVoice.sipGateway" class="ad-input mono" placeholder="96.0.46.249" /></div>
-            <div class="ad-field"><label>Port</label><input v-model.number="sotelVoice.sipPort" type="number" class="ad-input mono" placeholder="5060" /></div>
-            <div class="ad-field"><label>Transport</label>
-              <select v-model="sotelVoice.transport" class="select">
-                <option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option>
-              </select>
-            </div>
-            <div class="ad-field"><label>SIP domain (optional)</label><input v-model="sotelVoice.sipDomain" class="ad-input mono" placeholder="leave blank to use gateway" /></div>
-            <div class="ad-field"><label>Auth username (optional — blank if IP-auth)</label><input v-model="sotelVoice.authUser" class="ad-input mono" placeholder="(none for IP-authenticated)" /></div>
-            <div class="ad-field"><label>Auth password {{ cfg.sotelVoiceSet ? '· set' : '' }}</label><input v-model="sotelVoice.authPass" type="password" class="ad-input mono" :placeholder="cfg.sotelVoiceSet ? '••••••••' : '(none for IP-authenticated)'" /></div>
-            <div class="ad-field"><label>Default caller ID</label>
-              <select v-model="sotelVoice.callerId" class="select">
-                <option value="">— Select a provisioned Sotel number —</option>
-                <option v-for="n in sotelNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }}</option>
-              </select>
-              <span v-if="!sotelNumbers.length" class="ad-hint">No numbers assigned to Sotel yet. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink> first.</span>
-            </div>
-            <div class="ad-field set-span">
-              <label>Assigned numbers (DIDs)</label>
-              <div v-if="sotelNumbers.length" class="sotel-did-list">
-                <span v-for="n in sotelNumbers" :key="n.telnum" class="sotel-did mono">{{ n.telnum }}</span>
-              </div>
-              <span v-else class="ad-hint">DIDs come from Number inventory — assign numbers to the Sotel carrier there and they appear here automatically.</span>
-            </div>
-          </div>
-        </div>
 
         <!-- Our outbound IP to whitelist (shared by all IP-authenticated SIP vendors) -->
         <div class="set-ipbanner">
           <div class="set-ipbanner-label">Outbound / signaling IP to whitelist</div>
-          <p class="set-card-desc" style="margin:2px 0 10px">Give this IP to any SIP vendor that whitelists by address (Asterisk, Ruach, Sotel). Sourced from your deployment; override here if your egress IP differs.</p>
+          <p class="set-card-desc" style="margin:2px 0 10px">Give this IP to any SIP vendor that whitelists by address. Sourced from your deployment; override here if your egress IP differs.</p>
           <div class="set-ip-row">
             <code class="set-ip mono">{{ outboundSipIp || 'Not set' }}</code>
             <button class="btn btn-ghost btn-sm" type="button" @click="copy(outboundSipIp)">Copy</button>
@@ -273,23 +243,6 @@
           </div>
         </div>
 
-        <!-- Ruach (Nigeria only) -->
-        <div class="set-subcard">
-          <div class="set-carrier-name">Ruach (Nigeria) SIP trunk <span class="set-pill" :class="{ on: cfg.ruachVoiceSet }">{{ cfg.ruachVoiceSet ? 'Configured' : 'Not set' }}</span></div>
-          <p class="set-card-desc" style="margin:4px 0 12px">Nigeria-only SIP trunk via <code class="mono">sip.ruach.ng</code>. Logs in with a SIP account number + password; also IP-whitelisted (give them the outbound IP above). Assign numbers to Ruach under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</p>
-          <div class="set-grid">
-            <div class="ad-field"><label>SIP account number</label><input v-model="ruachVoice.sipAccount" class="ad-input mono" placeholder="e.g. 1001234" /></div>
-            <div class="ad-field"><label>SIP password {{ cfg.ruachVoiceSet ? '· set' : '' }}</label><input v-model="ruachVoice.sipPassword" type="password" class="ad-input mono" :placeholder="cfg.ruachVoiceSet ? '••••••••' : 'account password'" /></div>
-            <div class="ad-field"><label>SIP domain</label><input v-model="ruachVoice.sipDomain" class="ad-input mono" placeholder="sip.ruach.ng" /></div>
-            <div class="ad-field"><label>Default caller ID</label>
-              <select v-model="ruachVoice.callerId" class="select">
-                <option value="">— Select a provisioned Ruach number —</option>
-                <option v-for="n in ruachNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }}</option>
-              </select>
-              <span v-if="!ruachNumbers.length" class="ad-hint">No numbers assigned to Ruach yet. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="set-actions">
@@ -499,10 +452,6 @@
           <div class="ad-field"><label>Shared secret (sent as X-Telroi-Pbx-Secret){{ wh.secretsSet.pbx ? ' — set' : '' }}</label><input v-model="wh.pbxSecret" class="ad-input mono" :placeholder="wh.secretsSet.pbx ? '•••••• (leave blank to keep)' : 'a long random string'" /></div>
         </div>
         <div class="wh-row">
-          <div class="wh-head"><span class="wh-name">Sotel (SIP trunk)</span><label class="wh-toggle"><input type="checkbox" v-model="wh.enabled.sotel" /> Enabled</label></div>
-          <div class="wh-url"><input class="ad-input mono" :value="wh.urls.sotel" readonly /><button class="btn btn-ghost btn-sm" @click="copy(wh.urls.sotel)">Copy</button></div>
-          <div class="ad-field"><label>Shared secret (sent as X-Telroi-Sotel-Secret){{ wh.secretsSet.sotel ? ' — set' : '' }}</label><input v-model="wh.sotelSecret" class="ad-input mono" :placeholder="wh.secretsSet.sotel ? '•••••• (leave blank to keep)' : 'a long random string'" /></div>
-          <p class="ad-hint">Point your Sotel media gateway to POST inbound call events to this URL. Telroi returns the number's route (AI / person / department) for the gateway to connect.</p>
         </div>
         <div class="wh-row">
           <div class="wh-head"><span class="wh-name">Core Asterisk (global)</span><label class="wh-toggle"><input type="checkbox" v-model="wh.enabled.asterisk" /> Enabled</label></div>
@@ -511,10 +460,6 @@
           <p class="ad-hint">Point your Asterisk server (ARI/AGI bridge) to POST inbound call events to this URL. Telroi returns the number's route for Asterisk to connect.</p>
         </div>
         <div class="wh-row">
-          <div class="wh-head"><span class="wh-name">Ruach (Nigeria)</span><label class="wh-toggle"><input type="checkbox" v-model="wh.enabled.ruach" /> Enabled</label></div>
-          <div class="wh-url"><input class="ad-input mono" :value="wh.urls.ruach" readonly /><button class="btn btn-ghost btn-sm" @click="copy(wh.urls.ruach)">Copy</button></div>
-          <div class="ad-field"><label>Shared secret (sent as X-Telroi-Ruach-Secret){{ wh.secretsSet.ruach ? ' — set' : '' }}</label><input v-model="wh.ruachSecret" class="ad-input mono" :placeholder="wh.secretsSet.ruach ? '•••••• (leave blank to keep)' : 'a long random string'" /></div>
-          <p class="ad-hint">Point Ruach (or its peered gateway) to POST inbound call events to this URL. Telroi returns the number's route to connect.</p>
         </div>
       </div>
       <div class="set-actions">
@@ -533,12 +478,12 @@
         <span class="set-pill" :class="{ on: support.ready }">{{ support.ready ? 'Ready' : 'Not provisioned' }}</span>
       </div>
       <div class="field">
-        <label>Nigeria support number (Digidite / Sotel)</label>
+        <label>Nigeria support number</label>
         <select v-model="supportRegion.NG" class="select">
           <option value="">— Select a provisioned Nigerian number —</option>
           <option v-for="n in supportNumbersNG" :key="n.telnum" :value="n.telnum">{{ n.telnum }} · {{ provLabel(n.provider) }}</option>
         </select>
-        <span v-if="!supportNumbersNG.length" class="ad-hint">No Nigerian numbers provisioned. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink> (Digidite or Sotel).</span>
+        <span v-if="!supportNumbersNG.length" class="ad-hint">No Nigerian numbers provisioned. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</span>
       </div>
       <div class="field">
         <label>International support number (Twilio / Telnyx)</label>
@@ -805,23 +750,19 @@ const tnKey = ref(''); const tnConn = ref('');
 const twVoice = reactive({ apiKeySid: '', apiKeySecret: '', twimlAppSid: '', callerId: '' });
 const tnVoice = reactive({ sipUsername: '', sipPassword: '', connectionId: '', callerId: '' });
 const dgVoice = reactive({ wsServer: '', sipDomain: '', sipUsername: '', sipPassword: '', callerId: '' });
-const sotelVoice = reactive<any>({ sipGateway: '', sipPort: 5060, transport: 'udp', sipDomain: '', authUser: '', authPass: '', callerId: '' });
-const sotelNumbers = ref<{ telnum: string; region: string; status: string }[]>([]);
 const asteriskVoice = reactive<any>({ sipGateway: '', sipPort: 5060, transport: 'udp', sipDomain: '', authUser: '', authPass: '', callerId: '', apiBaseUrl: '', apiUsername: '', apiPassword: '', ariAppName: '' });
 const asteriskNumbers = ref<{ telnum: string; region: string; status: string }[]>([]);
-const ruachVoice = reactive<any>({ sipAccount: '', sipPassword: '', sipDomain: 'sip.ruach.ng', callerId: '' });
-const ruachNumbers = ref<{ telnum: string; region: string; status: string }[]>([]);
 const outboundSipIp = ref('');
 const digiditeNumbers = ref<{ telnum: string }[]>([]);
 const supportNumbers = ref<{ telnum: string; region: string; provider: string }[]>([]);
 const supportRegion = reactive<{ NG: string; INTL: string }>({ NG: '', INTL: '' });
-const supportNumbersNG = computed(() => supportNumbers.value.filter((n) => ['telroi', 'sotel'].includes(n.provider)));
-const supportNumbersINTL = computed(() => supportNumbers.value.filter((n) => !['telroi', 'sotel'].includes(n.provider)));
-function provLabel(p: string) { return ({ telroi: 'Digidite', sotel: 'Sotel', twilio: 'Twilio', telnyx: 'Telnyx' } as any)[p] || p; }
+const supportNumbersNG = computed(() => supportNumbers.value.filter((n) => ['telroi'].includes(n.provider)));
+const supportNumbersINTL = computed(() => supportNumbers.value.filter((n) => !['telroi'].includes(n.provider)));
+function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx' } as any)[p] || p; }
 const sipProxyDomain = ref('');
 
 // Inbound webhooks config
-const wh = reactive<any>({ urls: { twilio: '', telnyx: '', pbx: '', sotel: '', asterisk: '', ruach: '' }, enabled: {}, secretsSet: {}, telnyxSecret: '', pbxSecret: '', sotelSecret: '', asteriskSecret: '', ruachSecret: '' });
+const wh = reactive<any>({ urls: { twilio: '', telnyx: '', pbx: '', asterisk: '' }, enabled: {}, secretsSet: {}, telnyxSecret: '', pbxSecret: '', asteriskSecret: '' });
 const whSaving = ref(false);
 const whSaved = ref(false);
 async function loadWebhooks() {
@@ -836,11 +777,9 @@ async function saveWebhooks() {
     const body: any = { enabled: wh.enabled };
     if (wh.telnyxSecret) body.telnyxSecret = wh.telnyxSecret;
     if (wh.pbxSecret) body.pbxSecret = wh.pbxSecret;
-    if (wh.sotelSecret) body.sotelSecret = wh.sotelSecret;
     if (wh.asteriskSecret) body.asteriskSecret = wh.asteriskSecret;
-    if (wh.ruachSecret) body.ruachSecret = wh.ruachSecret;
     await $fetch('/api/admin/webhooks', { method: 'POST', body });
-    wh.telnyxSecret = ''; wh.pbxSecret = ''; wh.sotelSecret = ''; wh.asteriskSecret = ''; wh.ruachSecret = '';
+    wh.telnyxSecret = ''; wh.pbxSecret = ''; wh.asteriskSecret = '';
     await loadWebhooks();
     whSaved.value = true;
   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
@@ -1022,14 +961,6 @@ onMounted(async () => {
     statusDomain.value = s.statusDomain || '';
     pbxDomain.value = s.telroiPbxDomain || '';
     sipProxyDomain.value = s.sipProxyDomain || '';
-    // Pre-fill Sotel SIP trunk (non-secret values) so the form reflects what's saved.
-    if (s.sotelVoice) {
-      Object.assign(sotelVoice, {
-        sipGateway: s.sotelVoice.sipGateway || '', sipPort: s.sotelVoice.sipPort || 5060,
-        transport: s.sotelVoice.transport || 'udp', sipDomain: s.sotelVoice.sipDomain || '',
-        authUser: s.sotelVoice.authUser || '', authPass: '', callerId: s.sotelVoice.callerId || ''
-      });
-    }
     if (s.asteriskVoice) {
       Object.assign(asteriskVoice, {
         sipGateway: s.asteriskVoice.sipGateway || '', sipPort: s.asteriskVoice.sipPort || 5060,
@@ -1039,12 +970,6 @@ onMounted(async () => {
         apiPassword: '', ariAppName: s.asteriskVoice.ariAppName || ''
       });
     }
-    if (s.ruachVoice) {
-      Object.assign(ruachVoice, {
-        sipAccount: s.ruachVoice.sipAccount || '', sipPassword: '',
-        sipDomain: s.ruachVoice.sipDomain || 'sip.ruach.ng', callerId: s.ruachVoice.callerId || ''
-      });
-    }
     outboundSipIp.value = s.outboundSipIp || '';
     // Pre-fill per-region support numbers.
     if (s.supportNumbersByRegion) {
@@ -1052,15 +977,12 @@ onMounted(async () => {
       supportRegion.INTL = s.supportNumbersByRegion.INTL || '';
     }
     // DIDs + caller-ID options come from numbers assigned to carriers in inventory.
-    try { const sn = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'sotel' } }); sotelNumbers.value = sn.numbers || []; } catch { /* */ }
     try { const an = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'asterisk' } }); asteriskNumbers.value = an.numbers || []; } catch { /* */ }
-    try { const rn = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'ruach' } }); ruachNumbers.value = rn.numbers || []; } catch { /* */ }
     try { const dn = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'telroi' } }); digiditeNumbers.value = dn.numbers || []; } catch { /* */ }
     try {
       const all = await $fetch<any>('/api/admin/carrier/numbers');
-      // Support can dial from any Nigerian number on Telroi's own carriers (Digidite/Sotel).
-      // All assignable support numbers — NG (Digidite/Sotel) and international (Twilio/Telnyx).
-      supportNumbers.value = (all.numbers || []).filter((n: any) => ['telroi', 'sotel', 'twilio', 'telnyx'].includes(n.provider));
+      // All assignable support numbers — NG and international (Twilio/Telnyx).
+      supportNumbers.value = (all.numbers || []).filter((n: any) => ['telroi', 'twilio', 'telnyx'].includes(n.provider));
     } catch { /* */ }
     paymentMode.value = s.paymentMode || 'test';
     otpChannel.value = s.otpChannel || 'resend';
@@ -1088,22 +1010,10 @@ async function saveCarriers() {
     if (twVoice.apiKeySid && twVoice.apiKeySecret && twVoice.twimlAppSid) body.twilioVoice = { ...twVoice };
     if (tnVoice.sipUsername && tnVoice.sipPassword) body.telnyxVoice = { ...tnVoice };
     if (dgVoice.wsServer && dgVoice.sipUsername && dgVoice.sipPassword) body.digiditeVoice = { ...dgVoice };
-    // Sotel SIP trunk — only include when a gateway is set (IP-auth needs no user/pass).
-    // DIDs are derived from Number inventory (numbers assigned to the Sotel carrier),
-    // not typed here.
-    if (sotelVoice.sipGateway) {
-      const dids = sotelNumbers.value.map((n) => n.telnum);
-      body.sotelVoice = { ...sotelVoice, sipPort: Number(sotelVoice.sipPort) || 5060, dids };
-    }
     // Core Asterisk (global) — include when a gateway is set. DIDs from inventory.
     if (asteriskVoice.sipGateway) {
       const dids = asteriskNumbers.value.map((n) => n.telnum);
       body.asteriskVoice = { ...asteriskVoice, sipPort: Number(asteriskVoice.sipPort) || 5060, dids };
-    }
-    // Ruach (NG) — include when a SIP account is set.
-    if (ruachVoice.sipAccount) {
-      const dids = ruachNumbers.value.map((n) => n.telnum);
-      body.ruachVoice = { ...ruachVoice, sipDomain: ruachVoice.sipDomain || 'sip.ruach.ng', dids };
     }
     // Our outbound IP for vendors to whitelist (admin override of env default).
     body.outboundSipIp = outboundSipIp.value || '';
@@ -1111,7 +1021,7 @@ async function saveCarriers() {
     await $fetch('/api/admin/settings', { method: 'POST', body });
     cfg.value = await $fetch<any>('/api/admin/settings');
     pbxKey.value = twToken.value = tnKey.value = '';
-    twVoice.apiKeySecret = ''; tnVoice.sipPassword = ''; dgVoice.sipPassword = ''; sotelVoice.authPass = '';
+    twVoice.apiKeySecret = ''; tnVoice.sipPassword = ''; dgVoice.sipPassword = '';
     savedCarriers.value = true;
   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
   finally { savingCarriers.value = false; }
@@ -1229,8 +1139,6 @@ async function save() {
 .fx-naira { padding: 11px 12px; background: var(--paper-2); border: 1px solid var(--rule); border-right: 0; border-radius: var(--radius) 0 0 var(--radius); color: var(--ink-soft); font-size: 15px; }
 .fx-input { border-radius: 0 var(--radius) var(--radius) 0; width: 160px; }
 
-.sotel-did-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.sotel-did { font-size: 12.5px; padding: 4px 10px; background: var(--paper-3); border: 1px solid var(--rule-2); border-radius: 999px; color: var(--ink-soft); }
 .set-ipbanner { margin-top: 14px; padding: 14px 16px; background: var(--paper-2, #f7f6f3); border: 1px solid var(--rule); border-radius: var(--radius); }
 .set-ipbanner-label { font-size: 13px; font-weight: 600; color: var(--ink); }
 .set-ip-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

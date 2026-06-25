@@ -65,15 +65,13 @@
           <p v-else-if="searched && !searching" class="ad-hint">No purchasable numbers found for those filters.</p>
         </div>
 
-        <!-- NIGERIAN NUMBERS: manual add (Digidite or Sotel) -->
+        <!-- NIGERIAN NUMBERS: manual add (Telroi Voice) -->
         <div v-show="tab === 'ng'" class="inv-pane">
-          <p class="inv-pane-lede">Add Nigerian numbers you manage on Digidite, Sotel, Ruach, or your global Asterisk trunk. Choose the carrier the numbers are provisioned on, paste one or more, then they’re available to assign and for clients to purchase.</p>
+          <p class="inv-pane-lede">Add Nigerian numbers you manage on Telroi Voice (your own Asterisk PBX). Paste one or more, then they’re available to assign and for clients to purchase.</p>
           <div class="ad-field">
             <label>Carrier</label>
             <select v-model="draft.provider" class="ad-input">
               <option value="telroi">Digidite (Telroi PBX)</option>
-              <option value="sotel">Sotel (direct SIP trunk)</option>
-              <option value="ruach">Ruach (Nigeria SIP trunk)</option>
               <option value="asterisk">Core Asterisk (global SIP trunk)</option>
             </select>
           </div>
@@ -150,9 +148,9 @@ async function buy(n: any) {
   finally { buying.value = null; }
 }
 
-const PROV: Record<string, string[]> = { NG: ['Telroi', 'Sotel', 'Ruach', 'Asterisk'], US: ['Twilio', 'Telnyx', 'Asterisk'], CA: ['Twilio', 'Telnyx', 'Asterisk'], GB: ['Twilio', 'Telnyx', 'Asterisk'] };
+const PROV: Record<string, string[]> = { NG: ['Telroi', 'Asterisk'], US: ['Twilio', 'Telnyx', 'Asterisk'], CA: ['Twilio', 'Telnyx', 'Asterisk'], GB: ['Twilio', 'Telnyx', 'Asterisk'] };
 function providersFor(r: string) { return PROV[r] || ['Telroi']; }
-function provLabel(p: string) { return ({ telroi: 'Telroi PBX', twilio: 'Twilio', telnyx: 'Telnyx', sotel: 'Sotel', ruach: 'Ruach', asterisk: 'Asterisk' } as any)[p] || p; }
+function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice' } as any)[p] || p; }
 function regionLabel(r: string) { return ({ NG: 'Nigeria', US: 'United States', CA: 'Canada', GB: 'United Kingdom' } as any)[r] || r; }
 
 async function load() {

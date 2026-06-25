@@ -21,7 +21,7 @@ export const SETTINGS_CATALOG: Record<Feature, Record<string, { type: string; de
     bubblePosition: { type: 'select', default: 'middle-right', label: 'Button position' },
     greeting: { type: 'text', default: 'Need help? Call us.', label: 'Greeting text' },
     routeTo: { type: 'select', default: 'agent', label: 'Route calls to' }, // agent | ai
-    callProvider: { type: 'select', default: 'auto', label: 'Voice provider' }, // auto | asterisk | ruach | sotel | digidite | telnyx | twilio (operator-only)
+    callProvider: { type: 'select', default: 'auto', label: 'Voice provider' }, // auto | asterisk | digidite | telnyx | twilio (operator-only)
     routeTeamId: { type: 'select', default: '', label: 'Team to handle calls' },   // department id (when routeTo=agent)
     aiAgentId: { type: 'select', default: '', label: 'AI agent to answer' },        // ai_agents id (when routeTo=ai)
     csatEnabled: { type: 'bool', default: true, label: 'Ask for satisfaction rating after calls' },

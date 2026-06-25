@@ -8,9 +8,7 @@
 //   'telroi'   -> Telroi's own customized Digidite PBX (its subdomain + key)
 //   'twilio'   -> Twilio master account
 //   'telnyx'   -> Telnyx master account
-//   'sotel'    -> Sotel direct SIP trunk (Nigeria)
 //   'asterisk' -> Core Asterisk SIP trunk + ARI (global)
-//   'ruach'    -> Ruach SIP trunk via sip.ruach.ng (Nigeria)
 import { and, eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 import { apiError } from './api';
@@ -62,27 +60,6 @@ export async function placeCall(args: PlaceCallArgs) {
       if (!master.telnyx) throw apiError('no_carrier', 'Telnyx master account is not configured', 503);
       return await telnyx.makeCall({ ...master.telnyx, fromNumber: args.fromTelnum }, args.to);
     }
-    case 'sotel': {
-      // Sotel is a direct, IP-authenticated SIP trunk. Origination runs on the
-      // live media gateway peered with Sotel; here we build the dial intent
-      // (gateway/transport/caller-id) the gateway executes. Same control-plane
-      // pattern as the other carriers — actual audio bridges on live infra.
-      if (!master.sotel || !master.sotel.sipGateway) throw apiError('no_carrier', 'Sotel SIP trunk is not configured', 503);
-      return {
-        provider: 'sotel',
-        status: 'originating',
-        dial: {
-          to: args.to,
-          from: args.fromTelnum,
-          sipGateway: master.sotel.sipGateway,
-          sipPort: master.sotel.sipPort || 5060,
-          transport: master.sotel.transport || 'udp',
-          sipDomain: master.sotel.sipDomain || master.sotel.sipGateway,
-          authUser: master.sotel.authUser || '',
-          authPass: master.sotel.authPass || ''
-        }
-      };
-    }
     case 'asterisk': {
       // Core Asterisk: global, IP-authenticated SIP trunk on a separate server,
       // with an optional AMI/ARI REST API. Origination runs on the live Asterisk
@@ -106,25 +83,6 @@ export async function placeCall(args: PlaceCallArgs) {
           // instead of raw SIP signaling.
           apiBaseUrl: a.apiBaseUrl || '',
           ariAppName: a.ariAppName || ''
-        }
-      };
-    }
-    case 'ruach': {
-      // Ruach: Nigeria-only SIP trunk via sip.ruach.ng, account+password login,
-      // IP-whitelisted. Origination runs on the live media gateway peered with
-      // Ruach; here we build the dial intent. Control-plane only.
-      if (!(master as any).ruach || !(master as any).ruach.sipAccount) throw apiError('no_carrier', 'Ruach SIP trunk is not configured', 503);
-      const r = (master as any).ruach;
-      return {
-        provider: 'ruach',
-        status: 'originating',
-        dial: {
-          to: args.to,
-          from: args.fromTelnum,
-          sipDomain: r.sipDomain || 'sip.ruach.ng',
-          sipAccount: r.sipAccount,
-          authUser: r.sipAccount,
-          authPass: r.sipPassword || ''
         }
       };
     }

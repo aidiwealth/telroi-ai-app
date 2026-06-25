@@ -20,8 +20,8 @@ export default defineEventHandler(async (event) => {
   // Show ALL vendors as toggle choices; flag which match the client's region.
   const { providersForRegion } = await import('~/server/utils/regions');
   const regionSet = new Set(providersForRegion(region));
-  const ALL = ['telroi', 'sotel', 'ruach', 'asterisk', 'twilio', 'telnyx'];
-  const LABELS: Record<string, string> = { telroi: 'Telroi (Digidite)', twilio: 'Twilio', telnyx: 'Telnyx', sotel: 'Sotel', ruach: 'Ruach', asterisk: 'Core Asterisk' };
+  const ALL = ['telroi', 'asterisk', 'twilio', 'telnyx'];
+  const LABELS: Record<string, string> = { telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice' };
   return {
     region, overridden,
     override: (tenant.sipVendorOverride as string[] | null) ?? null,

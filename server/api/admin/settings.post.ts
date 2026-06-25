@@ -35,9 +35,7 @@ const Body = z.object({
   twilioVoice: z.object({ apiKeySid: z.string(), apiKeySecret: z.string(), twimlAppSid: z.string(), callerId: z.string() }).partial().optional(),
   telnyxVoice: z.object({ sipUsername: z.string(), sipPassword: z.string(), connectionId: z.string(), callerId: z.string() }).partial().optional(),
   digiditeVoice: z.object({ wsServer: z.string(), sipDomain: z.string(), sipUsername: z.string(), sipPassword: z.string(), callerId: z.string() }).partial().optional(),
-  sotelVoice: z.object({ sipGateway: z.string(), sipPort: z.number(), transport: z.enum(['udp', 'tcp', 'tls']), sipDomain: z.string(), authUser: z.string(), authPass: z.string(), callerId: z.string(), dids: z.array(z.string()) }).partial().optional(),
   asteriskVoice: z.object({ sipGateway: z.string(), sipPort: z.number(), transport: z.enum(['udp', 'tcp', 'tls']), sipDomain: z.string(), authUser: z.string(), authPass: z.string(), callerId: z.string(), dids: z.array(z.string()), apiBaseUrl: z.string(), apiUsername: z.string(), apiPassword: z.string(), ariAppName: z.string() }).partial().optional(),
-  ruachVoice: z.object({ sipAccount: z.string(), sipPassword: z.string(), sipDomain: z.string(), callerId: z.string(), dids: z.array(z.string()) }).partial().optional(),
   outboundSipIp: z.string().optional(),
   // Payment providers
   paymentMode: z.enum(['test', 'live']).optional(),
@@ -104,21 +102,6 @@ export default defineEventHandler(async (event) => {
   }
   // Sotel SIP trunk — IP-authenticated, so a gateway is enough (no user/pass required).
   // Merge over any existing creds so a blank password keeps the stored one.
-  if (d.sotelVoice && d.sotelVoice.sipGateway) {
-    const { decrypt } = await import('~/server/utils/crypto');
-    let existingSotel: any = {};
-    try { const cur = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1); if (cur[0]?.sotelVoiceCredsEnc) existingSotel = JSON.parse(decrypt(cur[0].sotelVoiceCredsEnc)); } catch { /* */ }
-    patch.sotelVoiceCredsEnc = encrypt(JSON.stringify({
-      sipGateway: d.sotelVoice.sipGateway,
-      sipPort: d.sotelVoice.sipPort || 5060,
-      transport: d.sotelVoice.transport || 'udp',
-      sipDomain: d.sotelVoice.sipDomain || '',
-      authUser: d.sotelVoice.authUser || existingSotel.authUser || '',
-      authPass: d.sotelVoice.authPass || existingSotel.authPass || '',
-      callerId: d.sotelVoice.callerId || '',
-      dids: d.sotelVoice.dids || existingSotel.dids || []
-    }));
-  }
 
   // Core Asterisk (global) — SIP trunk + AMI/ARI API. Preserve secrets when blank.
   if (d.asteriskVoice && d.asteriskVoice.sipGateway) {
@@ -138,20 +121,6 @@ export default defineEventHandler(async (event) => {
       apiUsername: d.asteriskVoice.apiUsername || ex.apiUsername || '',
       apiPassword: d.asteriskVoice.apiPassword || ex.apiPassword || '',
       ariAppName: d.asteriskVoice.ariAppName || ex.ariAppName || ''
-    }));
-  }
-
-  // Ruach (Nigeria only) — SIP account + password against sip.ruach.ng.
-  if (d.ruachVoice && d.ruachVoice.sipAccount) {
-    const { decrypt } = await import('~/server/utils/crypto');
-    let ex: any = {};
-    try { const cur = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1); if (cur[0]?.ruachVoiceCredsEnc) ex = JSON.parse(decrypt(cur[0].ruachVoiceCredsEnc)); } catch { /* */ }
-    patch.ruachVoiceCredsEnc = encrypt(JSON.stringify({
-      sipAccount: d.ruachVoice.sipAccount,
-      sipPassword: d.ruachVoice.sipPassword || ex.sipPassword || '',
-      sipDomain: d.ruachVoice.sipDomain || 'sip.ruach.ng',
-      callerId: d.ruachVoice.callerId || '',
-      dids: d.ruachVoice.dids || ex.dids || []
     }));
   }
 

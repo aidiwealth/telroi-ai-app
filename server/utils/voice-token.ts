@@ -63,24 +63,6 @@ export async function digiditeVoiceToken() {
   };
 }
 
-export async function sotelVoiceToken() {
-  const { sotel } = await voiceCredentials();
-  if (!sotel || !sotel.sipGateway) throw new Error('Sotel SIP trunk not configured');
-  // Sotel is a direct SIP trunk: hand the gateway/transport/caller-id to the
-  // media layer, which registers/peers with Sotel and bridges the audio. For
-  // IP-authenticated trunks authUser/authPass are blank.
-  return {
-    provider: 'sotel',
-    sipGateway: sotel.sipGateway,
-    sipPort: sotel.sipPort || 5060,
-    transport: sotel.transport || 'udp',
-    sipDomain: sotel.sipDomain || sotel.sipGateway,
-    authUser: sotel.authUser || '',
-    authPass: sotel.authPass || '',
-    callerId: sotel.callerId || (sotel.dids && sotel.dids[0]) || '',
-    dids: sotel.dids || []
-  };
-}
 
 export async function asteriskVoiceToken() {
   const { asterisk } = await voiceCredentials();
@@ -99,24 +81,11 @@ export async function asteriskVoiceToken() {
   };
 }
 
-export async function ruachVoiceToken() {
-  const { ruach } = await voiceCredentials();
-  if (!ruach || !ruach.sipAccount) throw new Error('Ruach SIP trunk not configured');
-  return {
-    provider: 'ruach',
-    sipAccount: ruach.sipAccount,
-    sipDomain: ruach.sipDomain || 'sip.ruach.ng',
-    callerId: ruach.callerId || (ruach.dids && ruach.dids[0]) || '',
-    dids: ruach.dids || []
-  };
-}
 
 export async function voiceTokenFor(provider: string, identity: string) {
   if (provider === 'twilio') return await twilioVoiceToken(identity);
   if (provider === 'telnyx') return await telnyxVoiceToken();
   if (provider === 'digidite') return await digiditeVoiceToken();
-  if (provider === 'sotel') return await sotelVoiceToken();
   if (provider === 'asterisk') return await asteriskVoiceToken();
-  if (provider === 'ruach') return await ruachVoiceToken();
   throw new Error(`Unknown voice provider: ${provider}`);
 }

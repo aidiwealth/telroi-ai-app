@@ -1,0 +1,1105 @@
+diff --git a/components/app/AdminFeatureSettings.vue b/components/app/AdminFeatureSettings.vue
+index 6d1aa27..c4918c8 100644
+--- a/components/app/AdminFeatureSettings.vue
++++ b/components/app/AdminFeatureSettings.vue
+@@ -66,7 +66,7 @@ const SELECT_OPTIONS: Record<string, { value: string; label: string }[]> = {
+   defaultStatus: [ { value: 'lead', label: 'Lead' }, { value: 'active', label: 'Active' }, { value: 'customer', label: 'Customer' } ],
+   bubblePosition: [ { value: 'middle-right', label: 'Middle right' }, { value: 'middle-left', label: 'Middle left' }, { value: 'bottom-right', label: 'Bottom right' }, { value: 'bottom-left', label: 'Bottom left' } ],
+   routeTo: [ { value: 'agent', label: 'A live agent' }, { value: 'ai', label: 'AI agent' } ],
+-  callProvider: [ { value: 'auto', label: 'Automatic (Nigeria → Sotel/Digidite, others → Telnyx/Twilio)' }, { value: 'digidite', label: 'Digidite' }, { value: 'telnyx', label: 'Telnyx' }, { value: 'twilio', label: 'Twilio' }, { value: 'sotel', label: 'Sotel (Nigeria only)' } ],
++  callProvider: [ { value: 'auto', label: 'Automatic (Nigeria → Telroi Voice, others → Telnyx/Twilio)' }, { value: 'digidite', label: 'Digidite' }, { value: 'telnyx', label: 'Telnyx' }, { value: 'twilio', label: 'Twilio' } ],
+   allowedIntegrations: [ { value: 'zapier', label: 'Zapier' }, { value: 'pipedrive', label: 'Pipedrive' }, { value: 'hubspot', label: 'HubSpot' }, { value: 'zoho', label: 'Zoho CRM' } ]
+ };
+ function optionsFor(k: string) { return SELECT_OPTIONS[k] || []; }
+diff --git a/components/app/FeatureSettings.vue b/components/app/FeatureSettings.vue
+index c38c21e..baa82b0 100644
+--- a/components/app/FeatureSettings.vue
++++ b/components/app/FeatureSettings.vue
+@@ -84,8 +84,6 @@ function optionsFor(key: string) {
+     return [
+       { value: 'auto', label: 'Automatic (recommended)' },
+       { value: 'asterisk', label: 'Core Asterisk (global)' },
+-      { value: 'ruach', label: 'Ruach (Nigeria only)' },
+-      { value: 'sotel', label: 'Sotel (Nigeria only)' },
+       { value: 'digidite', label: 'Digidite (Nigeria)' },
+       { value: 'telnyx', label: 'Telnyx (international)' },
+       { value: 'twilio', label: 'Twilio (international)' }
+diff --git a/pages/admin/inventory.vue b/pages/admin/inventory.vue
+index d11970c..aad15af 100644
+--- a/pages/admin/inventory.vue
++++ b/pages/admin/inventory.vue
+@@ -65,15 +65,13 @@
+           <p v-else-if="searched && !searching" class="ad-hint">No purchasable numbers found for those filters.</p>
+         </div>
+ 
+-        <!-- NIGERIAN NUMBERS: manual add (Digidite or Sotel) -->
++        <!-- NIGERIAN NUMBERS: manual add (Telroi Voice) -->
+         <div v-show="tab === 'ng'" class="inv-pane">
+-          <p class="inv-pane-lede">Add Nigerian numbers you manage on Digidite, Sotel, Ruach, or your global Asterisk trunk. Choose the carrier the numbers are provisioned on, paste one or more, then they’re available to assign and for clients to purchase.</p>
++          <p class="inv-pane-lede">Add Nigerian numbers you manage on Telroi Voice (your own Asterisk PBX). Paste one or more, then they’re available to assign and for clients to purchase.</p>
+           <div class="ad-field">
+             <label>Carrier</label>
+             <select v-model="draft.provider" class="ad-input">
+               <option value="telroi">Digidite (Telroi PBX)</option>
+-              <option value="sotel">Sotel (direct SIP trunk)</option>
+-              <option value="ruach">Ruach (Nigeria SIP trunk)</option>
+               <option value="asterisk">Core Asterisk (global SIP trunk)</option>
+             </select>
+           </div>
+@@ -150,9 +148,9 @@ async function buy(n: any) {
+   finally { buying.value = null; }
+ }
+ 
+-const PROV: Record<string, string[]> = { NG: ['Telroi', 'Sotel', 'Ruach', 'Asterisk'], US: ['Twilio', 'Telnyx', 'Asterisk'], CA: ['Twilio', 'Telnyx', 'Asterisk'], GB: ['Twilio', 'Telnyx', 'Asterisk'] };
++const PROV: Record<string, string[]> = { NG: ['Telroi', 'Asterisk'], US: ['Twilio', 'Telnyx', 'Asterisk'], CA: ['Twilio', 'Telnyx', 'Asterisk'], GB: ['Twilio', 'Telnyx', 'Asterisk'] };
+ function providersFor(r: string) { return PROV[r] || ['Telroi']; }
+-function provLabel(p: string) { return ({ telroi: 'Telroi PBX', twilio: 'Twilio', telnyx: 'Telnyx', sotel: 'Sotel', ruach: 'Ruach', asterisk: 'Asterisk' } as any)[p] || p; }
++function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice' } as any)[p] || p; }
+ function regionLabel(r: string) { return ({ NG: 'Nigeria', US: 'United States', CA: 'Canada', GB: 'United Kingdom' } as any)[r] || r; }
+ 
+ async function load() {
+diff --git a/pages/admin/settings.vue b/pages/admin/settings.vue
+index 7542b1a..99c9e4c 100644
+--- a/pages/admin/settings.vue
++++ b/pages/admin/settings.vue
+@@ -203,41 +203,11 @@
+           </div>
+         </div>
+ 
+-        <div class="set-subcard">
+-          <div class="set-carrier-name">Sotel (Nigeria) direct SIP trunk <span class="set-pill" :class="{ on: cfg.sotelVoiceSet }">{{ cfg.sotelVoiceSet ? 'Configured' : 'Not set' }}</span></div>
+-          <p class="set-card-desc" style="margin:4px 0 12px">A direct, IP-authenticated SIP trunk for Nigeria. Configure the gateway here; assign the actual phone numbers to Sotel under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>. Sotel is Nigeria-only.</p>
+-          <div class="set-grid">
+-            <div class="ad-field"><label>SIP gateway (IP or host)</label><input v-model="sotelVoice.sipGateway" class="ad-input mono" placeholder="96.0.46.249" /></div>
+-            <div class="ad-field"><label>Port</label><input v-model.number="sotelVoice.sipPort" type="number" class="ad-input mono" placeholder="5060" /></div>
+-            <div class="ad-field"><label>Transport</label>
+-              <select v-model="sotelVoice.transport" class="select">
+-                <option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option>
+-              </select>
+-            </div>
+-            <div class="ad-field"><label>SIP domain (optional)</label><input v-model="sotelVoice.sipDomain" class="ad-input mono" placeholder="leave blank to use gateway" /></div>
+-            <div class="ad-field"><label>Auth username (optional — blank if IP-auth)</label><input v-model="sotelVoice.authUser" class="ad-input mono" placeholder="(none for IP-authenticated)" /></div>
+-            <div class="ad-field"><label>Auth password {{ cfg.sotelVoiceSet ? '· set' : '' }}</label><input v-model="sotelVoice.authPass" type="password" class="ad-input mono" :placeholder="cfg.sotelVoiceSet ? '••••••••' : '(none for IP-authenticated)'" /></div>
+-            <div class="ad-field"><label>Default caller ID</label>
+-              <select v-model="sotelVoice.callerId" class="select">
+-                <option value="">— Select a provisioned Sotel number —</option>
+-                <option v-for="n in sotelNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }}</option>
+-              </select>
+-              <span v-if="!sotelNumbers.length" class="ad-hint">No numbers assigned to Sotel yet. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink> first.</span>
+-            </div>
+-            <div class="ad-field set-span">
+-              <label>Assigned numbers (DIDs)</label>
+-              <div v-if="sotelNumbers.length" class="sotel-did-list">
+-                <span v-for="n in sotelNumbers" :key="n.telnum" class="sotel-did mono">{{ n.telnum }}</span>
+-              </div>
+-              <span v-else class="ad-hint">DIDs come from Number inventory — assign numbers to the Sotel carrier there and they appear here automatically.</span>
+-            </div>
+-          </div>
+-        </div>
+ 
+         <!-- Our outbound IP to whitelist (shared by all IP-authenticated SIP vendors) -->
+         <div class="set-ipbanner">
+           <div class="set-ipbanner-label">Outbound / signaling IP to whitelist</div>
+-          <p class="set-card-desc" style="margin:2px 0 10px">Give this IP to any SIP vendor that whitelists by address (Asterisk, Ruach, Sotel). Sourced from your deployment; override here if your egress IP differs.</p>
++          <p class="set-card-desc" style="margin:2px 0 10px">Give this IP to any SIP vendor that whitelists by address. Sourced from your deployment; override here if your egress IP differs.</p>
+           <div class="set-ip-row">
+             <code class="set-ip mono">{{ outboundSipIp || 'Not set' }}</code>
+             <button class="btn btn-ghost btn-sm" type="button" @click="copy(outboundSipIp)">Copy</button>
+@@ -273,23 +243,6 @@
+           </div>
+         </div>
+ 
+-        <!-- Ruach (Nigeria only) -->
+-        <div class="set-subcard">
+-          <div class="set-carrier-name">Ruach (Nigeria) SIP trunk <span class="set-pill" :class="{ on: cfg.ruachVoiceSet }">{{ cfg.ruachVoiceSet ? 'Configured' : 'Not set' }}</span></div>
+-          <p class="set-card-desc" style="margin:4px 0 12px">Nigeria-only SIP trunk via <code class="mono">sip.ruach.ng</code>. Logs in with a SIP account number + password; also IP-whitelisted (give them the outbound IP above). Assign numbers to Ruach under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</p>
+-          <div class="set-grid">
+-            <div class="ad-field"><label>SIP account number</label><input v-model="ruachVoice.sipAccount" class="ad-input mono" placeholder="e.g. 1001234" /></div>
+-            <div class="ad-field"><label>SIP password {{ cfg.ruachVoiceSet ? '· set' : '' }}</label><input v-model="ruachVoice.sipPassword" type="password" class="ad-input mono" :placeholder="cfg.ruachVoiceSet ? '••••••••' : 'account password'" /></div>
+-            <div class="ad-field"><label>SIP domain</label><input v-model="ruachVoice.sipDomain" class="ad-input mono" placeholder="sip.ruach.ng" /></div>
+-            <div class="ad-field"><label>Default caller ID</label>
+-              <select v-model="ruachVoice.callerId" class="select">
+-                <option value="">— Select a provisioned Ruach number —</option>
+-                <option v-for="n in ruachNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }}</option>
+-              </select>
+-              <span v-if="!ruachNumbers.length" class="ad-hint">No numbers assigned to Ruach yet. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</span>
+-            </div>
+-          </div>
+-        </div>
+       </div>
+ 
+       <div class="set-actions">
+@@ -499,10 +452,6 @@
+           <div class="ad-field"><label>Shared secret (sent as X-Telroi-Pbx-Secret){{ wh.secretsSet.pbx ? ' — set' : '' }}</label><input v-model="wh.pbxSecret" class="ad-input mono" :placeholder="wh.secretsSet.pbx ? '•••••• (leave blank to keep)' : 'a long random string'" /></div>
+         </div>
+         <div class="wh-row">
+-          <div class="wh-head"><span class="wh-name">Sotel (SIP trunk)</span><label class="wh-toggle"><input type="checkbox" v-model="wh.enabled.sotel" /> Enabled</label></div>
+-          <div class="wh-url"><input class="ad-input mono" :value="wh.urls.sotel" readonly /><button class="btn btn-ghost btn-sm" @click="copy(wh.urls.sotel)">Copy</button></div>
+-          <div class="ad-field"><label>Shared secret (sent as X-Telroi-Sotel-Secret){{ wh.secretsSet.sotel ? ' — set' : '' }}</label><input v-model="wh.sotelSecret" class="ad-input mono" :placeholder="wh.secretsSet.sotel ? '•••••• (leave blank to keep)' : 'a long random string'" /></div>
+-          <p class="ad-hint">Point your Sotel media gateway to POST inbound call events to this URL. Telroi returns the number's route (AI / person / department) for the gateway to connect.</p>
+         </div>
+         <div class="wh-row">
+           <div class="wh-head"><span class="wh-name">Core Asterisk (global)</span><label class="wh-toggle"><input type="checkbox" v-model="wh.enabled.asterisk" /> Enabled</label></div>
+@@ -511,10 +460,6 @@
+           <p class="ad-hint">Point your Asterisk server (ARI/AGI bridge) to POST inbound call events to this URL. Telroi returns the number's route for Asterisk to connect.</p>
+         </div>
+         <div class="wh-row">
+-          <div class="wh-head"><span class="wh-name">Ruach (Nigeria)</span><label class="wh-toggle"><input type="checkbox" v-model="wh.enabled.ruach" /> Enabled</label></div>
+-          <div class="wh-url"><input class="ad-input mono" :value="wh.urls.ruach" readonly /><button class="btn btn-ghost btn-sm" @click="copy(wh.urls.ruach)">Copy</button></div>
+-          <div class="ad-field"><label>Shared secret (sent as X-Telroi-Ruach-Secret){{ wh.secretsSet.ruach ? ' — set' : '' }}</label><input v-model="wh.ruachSecret" class="ad-input mono" :placeholder="wh.secretsSet.ruach ? '•••••• (leave blank to keep)' : 'a long random string'" /></div>
+-          <p class="ad-hint">Point Ruach (or its peered gateway) to POST inbound call events to this URL. Telroi returns the number's route to connect.</p>
+         </div>
+       </div>
+       <div class="set-actions">
+@@ -533,12 +478,12 @@
+         <span class="set-pill" :class="{ on: support.ready }">{{ support.ready ? 'Ready' : 'Not provisioned' }}</span>
+       </div>
+       <div class="field">
+-        <label>Nigeria support number (Digidite / Sotel)</label>
++        <label>Nigeria support number</label>
+         <select v-model="supportRegion.NG" class="select">
+           <option value="">— Select a provisioned Nigerian number —</option>
+           <option v-for="n in supportNumbersNG" :key="n.telnum" :value="n.telnum">{{ n.telnum }} · {{ provLabel(n.provider) }}</option>
+         </select>
+-        <span v-if="!supportNumbersNG.length" class="ad-hint">No Nigerian numbers provisioned. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink> (Digidite or Sotel).</span>
++        <span v-if="!supportNumbersNG.length" class="ad-hint">No Nigerian numbers provisioned. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</span>
+       </div>
+       <div class="field">
+         <label>International support number (Twilio / Telnyx)</label>
+@@ -805,23 +750,19 @@ const tnKey = ref(''); const tnConn = ref('');
+ const twVoice = reactive({ apiKeySid: '', apiKeySecret: '', twimlAppSid: '', callerId: '' });
+ const tnVoice = reactive({ sipUsername: '', sipPassword: '', connectionId: '', callerId: '' });
+ const dgVoice = reactive({ wsServer: '', sipDomain: '', sipUsername: '', sipPassword: '', callerId: '' });
+-const sotelVoice = reactive<any>({ sipGateway: '', sipPort: 5060, transport: 'udp', sipDomain: '', authUser: '', authPass: '', callerId: '' });
+-const sotelNumbers = ref<{ telnum: string; region: string; status: string }[]>([]);
+ const asteriskVoice = reactive<any>({ sipGateway: '', sipPort: 5060, transport: 'udp', sipDomain: '', authUser: '', authPass: '', callerId: '', apiBaseUrl: '', apiUsername: '', apiPassword: '', ariAppName: '' });
+ const asteriskNumbers = ref<{ telnum: string; region: string; status: string }[]>([]);
+-const ruachVoice = reactive<any>({ sipAccount: '', sipPassword: '', sipDomain: 'sip.ruach.ng', callerId: '' });
+-const ruachNumbers = ref<{ telnum: string; region: string; status: string }[]>([]);
+ const outboundSipIp = ref('');
+ const digiditeNumbers = ref<{ telnum: string }[]>([]);
+ const supportNumbers = ref<{ telnum: string; region: string; provider: string }[]>([]);
+ const supportRegion = reactive<{ NG: string; INTL: string }>({ NG: '', INTL: '' });
+-const supportNumbersNG = computed(() => supportNumbers.value.filter((n) => ['telroi', 'sotel'].includes(n.provider)));
+-const supportNumbersINTL = computed(() => supportNumbers.value.filter((n) => !['telroi', 'sotel'].includes(n.provider)));
+-function provLabel(p: string) { return ({ telroi: 'Digidite', sotel: 'Sotel', twilio: 'Twilio', telnyx: 'Telnyx' } as any)[p] || p; }
++const supportNumbersNG = computed(() => supportNumbers.value.filter((n) => ['telroi'].includes(n.provider)));
++const supportNumbersINTL = computed(() => supportNumbers.value.filter((n) => !['telroi'].includes(n.provider)));
++function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx' } as any)[p] || p; }
+ const sipProxyDomain = ref('');
+ 
+ // Inbound webhooks config
+-const wh = reactive<any>({ urls: { twilio: '', telnyx: '', pbx: '', sotel: '', asterisk: '', ruach: '' }, enabled: {}, secretsSet: {}, telnyxSecret: '', pbxSecret: '', sotelSecret: '', asteriskSecret: '', ruachSecret: '' });
++const wh = reactive<any>({ urls: { twilio: '', telnyx: '', pbx: '', asterisk: '' }, enabled: {}, secretsSet: {}, telnyxSecret: '', pbxSecret: '', asteriskSecret: '' });
+ const whSaving = ref(false);
+ const whSaved = ref(false);
+ async function loadWebhooks() {
+@@ -836,11 +777,9 @@ async function saveWebhooks() {
+     const body: any = { enabled: wh.enabled };
+     if (wh.telnyxSecret) body.telnyxSecret = wh.telnyxSecret;
+     if (wh.pbxSecret) body.pbxSecret = wh.pbxSecret;
+-    if (wh.sotelSecret) body.sotelSecret = wh.sotelSecret;
+     if (wh.asteriskSecret) body.asteriskSecret = wh.asteriskSecret;
+-    if (wh.ruachSecret) body.ruachSecret = wh.ruachSecret;
+     await $fetch('/api/admin/webhooks', { method: 'POST', body });
+-    wh.telnyxSecret = ''; wh.pbxSecret = ''; wh.sotelSecret = ''; wh.asteriskSecret = ''; wh.ruachSecret = '';
++    wh.telnyxSecret = ''; wh.pbxSecret = ''; wh.asteriskSecret = '';
+     await loadWebhooks();
+     whSaved.value = true;
+   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+@@ -1021,14 +960,7 @@ onMounted(async () => {
+     docsDomain.value = s.docsDomain || '';
+     statusDomain.value = s.statusDomain || '';
+     pbxDomain.value = s.telroiPbxDomain || '';
+-    sipProxyDomain.value = s.sipProxyDomain || '';
+-    // Pre-fill Sotel SIP trunk (non-secret values) so the form reflects what's saved.
+-    if (s.sotelVoice) {
+-      Object.assign(sotelVoice, {
+-        sipGateway: s.sotelVoice.sipGateway || '', sipPort: s.sotelVoice.sipPort || 5060,
+-        transport: s.sotelVoice.transport || 'udp', sipDomain: s.sotelVoice.sipDomain || '',
+-        authUser: s.sotelVoice.authUser || '', authPass: '', callerId: s.sotelVoice.callerId || ''
+-      });
++    sipProxyDomain.value = s.sipProxyDomain || '';);
+     }
+     if (s.asteriskVoice) {
+       Object.assign(asteriskVoice, {
+@@ -1038,12 +970,7 @@ onMounted(async () => {
+         apiBaseUrl: s.asteriskVoice.apiBaseUrl || '', apiUsername: s.asteriskVoice.apiUsername || '',
+         apiPassword: '', ariAppName: s.asteriskVoice.ariAppName || ''
+       });
+-    }
+-    if (s.ruachVoice) {
+-      Object.assign(ruachVoice, {
+-        sipAccount: s.ruachVoice.sipAccount || '', sipPassword: '',
+-        sipDomain: s.ruachVoice.sipDomain || 'sip.ruach.ng', callerId: s.ruachVoice.callerId || ''
+-      });
++    });
+     }
+     outboundSipIp.value = s.outboundSipIp || '';
+     // Pre-fill per-region support numbers.
+@@ -1052,15 +979,12 @@ onMounted(async () => {
+       supportRegion.INTL = s.supportNumbersByRegion.INTL || '';
+     }
+     // DIDs + caller-ID options come from numbers assigned to carriers in inventory.
+-    try { const sn = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'sotel' } }); sotelNumbers.value = sn.numbers || []; } catch { /* */ }
+     try { const an = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'asterisk' } }); asteriskNumbers.value = an.numbers || []; } catch { /* */ }
+-    try { const rn = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'ruach' } }); ruachNumbers.value = rn.numbers || []; } catch { /* */ }
+     try { const dn = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'telroi' } }); digiditeNumbers.value = dn.numbers || []; } catch { /* */ }
+     try {
+       const all = await $fetch<any>('/api/admin/carrier/numbers');
+-      // Support can dial from any Nigerian number on Telroi's own carriers (Digidite/Sotel).
+-      // All assignable support numbers — NG (Digidite/Sotel) and international (Twilio/Telnyx).
+-      supportNumbers.value = (all.numbers || []).filter((n: any) => ['telroi', 'sotel', 'twilio', 'telnyx'].includes(n.provider));
++      // All assignable support numbers — NG and international (Twilio/Telnyx).
++      supportNumbers.value = (all.numbers || []).filter((n: any) => ['telroi', 'twilio', 'telnyx'].includes(n.provider));
+     } catch { /* */ }
+     paymentMode.value = s.paymentMode || 'test';
+     otpChannel.value = s.otpChannel || 'resend';
+@@ -1088,30 +1012,18 @@ async function saveCarriers() {
+     if (twVoice.apiKeySid && twVoice.apiKeySecret && twVoice.twimlAppSid) body.twilioVoice = { ...twVoice };
+     if (tnVoice.sipUsername && tnVoice.sipPassword) body.telnyxVoice = { ...tnVoice };
+     if (dgVoice.wsServer && dgVoice.sipUsername && dgVoice.sipPassword) body.digiditeVoice = { ...dgVoice };
+-    // Sotel SIP trunk — only include when a gateway is set (IP-auth needs no user/pass).
+-    // DIDs are derived from Number inventory (numbers assigned to the Sotel carrier),
+-    // not typed here.
+-    if (sotelVoice.sipGateway) {
+-      const dids = sotelNumbers.value.map((n) => n.telnum);
+-      body.sotelVoice = { ...sotelVoice, sipPort: Number(sotelVoice.sipPort) || 5060, dids };
+-    }
+     // Core Asterisk (global) — include when a gateway is set. DIDs from inventory.
+     if (asteriskVoice.sipGateway) {
+       const dids = asteriskNumbers.value.map((n) => n.telnum);
+       body.asteriskVoice = { ...asteriskVoice, sipPort: Number(asteriskVoice.sipPort) || 5060, dids };
+     }
+-    // Ruach (NG) — include when a SIP account is set.
+-    if (ruachVoice.sipAccount) {
+-      const dids = ruachNumbers.value.map((n) => n.telnum);
+-      body.ruachVoice = { ...ruachVoice, sipDomain: ruachVoice.sipDomain || 'sip.ruach.ng', dids };
+-    }
+     // Our outbound IP for vendors to whitelist (admin override of env default).
+     body.outboundSipIp = outboundSipIp.value || '';
+     body.sipProxyDomain = sipProxyDomain.value;
+     await $fetch('/api/admin/settings', { method: 'POST', body });
+     cfg.value = await $fetch<any>('/api/admin/settings');
+     pbxKey.value = twToken.value = tnKey.value = '';
+-    twVoice.apiKeySecret = ''; tnVoice.sipPassword = ''; dgVoice.sipPassword = ''; sotelVoice.authPass = '';
++    twVoice.apiKeySecret = ''; tnVoice.sipPassword = ''; dgVoice.sipPassword = '';
+     savedCarriers.value = true;
+   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+   finally { savingCarriers.value = false; }
+@@ -1229,8 +1141,6 @@ async function save() {
+ .fx-naira { padding: 11px 12px; background: var(--paper-2); border: 1px solid var(--rule); border-right: 0; border-radius: var(--radius) 0 0 var(--radius); color: var(--ink-soft); font-size: 15px; }
+ .fx-input { border-radius: 0 var(--radius) var(--radius) 0; width: 160px; }
+ 
+-.sotel-did-list { display: flex; flex-wrap: wrap; gap: 6px; }
+-.sotel-did { font-size: 12.5px; padding: 4px 10px; background: var(--paper-3); border: 1px solid var(--rule-2); border-radius: 999px; color: var(--ink-soft); }
+ .set-ipbanner { margin-top: 14px; padding: 14px 16px; background: var(--paper-2, #f7f6f3); border: 1px solid var(--rule); border-radius: var(--radius); }
+ .set-ipbanner-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+ .set-ip-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+diff --git a/server/api/admin/clients/[domain]/sip-vendors.get.ts b/server/api/admin/clients/[domain]/sip-vendors.get.ts
+index 029918f..c835f6a 100644
+--- a/server/api/admin/clients/[domain]/sip-vendors.get.ts
++++ b/server/api/admin/clients/[domain]/sip-vendors.get.ts
+@@ -20,8 +20,8 @@ export default defineEventHandler(async (event) => {
+   // Show ALL vendors as toggle choices; flag which match the client's region.
+   const { providersForRegion } = await import('~/server/utils/regions');
+   const regionSet = new Set(providersForRegion(region));
+-  const ALL = ['telroi', 'sotel', 'ruach', 'asterisk', 'twilio', 'telnyx'];
+-  const LABELS: Record<string, string> = { telroi: 'Telroi (Digidite)', twilio: 'Twilio', telnyx: 'Telnyx', sotel: 'Sotel', ruach: 'Ruach', asterisk: 'Core Asterisk' };
++  const ALL = ['telroi', 'asterisk', 'twilio', 'telnyx'];
++  const LABELS: Record<string, string> = { telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice' };
+   return {
+     region, overridden,
+     override: (tenant.sipVendorOverride as string[] | null) ?? null,
+diff --git a/server/api/admin/clients/[domain]/sip-vendors.post.ts b/server/api/admin/clients/[domain]/sip-vendors.post.ts
+index 5077b5d..2c381d5 100644
+--- a/server/api/admin/clients/[domain]/sip-vendors.post.ts
++++ b/server/api/admin/clients/[domain]/sip-vendors.post.ts
+@@ -9,7 +9,7 @@ import { useDb, schema } from '~/server/db';
+ import { logEvent } from '~/server/utils/logs';
+ 
+ const Body = z.object({
+-  vendors: z.array(z.enum(['twilio', 'telnyx', 'telroi', 'sotel', 'ruach', 'asterisk'])).nullable().optional(),
++  vendors: z.array(z.enum(['twilio', 'telnyx', 'telroi', 'asterisk'])).nullable().optional(),
+   sipDeviceVendor: z.enum(['telroi', 'twilio', 'telnyx']).nullable().optional()
+ });
+ 
+diff --git a/server/api/admin/inventory/index.post.ts b/server/api/admin/inventory/index.post.ts
+index 295c7d8..3b6e5ec 100644
+--- a/server/api/admin/inventory/index.post.ts
++++ b/server/api/admin/inventory/index.post.ts
+@@ -10,7 +10,7 @@ import { detectRegion, providerAllowed, providersForRegion, regionLabel } from '
+ 
+ const Body = z.object({
+   numbers: z.string().min(3),
+-  provider: z.enum(['telroi', 'twilio', 'telnyx', 'sotel', 'asterisk', 'ruach']),
++  provider: z.enum(['telroi', 'twilio', 'telnyx', 'asterisk']),
+   regionOverride: z.enum(['NG', 'US', 'CA', 'GB']).optional(),
+   monthlyUsdMinorOverride: z.number().int().positive().optional()
+ });
+diff --git a/server/api/admin/settings.get.ts b/server/api/admin/settings.get.ts
+index 0a4804e..9adb20f 100644
+--- a/server/api/admin/settings.get.ts
++++ b/server/api/admin/settings.get.ts
+@@ -23,15 +23,7 @@ export default defineEventHandler(async (event) => {
+     twilioVoiceSet: !!s?.twilioVoiceCredsEnc,
+     telnyxVoiceSet: !!s?.telnyxVoiceCredsEnc,
+     digiditeVoiceSet: !!s?.digiditeVoiceCredsEnc,
+-    sotelVoiceSet: !!s?.sotelVoiceCredsEnc,
+     // Non-secret Sotel trunk values for the form to pre-fill (auth password omitted).
+-    sotelVoice: (() => {
+-      if (!s?.sotelVoiceCredsEnc) return null;
+-      try {
+-        const v = JSON.parse(decrypt(s.sotelVoiceCredsEnc));
+-        return { sipGateway: v.sipGateway, sipPort: v.sipPort, transport: v.transport, sipDomain: v.sipDomain, authUser: v.authUser, callerId: v.callerId, dids: v.dids || [] };
+-      } catch { return null; }
+-    })(),
+     asteriskVoiceSet: !!s?.asteriskVoiceCredsEnc,
+     asteriskVoice: (() => {
+       if (!s?.asteriskVoiceCredsEnc) return null;
+@@ -41,15 +33,6 @@ export default defineEventHandler(async (event) => {
+         return { sipGateway: v.sipGateway, sipPort: v.sipPort, transport: v.transport, sipDomain: v.sipDomain, authUser: v.authUser, callerId: v.callerId, dids: v.dids || [], apiBaseUrl: v.apiBaseUrl, apiUsername: v.apiUsername, ariAppName: v.ariAppName };
+       } catch { return null; }
+     })(),
+-    ruachVoiceSet: !!s?.ruachVoiceCredsEnc,
+-    ruachVoice: (() => {
+-      if (!s?.ruachVoiceCredsEnc) return null;
+-      try {
+-        const v = JSON.parse(decrypt(s.ruachVoiceCredsEnc));
+-        // sipPassword omitted.
+-        return { sipAccount: v.sipAccount, sipDomain: v.sipDomain, callerId: v.callerId, dids: v.dids || [] };
+-      } catch { return null; }
+-    })(),
+     // Our outbound IP for vendors to whitelist (admin override, else env default).
+     outboundSipIp: s?.outboundSipIp || process.env.OUTBOUND_SIP_IP || '',
+     // Payment provider state (booleans only) + active mode
+diff --git a/server/api/admin/settings.post.ts b/server/api/admin/settings.post.ts
+index f01eb21..69b2c2a 100644
+--- a/server/api/admin/settings.post.ts
++++ b/server/api/admin/settings.post.ts
+@@ -35,9 +35,7 @@ const Body = z.object({
+   twilioVoice: z.object({ apiKeySid: z.string(), apiKeySecret: z.string(), twimlAppSid: z.string(), callerId: z.string() }).partial().optional(),
+   telnyxVoice: z.object({ sipUsername: z.string(), sipPassword: z.string(), connectionId: z.string(), callerId: z.string() }).partial().optional(),
+   digiditeVoice: z.object({ wsServer: z.string(), sipDomain: z.string(), sipUsername: z.string(), sipPassword: z.string(), callerId: z.string() }).partial().optional(),
+-  sotelVoice: z.object({ sipGateway: z.string(), sipPort: z.number(), transport: z.enum(['udp', 'tcp', 'tls']), sipDomain: z.string(), authUser: z.string(), authPass: z.string(), callerId: z.string(), dids: z.array(z.string()) }).partial().optional(),
+   asteriskVoice: z.object({ sipGateway: z.string(), sipPort: z.number(), transport: z.enum(['udp', 'tcp', 'tls']), sipDomain: z.string(), authUser: z.string(), authPass: z.string(), callerId: z.string(), dids: z.array(z.string()), apiBaseUrl: z.string(), apiUsername: z.string(), apiPassword: z.string(), ariAppName: z.string() }).partial().optional(),
+-  ruachVoice: z.object({ sipAccount: z.string(), sipPassword: z.string(), sipDomain: z.string(), callerId: z.string(), dids: z.array(z.string()) }).partial().optional(),
+   outboundSipIp: z.string().optional(),
+   // Payment providers
+   paymentMode: z.enum(['test', 'live']).optional(),
+@@ -104,21 +102,6 @@ export default defineEventHandler(async (event) => {
+   }
+   // Sotel SIP trunk — IP-authenticated, so a gateway is enough (no user/pass required).
+   // Merge over any existing creds so a blank password keeps the stored one.
+-  if (d.sotelVoice && d.sotelVoice.sipGateway) {
+-    const { decrypt } = await import('~/server/utils/crypto');
+-    let existingSotel: any = {};
+-    try { const cur = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1); if (cur[0]?.sotelVoiceCredsEnc) existingSotel = JSON.parse(decrypt(cur[0].sotelVoiceCredsEnc)); } catch { /* */ }
+-    patch.sotelVoiceCredsEnc = encrypt(JSON.stringify({
+-      sipGateway: d.sotelVoice.sipGateway,
+-      sipPort: d.sotelVoice.sipPort || 5060,
+-      transport: d.sotelVoice.transport || 'udp',
+-      sipDomain: d.sotelVoice.sipDomain || '',
+-      authUser: d.sotelVoice.authUser || existingSotel.authUser || '',
+-      authPass: d.sotelVoice.authPass || existingSotel.authPass || '',
+-      callerId: d.sotelVoice.callerId || '',
+-      dids: d.sotelVoice.dids || existingSotel.dids || []
+-    }));
+-  }
+ 
+   // Core Asterisk (global) — SIP trunk + AMI/ARI API. Preserve secrets when blank.
+   if (d.asteriskVoice && d.asteriskVoice.sipGateway) {
+@@ -141,20 +124,6 @@ export default defineEventHandler(async (event) => {
+     }));
+   }
+ 
+-  // Ruach (Nigeria only) — SIP account + password against sip.ruach.ng.
+-  if (d.ruachVoice && d.ruachVoice.sipAccount) {
+-    const { decrypt } = await import('~/server/utils/crypto');
+-    let ex: any = {};
+-    try { const cur = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1); if (cur[0]?.ruachVoiceCredsEnc) ex = JSON.parse(decrypt(cur[0].ruachVoiceCredsEnc)); } catch { /* */ }
+-    patch.ruachVoiceCredsEnc = encrypt(JSON.stringify({
+-      sipAccount: d.ruachVoice.sipAccount,
+-      sipPassword: d.ruachVoice.sipPassword || ex.sipPassword || '',
+-      sipDomain: d.ruachVoice.sipDomain || 'sip.ruach.ng',
+-      callerId: d.ruachVoice.callerId || '',
+-      dids: d.ruachVoice.dids || ex.dids || []
+-    }));
+-  }
+-
+   // Our outbound IP that vendors whitelist (admin override of the env default).
+   if (d.outboundSipIp !== undefined) {
+     patch.outboundSipIp = (d.outboundSipIp || '').trim() || null;
+diff --git a/server/api/admin/webhooks/index.get.ts b/server/api/admin/webhooks/index.get.ts
+index 64ca02e..0b48523 100644
+--- a/server/api/admin/webhooks/index.get.ts
++++ b/server/api/admin/webhooks/index.get.ts
+@@ -13,18 +13,14 @@ export default defineEventHandler(async (event) => {
+       twilio: `${base}/api/webhooks/twilio/voice`,
+       telnyx: `${base}/api/webhooks/telnyx/voice`,
+       pbx: `${base}/api/webhooks/pbx/voice`,
+-      sotel: `${base}/api/webhooks/sotel/voice`,
+       asterisk: `${base}/api/webhooks/asterisk/voice`,
+-      ruach: `${base}/api/webhooks/ruach/voice`
+     },
+     enabled: (s?.inboundWebhooksEnabled as any) || {},
+     secretsSet: {
+       twilio: !!(s as any)?.twilioWebhookSecretEnc,   // optional; Twilio uses auth token
+       telnyx: !!(s as any)?.telnyxWebhookSecretEnc,
+       pbx: !!(s as any)?.pbxWebhookSecretEnc,
+-      sotel: !!(s as any)?.sotelWebhookSecretEnc,
+       asterisk: !!(s as any)?.asteriskWebhookSecretEnc,
+-      ruach: !!(s as any)?.ruachWebhookSecretEnc
+     }
+   };
+ });
+diff --git a/server/api/admin/webhooks/index.post.ts b/server/api/admin/webhooks/index.post.ts
+index 216469d..ac0d40c 100644
+--- a/server/api/admin/webhooks/index.post.ts
++++ b/server/api/admin/webhooks/index.post.ts
+@@ -8,13 +8,11 @@ import { useDb, schema } from '~/server/db';
+ import { encrypt } from '~/server/utils/crypto';
+ 
+ const Body = z.object({
+-  enabled: z.object({ twilio: z.boolean().optional(), telnyx: z.boolean().optional(), pbx: z.boolean().optional(), sotel: z.boolean().optional(), asterisk: z.boolean().optional(), ruach: z.boolean().optional() }).optional(),
++  enabled: z.object({ twilio: z.boolean().optional(), telnyx: z.boolean().optional(), pbx: z.boolean().optional(), asterisk: z.boolean().optional() }).optional(),
+   telnyxSecret: z.string().optional(),
+   pbxSecret: z.string().optional(),
+   twilioSecret: z.string().optional(),
+-  sotelSecret: z.string().optional(),
+   asteriskSecret: z.string().optional(),
+-  ruachSecret: z.string().optional()
+ });
+ 
+ export default defineEventHandler(async (event) => {
+@@ -30,9 +28,7 @@ export default defineEventHandler(async (event) => {
+   if (p.data.telnyxSecret) patch.telnyxWebhookSecretEnc = encrypt(p.data.telnyxSecret);
+   if (p.data.pbxSecret) patch.pbxWebhookSecretEnc = encrypt(p.data.pbxSecret);
+   if (p.data.twilioSecret) patch.twilioWebhookSecretEnc = encrypt(p.data.twilioSecret);
+-  if (p.data.sotelSecret) patch.sotelWebhookSecretEnc = encrypt(p.data.sotelSecret);
+   if (p.data.asteriskSecret) patch.asteriskWebhookSecretEnc = encrypt(p.data.asteriskSecret);
+-  if (p.data.ruachSecret) patch.ruachWebhookSecretEnc = encrypt(p.data.ruachSecret);
+ 
+   if (s) await db.update(schema.platformSettings).set(patch).where(eq(schema.platformSettings.id, s.id));
+   else await db.insert(schema.platformSettings).values({ id: 'singleton', ...patch });
+diff --git a/server/api/providers/[id]/call.post.ts b/server/api/providers/[id]/call.post.ts
+index 08e25a4..6bde234 100644
+--- a/server/api/providers/[id]/call.post.ts
++++ b/server/api/providers/[id]/call.post.ts
+@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm';
+ import { requireTenant, apiError } from '~/server/utils/api';
+ import { useDb, schema } from '~/server/db';
+ import { decrypt } from '~/server/utils/crypto';
+-import { twilio, telnyx, sotel } from '~/server/utils/providers';
++import { twilio, telnyx } from '~/server/utils/providers';
+ 
+ const Body = z.object({ to: z.string().min(3) });
+ 
+@@ -32,6 +32,5 @@ export default defineEventHandler(async (event) => {
+   const base = useRuntimeConfig().public.appBaseUrl;
+   if (prov.kind === 'twilio') return await twilio.makeCall(creds, p.data.to, `${base}/api/webhooks/twilio/voice`);
+   if (prov.kind === 'telnyx') return await telnyx.makeCall(creds, p.data.to);
+-  if (prov.kind === 'sotel') return await sotel.makeCall(creds, p.data.to);
+   throw apiError('unsupported', 'Outbound not supported for this carrier');
+ });
+diff --git a/server/api/providers/index.post.ts b/server/api/providers/index.post.ts
+index dc141bc..63639cf 100644
+--- a/server/api/providers/index.post.ts
++++ b/server/api/providers/index.post.ts
+@@ -7,7 +7,7 @@ import { encrypt } from '~/server/utils/crypto';
+ import { testProvider } from '~/server/utils/providers';
+ 
+ const Body = z.object({
+-  kind: z.enum(['twilio', 'telnyx', 'sotel']),
++  kind: z.enum(['twilio', 'telnyx']),
+   credentials: z.record(z.any())
+ });
+ 
+diff --git a/server/api/webhooks/ruach/voice.post.ts b/server/api/webhooks/ruach/voice.post.ts
+deleted file mode 100644
+index d8fb114..0000000
+--- a/server/api/webhooks/ruach/voice.post.ts
++++ /dev/null
+@@ -1,38 +0,0 @@
+-// Ruach SIP trunk inbound voice webhook (Nigeria only). Ruach (sip.ruach.ng) or
+-// its peered gateway posts inbound call events here. Protected by a shared secret
+-// (X-Telroi-Ruach-Secret) configured in admin. Resolves the number's UNIFIED
+-// route and returns it so the call connects the same way as every other carrier
+-// (AI / person / department).
+-import { upsertCallEvent, tenantForNumber } from '~/server/utils/call-log';
+-import { verifyRuachSecret } from '~/server/utils/webhook-verify';
+-
+-export default defineEventHandler(async (event) => {
+-  const ok = await verifyRuachSecret(event);
+-  if (ok === false) { setResponseStatus(event, 403); return { ok: false, reason: 'invalid secret' }; }
+-  if (ok === null) { setResponseStatus(event, 401); return { ok: false, reason: 'secret not configured' }; }
+-
+-  const b = await readBody<any>(event).catch(() => ({}));
+-  const callId = b.uid || b.callid || b.call_id || b.id;
+-  const to = b.to || b.callee || b.dst || b.diversion;
+-  const from = b.from || b.caller || b.src;
+-  const status = b.status || b.disposition || 'ringing';
+-  const duration = b.duration ? parseInt(String(b.duration), 10) : undefined;
+-
+-  if (callId && to) {
+-    const tenantId = await tenantForNumber(to);
+-    if (tenantId) {
+-      let routeAction: any = undefined;
+-      try {
+-        const { resolveInboundAction } = await import('~/server/utils/inbound-routing');
+-        routeAction = await resolveInboundAction(tenantId, to);
+-      } catch { /* */ }
+-      await upsertCallEvent({
+-        tenantId, callid: String(callId), carrier: 'ruach', direction: 'in',
+-        phone: from, status, duration, recordingUrl: b.record || b.recording || null,
+-        raw: { to, from, ruachStatus: b.status, route: routeAction }
+-      });
+-      if (routeAction) return { ok: true, route: routeAction };
+-    }
+-  }
+-  return { ok: true };
+-});
+diff --git a/server/api/webhooks/sotel/voice.post.ts b/server/api/webhooks/sotel/voice.post.ts
+deleted file mode 100644
+index 4d038ea..0000000
+--- a/server/api/webhooks/sotel/voice.post.ts
++++ /dev/null
+@@ -1,38 +0,0 @@
+-// Sotel SIP trunk inbound voice webhook. Your media gateway (peered with Sotel)
+-// posts inbound call events here. Protected by a shared secret
+-// (X-Telroi-Sotel-Secret) configured in admin. Resolves the number's UNIFIED
+-// route and returns it so the gateway connects the call the same way as every
+-// other carrier (AI / person / department).
+-import { upsertCallEvent, tenantForNumber } from '~/server/utils/call-log';
+-import { verifySotelSecret } from '~/server/utils/webhook-verify';
+-
+-export default defineEventHandler(async (event) => {
+-  const ok = await verifySotelSecret(event);
+-  if (ok === false) { setResponseStatus(event, 403); return { ok: false, reason: 'invalid secret' }; }
+-  if (ok === null) { setResponseStatus(event, 401); return { ok: false, reason: 'secret not configured' }; }
+-
+-  const b = await readBody<any>(event).catch(() => ({}));
+-  const callId = b.uid || b.callid || b.call_id || b.id;
+-  const to = b.to || b.callee || b.dst || b.diversion;
+-  const from = b.from || b.caller || b.src;
+-  const status = b.status || b.disposition || 'ringing';
+-  const duration = b.duration ? parseInt(String(b.duration), 10) : undefined;
+-
+-  if (callId && to) {
+-    const tenantId = await tenantForNumber(to);
+-    if (tenantId) {
+-      let routeAction: any = undefined;
+-      try {
+-        const { resolveInboundAction } = await import('~/server/utils/inbound-routing');
+-        routeAction = await resolveInboundAction(tenantId, to);
+-      } catch { /* */ }
+-      await upsertCallEvent({
+-        tenantId, callid: String(callId), carrier: 'sotel', direction: 'in',
+-        phone: from, status, duration, recordingUrl: b.record || b.recording || null,
+-        raw: { to, from, sotelStatus: b.status, route: routeAction }
+-      });
+-      if (routeAction) return { ok: true, route: routeAction };
+-    }
+-  }
+-  return { ok: true };
+-});
+diff --git a/server/db/schema.ts b/server/db/schema.ts
+index bb76031..713304b 100644
+--- a/server/db/schema.ts
++++ b/server/db/schema.ts
+@@ -5,7 +5,7 @@ import {
+ } from 'drizzle-orm/pg-core';
+ 
+ export const roleEnum = pgEnum('role', ['owner', 'admin', 'member']);export const platformRoleEnum = pgEnum('platform_role', ['superadmin', 'staff']);
+-export const providerKindEnum = pgEnum('provider_kind', ['telroi', 'twilio', 'telnyx', 'sotel']);
++export const providerKindEnum = pgEnum('provider_kind', ['telroi', 'twilio', 'telnyx']);
+ export const aiProviderEnum = pgEnum('ai_provider', ['openai', 'anthropic', 'deepgram', 'elevenlabs', 'vapi', 'google']);
+ export const tokenPurposeEnum = pgEnum('token_purpose', ['login']);
+ export const vanStatusEnum = pgEnum('van_status', ['draft', 'live', 'paused']);
+@@ -47,15 +47,12 @@ export const platformSettings = pgTable('platform_settings', {
+   // a fixed gateway IP:port over UDP/TCP/TLS, with a set of assigned DIDs. Used
+   // when Telroi connects to Sotel directly instead of via a hosted platform.
+   // {sipGateway, sipPort, transport, sipDomain, authUser, authPass, callerId, dids[]}
+-  sotelVoiceCredsEnc: text('sotel_voice_creds_enc'),
+   // Core Asterisk integration (GLOBAL, all countries). Self-hosted on a separate
+   // server, IP-authenticated. Has BOTH a SIP trunk and an AMI/ARI REST API.
+   // {sipGateway, sipPort, transport, sipDomain, authUser, authPass, callerId, dids[],
+   //  apiBaseUrl, apiUsername, apiPassword, ariAppName}
+   asteriskVoiceCredsEnc: text('asterisk_voice_creds_enc'),
+   // Ruach SIP trunk (Nigeria only). Logs in with a SIP account number + password
+-  // against sip.ruach.ng; IP-whitelisted. {sipAccount, sipPassword, sipDomain, callerId, dids[]}
+-  ruachVoiceCredsEnc: text('ruach_voice_creds_enc'),
+   // Our outbound/signaling IP that SIP vendors must whitelist. Sourced from env
+   // OUTBOUND_SIP_IP by default; this column lets ops override without a redeploy.
+   outboundSipIp: text('outbound_sip_ip'),
+@@ -93,10 +90,8 @@ export const platformSettings = pgTable('platform_settings', {
+   twilioWebhookSecretEnc: text('twilio_webhook_secret_enc'), // Twilio auth token is used to sign; stored if separate
+   telnyxWebhookSecretEnc: text('telnyx_webhook_secret_enc'), // Telnyx public key / signing secret
+   pbxWebhookSecretEnc: text('pbx_webhook_secret_enc'),       // shared secret for PBX inbound posts
+-  sotelWebhookSecretEnc: text('sotel_webhook_secret_enc'),   // shared secret for Sotel SIP gateway inbound posts
+   asteriskWebhookSecretEnc: text('asterisk_webhook_secret_enc'), // shared secret for Asterisk inbound posts
+-  ruachWebhookSecretEnc: text('ruach_webhook_secret_enc'),   // shared secret for Ruach inbound posts
+-  inboundWebhooksEnabled: jsonb('inbound_webhooks_enabled').$type<{ twilio?: boolean; telnyx?: boolean; pbx?: boolean; sotel?: boolean; asterisk?: boolean; ruach?: boolean }>().default({}),
++  inboundWebhooksEnabled: jsonb('inbound_webhooks_enabled').$type<{ twilio?: boolean; telnyx?: boolean; pbx?: boolean; asterisk?: boolean }>().default({}),
+   // Admin-editable email content. A JSON map of templateKey -> overrides
+   // ({ subject?, heading?, intro?, body? }) layered over the built-in designs,
+   // so operators can tweak copy without code. Social links power the email
+diff --git a/server/routes/widget/call.post.ts b/server/routes/widget/call.post.ts
+index 082b828..d8dd9f1 100644
+--- a/server/routes/widget/call.post.ts
++++ b/server/routes/widget/call.post.ts
+@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
+   const { isNigeria } = await import('~/server/utils/countries');
+   const callerIsNG = isNigeria(visitorCountry);
+   // NG carriers vs international carriers, for matching a VAN to the caller's region.
+-  const NG_PROVIDERS = ['telroi', 'sotel'];
++  const NG_PROVIDERS = ['telroi'];
+ 
+   // Resolve the concrete routing target so the call can actually be handled.
+   let routeTarget: any = { mode: cfg.routeTo };
+diff --git a/server/utils/call-router.ts b/server/utils/call-router.ts
+index 710b770..001423d 100644
+--- a/server/utils/call-router.ts
++++ b/server/utils/call-router.ts
+@@ -8,9 +8,7 @@
+ //   'telroi'   -> Telroi's own customized Digidite PBX (its subdomain + key)
+ //   'twilio'   -> Twilio master account
+ //   'telnyx'   -> Telnyx master account
+-//   'sotel'    -> Sotel direct SIP trunk (Nigeria)
+ //   'asterisk' -> Core Asterisk SIP trunk + ARI (global)
+-//   'ruach'    -> Ruach SIP trunk via sip.ruach.ng (Nigeria)
+ import { and, eq } from 'drizzle-orm';
+ import { useDb, schema } from '../db';
+ import { apiError } from './api';
+@@ -62,27 +60,6 @@ export async function placeCall(args: PlaceCallArgs) {
+       if (!master.telnyx) throw apiError('no_carrier', 'Telnyx master account is not configured', 503);
+       return await telnyx.makeCall({ ...master.telnyx, fromNumber: args.fromTelnum }, args.to);
+     }
+-    case 'sotel': {
+-      // Sotel is a direct, IP-authenticated SIP trunk. Origination runs on the
+-      // live media gateway peered with Sotel; here we build the dial intent
+-      // (gateway/transport/caller-id) the gateway executes. Same control-plane
+-      // pattern as the other carriers — actual audio bridges on live infra.
+-      if (!master.sotel || !master.sotel.sipGateway) throw apiError('no_carrier', 'Sotel SIP trunk is not configured', 503);
+-      return {
+-        provider: 'sotel',
+-        status: 'originating',
+-        dial: {
+-          to: args.to,
+-          from: args.fromTelnum,
+-          sipGateway: master.sotel.sipGateway,
+-          sipPort: master.sotel.sipPort || 5060,
+-          transport: master.sotel.transport || 'udp',
+-          sipDomain: master.sotel.sipDomain || master.sotel.sipGateway,
+-          authUser: master.sotel.authUser || '',
+-          authPass: master.sotel.authPass || ''
+-        }
+-      };
+-    }
+     case 'asterisk': {
+       // Core Asterisk: global, IP-authenticated SIP trunk on a separate server,
+       // with an optional AMI/ARI REST API. Origination runs on the live Asterisk
+@@ -109,25 +86,6 @@ export async function placeCall(args: PlaceCallArgs) {
+         }
+       };
+     }
+-    case 'ruach': {
+-      // Ruach: Nigeria-only SIP trunk via sip.ruach.ng, account+password login,
+-      // IP-whitelisted. Origination runs on the live media gateway peered with
+-      // Ruach; here we build the dial intent. Control-plane only.
+-      if (!(master as any).ruach || !(master as any).ruach.sipAccount) throw apiError('no_carrier', 'Ruach SIP trunk is not configured', 503);
+-      const r = (master as any).ruach;
+-      return {
+-        provider: 'ruach',
+-        status: 'originating',
+-        dial: {
+-          to: args.to,
+-          from: args.fromTelnum,
+-          sipDomain: r.sipDomain || 'sip.ruach.ng',
+-          sipAccount: r.sipAccount,
+-          authUser: r.sipAccount,
+-          authPass: r.sipPassword || ''
+-        }
+-      };
+-    }
+     default:
+       throw apiError('unsupported', `Unknown provider ${provider}`, 400);
+   }
+diff --git a/server/utils/feature-settings.ts b/server/utils/feature-settings.ts
+index da62cbc..0e597a9 100644
+--- a/server/utils/feature-settings.ts
++++ b/server/utils/feature-settings.ts
+@@ -21,7 +21,7 @@ export const SETTINGS_CATALOG: Record<Feature, Record<string, { type: string; de
+     bubblePosition: { type: 'select', default: 'middle-right', label: 'Button position' },
+     greeting: { type: 'text', default: 'Need help? Call us.', label: 'Greeting text' },
+     routeTo: { type: 'select', default: 'agent', label: 'Route calls to' }, // agent | ai
+-    callProvider: { type: 'select', default: 'auto', label: 'Voice provider' }, // auto | asterisk | ruach | sotel | digidite | telnyx | twilio (operator-only)
++    callProvider: { type: 'select', default: 'auto', label: 'Voice provider' }, // auto | asterisk | digidite | telnyx | twilio (operator-only)
+     routeTeamId: { type: 'select', default: '', label: 'Team to handle calls' },   // department id (when routeTo=agent)
+     aiAgentId: { type: 'select', default: '', label: 'AI agent to answer' },        // ai_agents id (when routeTo=ai)
+     csatEnabled: { type: 'bool', default: true, label: 'Ask for satisfaction rating after calls' },
+diff --git a/server/utils/live-call-provider.ts b/server/utils/live-call-provider.ts
+index eb7c5c0..3ef9292 100644
+--- a/server/utils/live-call-provider.ts
++++ b/server/utils/live-call-provider.ts
+@@ -11,7 +11,7 @@ import { masterCarrierCreds } from './platform';
+ import { voiceCredentials } from './voice-credentials';
+ import { isNigeria } from './countries';
+ 
+-export type VoiceProvider = 'digidite' | 'telnyx' | 'twilio' | 'sotel' | 'asterisk' | 'ruach';
++export type VoiceProvider = 'digidite' | 'telnyx' | 'twilio' | 'asterisk';
+ 
+ export interface DialIntent {
+   provider: VoiceProvider;
+@@ -26,9 +26,7 @@ function normalize(p: string): VoiceProvider {
+   if (p === 'telroi' || p === 'digidite' || p === 'pbx') return 'digidite';
+   if (p === 'telnyx') return 'telnyx';
+   if (p === 'twilio') return 'twilio';
+-  if (p === 'sotel') return 'sotel';
+   if (p === 'asterisk') return 'asterisk';
+-  if (p === 'ruach') return 'ruach';
+   return 'telnyx';
+ }
+ 
+@@ -50,7 +48,7 @@ async function resolveFromNumber(tenantId: string, teamId?: string | null): Prom
+ 
+ export async function resolveLiveCallProvider(opts: {
+   tenantId: string;
+-  configuredProvider?: string;   // from live_call settings (auto|digidite|telnyx|twilio|sotel)
++  configuredProvider?: string;   // from live_call settings (auto|digidite|telnyx|twilio)
+   visitorCountry?: string | null;
+   teamId?: string | null;
+   toRoute?: any;
+@@ -65,28 +63,17 @@ export async function resolveLiveCallProvider(opts: {
+   let reason: string;
+   const cfg = (opts.configuredProvider || 'auto').toLowerCase();
+   const ng = isNigeria(opts.visitorCountry);
+-  if (cfg === 'sotel') {
+-    // Admin explicitly chose Sotel — honor it exactly.
+-    provider = 'sotel'; reason = 'admin override (sotel)';
+-  } else if (cfg === 'ruach') {
+-    // Admin explicitly chose Ruach — honor it exactly. No automated fallback:
+-    // the admin decides which vendor powers this number/region.
+-    provider = 'ruach'; reason = 'admin override (ruach)';
+-  } else if (cfg === 'asterisk') {
++
++  if (cfg === 'asterisk') {
+     // Admin explicitly chose Asterisk (global).
+     provider = 'asterisk'; reason = 'admin override (asterisk)';
+   } else if (cfg === 'digidite' || cfg === 'telnyx' || cfg === 'twilio') {
+     provider = cfg as VoiceProvider; reason = `admin override (${cfg})`;
+   } else {
+-    // auto: Nigeria -> Sotel if its trunk is configured, else Digidite; non-NG -> Telnyx.
++    // auto: Nigeria -> Digidite; non-NG -> Telnyx.
+     // If the from-number's own provider is known, prefer that (number already on it).
+     if (from.provider) { provider = from.provider; reason = `number's carrier (${from.provider})`; }
+-    else if (ng) {
+-      let sotelReady = false;
+-      try { const c = await voiceCredentials(); sotelReady = !!c?.sotel?.sipGateway; } catch { /* */ }
+-      if (sotelReady) { provider = 'sotel'; reason = 'auto: Nigeria -> Sotel (trunk configured)'; }
+-      else { provider = 'digidite'; reason = 'auto: Nigeria -> Digidite'; }
+-    }
++    else if (ng) { provider = 'digidite'; reason = 'auto: Nigeria -> Digidite'; }
+     else { provider = 'telnyx'; reason = 'auto: non-Nigeria -> Telnyx'; }
+   }
+ 
+@@ -97,9 +84,7 @@ export async function resolveLiveCallProvider(opts: {
+     if (provider === 'digidite') ready = !!creds?.telroiPbx;
+     else if (provider === 'telnyx') ready = !!creds?.telnyx;
+     else if (provider === 'twilio') ready = !!creds?.twilio;
+-    else if (provider === 'sotel') { const c = await voiceCredentials(); ready = !!c?.sotel?.sipGateway; }
+     else if (provider === 'asterisk') { const c = await voiceCredentials(); ready = !!c?.asterisk?.sipGateway; }
+-    else if (provider === 'ruach') { const c = await voiceCredentials(); ready = !!c?.ruach?.sipAccount; }
+   } catch { ready = false; }
+ 
+   return { provider, ready, fromNumber: from.telnum, toRoute: opts.toRoute || null, reason };
+diff --git a/server/utils/platform.ts b/server/utils/platform.ts
+index b607981..03e1718 100644
+--- a/server/utils/platform.ts
++++ b/server/utils/platform.ts
+@@ -73,9 +73,7 @@ export async function masterCarrierCreds() {
+     telroiPbx: pbx,
+     twilio: s.twilioCredsEnc ? JSON.parse(decrypt(s.twilioCredsEnc)) : null,
+     telnyx: s.telnyxCredsEnc ? JSON.parse(decrypt(s.telnyxCredsEnc)) : null,
+-    sotel: s.sotelVoiceCredsEnc ? JSON.parse(decrypt(s.sotelVoiceCredsEnc)) : null,
+     asterisk: s.asteriskVoiceCredsEnc ? JSON.parse(decrypt(s.asteriskVoiceCredsEnc)) : null,
+-    ruach: s.ruachVoiceCredsEnc ? JSON.parse(decrypt(s.ruachVoiceCredsEnc)) : null,
+   };
+ }
+ 
+diff --git a/server/utils/providers.ts b/server/utils/providers.ts
+index 0e341b8..8ff739d 100644
+--- a/server/utils/providers.ts
++++ b/server/utils/providers.ts
+@@ -8,7 +8,6 @@
+ 
+ export interface TwilioCreds { accountSid: string; authToken: string; fromNumber?: string }
+ export interface TelnyxCreds { apiKey: string; connectionId?: string; fromNumber?: string }
+-export interface SotelCreds { sipGateway: string; sipPort?: number; transport?: 'udp' | 'tcp' | 'tls'; sipDomain?: string; authUser?: string; authPass?: string; fromNumber?: string }
+ 
+ /* ---------------- Twilio ---------------- */
+ export const twilio = {
+@@ -185,32 +184,9 @@ export const telnyx = {
+ export async function testProvider(kind: string, creds: any) {
+   if (kind === 'twilio') return twilio.testCreds(creds);
+   if (kind === 'telnyx') return telnyx.testCreds(creds);
+-  if (kind === 'sotel') return sotel.testCreds(creds);
+   return { ok: false, detail: 'Unsupported provider' };
+ }
+ 
+-// Sotel direct SIP trunk. IP-authenticated; origination runs on the live media
+-// gateway peered with Sotel, so makeCall returns a dial intent the gateway
+-// executes (control plane), and testCreds validates the trunk config shape.
+-export const sotel = {
+-  async testCreds(c: SotelCreds) {
+-    const ok = !!(c && c.sipGateway && String(c.sipGateway).trim());
+-    return { ok, detail: ok ? undefined : 'A SIP gateway (IP or host) is required' };
+-  },
+-  async makeCall(c: SotelCreds, to: string) {
+-    if (!c?.sipGateway) throw createError({ statusCode: 503, message: 'Sotel SIP trunk not configured' });
+-    return {
+-      callid: `sotel_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+-      status: 'originating',
+-      provider: 'sotel',
+-      dial: {
+-        to, from: c.fromNumber || '',
+-        sipGateway: c.sipGateway, sipPort: c.sipPort || 5060, transport: c.transport || 'udp',
+-        sipDomain: c.sipDomain || c.sipGateway, authUser: c.authUser || '', authPass: c.authPass || ''
+-      }
+-    };
+-  }
+-};
+ 
+ // ── Number provisioning (allocate a number on the carrier) ──
+ // Built to each carrier's documented API. Unverified against live accounts from
+diff --git a/server/utils/regions.ts b/server/utils/regions.ts
+index 3ff47ca..095b150 100644
+--- a/server/utils/regions.ts
++++ b/server/utils/regions.ts
+@@ -3,7 +3,7 @@
+ // voice providers each region's numbers may attach to.
+ //
+ // Rule (per product spec):
+-//   NG (+234)            -> telroi (Digidite), sotel, ruach, or asterisk (global)
++//   NG (+234)            -> telroi (Telroi Voice / Asterisk) or asterisk
+ //   US/CA (+1), GB (+44) -> twilio, telnyx, or asterisk (global)
+ //   Asterisk is a global trunk and is therefore allowed in every region.
+ 
+@@ -17,11 +17,11 @@ export function detectRegion(raw: string): string {
+ 
+ export function providersForRegion(region: string): string[] {
+   switch (region) {
+-    case 'NG': return ['telroi', 'sotel', 'ruach', 'asterisk'];
++    case 'NG': return ['telroi', 'asterisk'];
+     case 'US':
+     case 'CA':
+     case 'GB': return ['twilio', 'telnyx', 'asterisk'];
+-    default: return ['telroi', 'sotel', 'ruach', 'asterisk'];
++    default: return ['telroi', 'asterisk'];
+   }
+ }
+ 
+diff --git a/server/utils/sip.ts b/server/utils/sip.ts
+index fade1d7..3fec6d6 100644
+--- a/server/utils/sip.ts
++++ b/server/utils/sip.ts
+@@ -13,7 +13,7 @@ import { detectRegion, providersForRegion, countryToRegion } from './regions';
+ export interface SipVendor { id: string; label: string; }
+ 
+ const LABELS: Record<string, string> = {
+-  telroi: 'Telroi (Digidite)', twilio: 'Twilio', telnyx: 'Telnyx', sotel: 'Sotel', ruach: 'Ruach', asterisk: 'Core Asterisk'
++  telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice'
+ };
+ 
+ /** Which SIP vendors this tenant may use, after region + credential + override gating. */
+@@ -36,9 +36,7 @@ export async function availableSipVendors(tenantId: string): Promise<{ vendors:
+   try {
+     const { voiceCredentials } = await import('./voice-credentials');
+     const vc = await voiceCredentials();
+-    if (vc?.sotel?.sipGateway) configured.add('sotel');
+     if (vc?.asterisk?.sipGateway) configured.add('asterisk');
+-    if (vc?.ruach?.sipAccount) configured.add('ruach');
+   } catch { /* */ }
+ 
+   // Base list = region ∩ configured.
+diff --git a/server/utils/status-registry.ts b/server/utils/status-registry.ts
+index 3efb7cf..57c8151 100644
+--- a/server/utils/status-registry.ts
++++ b/server/utils/status-registry.ts
+@@ -34,7 +34,7 @@ async function probeVoiceGateway(label: string): Promise<ProbeResult> {
+   try {
+     const { voiceCredentials } = await import('./voice-credentials');
+     const all = await voiceCredentials().catch(() => null);
+-    const configured = !!(all && (all.digidite || all.sotel || all.telnyx || all.twilio));
++    const configured = !!(all && (all.digidite || all.telnyx || all.twilio));
+     if (!configured) return { ok: false, state: 'unknown', detail: `${label}: no voice gateway configured` };
+     // Live infra present — a real reachability check runs here against the
+     // gateway in production. We treat "configured" as operational at the
+diff --git a/server/utils/support-numbers.ts b/server/utils/support-numbers.ts
+index 645fd0e..d8e9101 100644
+--- a/server/utils/support-numbers.ts
++++ b/server/utils/support-numbers.ts
+@@ -10,7 +10,7 @@ import { platformSettings } from './platform';
+ import { ensureSupportWorkspace } from './support';
+ import { isNigeria } from './countries';
+ 
+-const NG_PROVIDERS = ['telroi', 'sotel'];
++const NG_PROVIDERS = ['telroi'];
+ 
+ // Region bucket for support routing: Nigeria vs International.
+ export function supportRegionFor(country?: string | null): 'NG' | 'INTL' {
+diff --git a/server/utils/voice-credentials.ts b/server/utils/voice-credentials.ts
+index 1e3a36a..549b79f 100644
+--- a/server/utils/voice-credentials.ts
++++ b/server/utils/voice-credentials.ts
+@@ -6,18 +6,6 @@ import { platformSettings } from './platform';
+ export interface TwilioVoiceCreds { accountSid: string; apiKeySid: string; apiKeySecret: string; twimlAppSid: string; callerId: string; }
+ export interface TelnyxVoiceCreds { sipUsername: string; sipPassword: string; connectionId: string; callerId: string; }
+ export interface DigiditeVoiceCreds { wsServer: string; sipDomain: string; sipUsername: string; sipPassword: string; callerId: string; }
+-// Sotel direct SIP trunk (Nigeria). IP-authenticated: a fixed signaling gateway
+-// (IP or domain) + transport, optional auth, caller id and the assigned DIDs.
+-export interface SotelSipCreds {
+-  sipGateway: string;          // e.g. "96.0.46.249"
+-  sipPort: number;             // e.g. 5060
+-  transport: 'udp' | 'tcp' | 'tls';
+-  sipDomain?: string;          // SIP domain if different from the gateway IP
+-  authUser?: string;           // optional — blank when the trunk is IP-authenticated
+-  authPass?: string;
+-  callerId?: string;           // default outbound caller id (one of the DIDs)
+-  dids: string[];              // assigned numbers on this trunk
+-}
+ // Core Asterisk (global). SIP trunk + AMI/ARI REST API, IP-authenticated.
+ export interface AsteriskVoiceCreds {
+   sipGateway: string;          // Asterisk server IP/host
+@@ -33,27 +21,17 @@ export interface AsteriskVoiceCreds {
+   apiPassword?: string;        // ARI/AMI secret
+   ariAppName?: string;         // Stasis app name for ARI origination
+ }
+-// Ruach SIP trunk (Nigeria only). Account-number + password against sip.ruach.ng.
+-export interface RuachVoiceCreds {
+-  sipAccount: string;          // SIP account number (login)
+-  sipPassword: string;
+-  sipDomain: string;           // fixed: sip.ruach.ng
+-  callerId?: string;
+-  dids: string[];
+-}
+ 
+ export async function voiceCredentials() {
+   const s = await platformSettings();
+-  if (!s) return { twilio: null, telnyx: null, digidite: null, sotel: null, asterisk: null, ruach: null };
++  if (!s) return { twilio: null, telnyx: null, digidite: null, asterisk: null };
+   const twilioBase = s.twilioCredsEnc ? JSON.parse(decrypt(s.twilioCredsEnc)) : null;
+   const tv = s.twilioVoiceCredsEnc ? JSON.parse(decrypt(s.twilioVoiceCredsEnc)) : null;
+   return {
+     twilio: tv ? ({ accountSid: twilioBase?.accountSid, ...tv } as TwilioVoiceCreds) : null,
+     telnyx: s.telnyxVoiceCredsEnc ? (JSON.parse(decrypt(s.telnyxVoiceCredsEnc)) as TelnyxVoiceCreds) : null,
+     digidite: s.digiditeVoiceCredsEnc ? (JSON.parse(decrypt(s.digiditeVoiceCredsEnc)) as DigiditeVoiceCreds) : null,
+-    sotel: s.sotelVoiceCredsEnc ? (JSON.parse(decrypt(s.sotelVoiceCredsEnc)) as SotelSipCreds) : null,
+-    asterisk: s.asteriskVoiceCredsEnc ? (JSON.parse(decrypt(s.asteriskVoiceCredsEnc)) as AsteriskVoiceCreds) : null,
+-    ruach: s.ruachVoiceCredsEnc ? (JSON.parse(decrypt(s.ruachVoiceCredsEnc)) as RuachVoiceCreds) : null
++    asterisk: s.asteriskVoiceCredsEnc ? (JSON.parse(decrypt(s.asteriskVoiceCredsEnc)) as AsteriskVoiceCreds) : null
+   };
+ }
+ 
+diff --git a/server/utils/voice-token.ts b/server/utils/voice-token.ts
+index 8b7a86b..3bcb4cc 100644
+--- a/server/utils/voice-token.ts
++++ b/server/utils/voice-token.ts
+@@ -63,24 +63,6 @@ export async function digiditeVoiceToken() {
+   };
+ }
+ 
+-export async function sotelVoiceToken() {
+-  const { sotel } = await voiceCredentials();
+-  if (!sotel || !sotel.sipGateway) throw new Error('Sotel SIP trunk not configured');
+-  // Sotel is a direct SIP trunk: hand the gateway/transport/caller-id to the
+-  // media layer, which registers/peers with Sotel and bridges the audio. For
+-  // IP-authenticated trunks authUser/authPass are blank.
+-  return {
+-    provider: 'sotel',
+-    sipGateway: sotel.sipGateway,
+-    sipPort: sotel.sipPort || 5060,
+-    transport: sotel.transport || 'udp',
+-    sipDomain: sotel.sipDomain || sotel.sipGateway,
+-    authUser: sotel.authUser || '',
+-    authPass: sotel.authPass || '',
+-    callerId: sotel.callerId || (sotel.dids && sotel.dids[0]) || '',
+-    dids: sotel.dids || []
+-  };
+-}
+ 
+ export async function asteriskVoiceToken() {
+   const { asterisk } = await voiceCredentials();
+@@ -99,24 +81,11 @@ export async function asteriskVoiceToken() {
+   };
+ }
+ 
+-export async function ruachVoiceToken() {
+-  const { ruach } = await voiceCredentials();
+-  if (!ruach || !ruach.sipAccount) throw new Error('Ruach SIP trunk not configured');
+-  return {
+-    provider: 'ruach',
+-    sipAccount: ruach.sipAccount,
+-    sipDomain: ruach.sipDomain || 'sip.ruach.ng',
+-    callerId: ruach.callerId || (ruach.dids && ruach.dids[0]) || '',
+-    dids: ruach.dids || []
+-  };
+-}
+ 
+ export async function voiceTokenFor(provider: string, identity: string) {
+   if (provider === 'twilio') return await twilioVoiceToken(identity);
+   if (provider === 'telnyx') return await telnyxVoiceToken();
+   if (provider === 'digidite') return await digiditeVoiceToken();
+-  if (provider === 'sotel') return await sotelVoiceToken();
+   if (provider === 'asterisk') return await asteriskVoiceToken();
+-  if (provider === 'ruach') return await ruachVoiceToken();
+   throw new Error(`Unknown voice provider: ${provider}`);
+ }
+diff --git a/server/utils/voice/otp-gateway.ts b/server/utils/voice/otp-gateway.ts
+index 7ddf194..0527858 100644
+--- a/server/utils/voice/otp-gateway.ts
++++ b/server/utils/voice/otp-gateway.ts
+@@ -13,7 +13,7 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
+   // gateway credentials to be configured; without them this honestly reports
+   // that the service isn't available (rather than pretending a call placed).
+   const all = await voiceCredentials().catch(() => null);
+-  const creds = all?.digidite || all?.sotel || all?.asterisk || all?.ruach || all?.telnyx || null;
++  const creds = all?.digidite || all?.asterisk || all?.telnyx || null;
+   if (!creds) {
+     return { ok: false, reason: 'No Telroi voice gateway is configured for OTP. Configure a carrier in admin Settings, or select an external OTP vendor.' };
+   }
+diff --git a/server/utils/webhook-verify.ts b/server/utils/webhook-verify.ts
+index 5610531..e2664b0 100644
+--- a/server/utils/webhook-verify.ts
++++ b/server/utils/webhook-verify.ts
+@@ -52,16 +52,6 @@ export async function verifyPbxSecret(event: any): Promise<boolean | null> {
+   try { return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)); } catch { return false; }
+ }
+ 
+-export async function verifySotelSecret(event: any): Promise<boolean | null> {
+-  const given = getHeader(event, 'x-telroi-sotel-secret');
+-  if (!given) return null;
+-  const s = await platformSettings();
+-  const enc = (s as any)?.sotelWebhookSecretEnc;
+-  if (!enc) return null;
+-  let secret: string;
+-  try { secret = decrypt(enc); } catch { return null; }
+-  try { return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)); } catch { return false; }
+-}
+ 
+ export async function verifyAsteriskSecret(event: any): Promise<boolean | null> {
+   const given = getHeader(event, 'x-telroi-asterisk-secret');
+@@ -74,13 +64,3 @@ export async function verifyAsteriskSecret(event: any): Promise<boolean | null>
+   try { return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)); } catch { return false; }
+ }
+ 
+-export async function verifyRuachSecret(event: any): Promise<boolean | null> {
+-  const given = getHeader(event, 'x-telroi-ruach-secret');
+-  if (!given) return null;
+-  const s = await platformSettings();
+-  const enc = (s as any)?.ruachWebhookSecretEnc;
+-  if (!enc) return null;
+-  let secret: string;
+-  try { secret = decrypt(enc); } catch { return null; }
+-  try { return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)); } catch { return false; }
+-}

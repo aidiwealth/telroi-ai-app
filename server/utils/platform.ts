@@ -73,9 +73,7 @@ export async function masterCarrierCreds() {
     telroiPbx: pbx,
     twilio: s.twilioCredsEnc ? JSON.parse(decrypt(s.twilioCredsEnc)) : null,
     telnyx: s.telnyxCredsEnc ? JSON.parse(decrypt(s.telnyxCredsEnc)) : null,
-    sotel: s.sotelVoiceCredsEnc ? JSON.parse(decrypt(s.sotelVoiceCredsEnc)) : null,
     asterisk: s.asteriskVoiceCredsEnc ? JSON.parse(decrypt(s.asteriskVoiceCredsEnc)) : null,
-    ruach: s.ruachVoiceCredsEnc ? JSON.parse(decrypt(s.ruachVoiceCredsEnc)) : null,
   };
 }
 

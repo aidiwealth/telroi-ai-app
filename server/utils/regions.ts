@@ -3,7 +3,7 @@
 // voice providers each region's numbers may attach to.
 //
 // Rule (per product spec):
-//   NG (+234)            -> telroi (Digidite), sotel, ruach, or asterisk (global)
+//   NG (+234)            -> telroi (Telroi Voice / Asterisk) or asterisk
 //   US/CA (+1), GB (+44) -> twilio, telnyx, or asterisk (global)
 //   Asterisk is a global trunk and is therefore allowed in every region.
 
@@ -17,11 +17,11 @@ export function detectRegion(raw: string): string {
 
 export function providersForRegion(region: string): string[] {
   switch (region) {
-    case 'NG': return ['telroi', 'sotel', 'ruach', 'asterisk'];
+    case 'NG': return ['telroi', 'asterisk'];
     case 'US':
     case 'CA':
     case 'GB': return ['twilio', 'telnyx', 'asterisk'];
-    default: return ['telroi', 'sotel', 'ruach', 'asterisk'];
+    default: return ['telroi', 'asterisk'];
   }
 }
 

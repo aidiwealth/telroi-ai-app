@@ -10,7 +10,7 @@ import { detectRegion, providerAllowed, providersForRegion, regionLabel } from '
 
 const Body = z.object({
   numbers: z.string().min(3),
-  provider: z.enum(['telroi', 'twilio', 'telnyx', 'sotel', 'asterisk', 'ruach']),
+  provider: z.enum(['telroi', 'twilio', 'telnyx', 'asterisk']),
   regionOverride: z.enum(['NG', 'US', 'CA', 'GB']).optional(),
   monthlyUsdMinorOverride: z.number().int().positive().optional()
 });

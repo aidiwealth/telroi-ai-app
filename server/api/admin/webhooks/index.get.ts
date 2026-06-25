@@ -13,18 +13,14 @@ export default defineEventHandler(async (event) => {
       twilio: `${base}/api/webhooks/twilio/voice`,
       telnyx: `${base}/api/webhooks/telnyx/voice`,
       pbx: `${base}/api/webhooks/pbx/voice`,
-      sotel: `${base}/api/webhooks/sotel/voice`,
       asterisk: `${base}/api/webhooks/asterisk/voice`,
-      ruach: `${base}/api/webhooks/ruach/voice`
     },
     enabled: (s?.inboundWebhooksEnabled as any) || {},
     secretsSet: {
       twilio: !!(s as any)?.twilioWebhookSecretEnc,   // optional; Twilio uses auth token
       telnyx: !!(s as any)?.telnyxWebhookSecretEnc,
       pbx: !!(s as any)?.pbxWebhookSecretEnc,
-      sotel: !!(s as any)?.sotelWebhookSecretEnc,
       asterisk: !!(s as any)?.asteriskWebhookSecretEnc,
-      ruach: !!(s as any)?.ruachWebhookSecretEnc
     }
   };
 });

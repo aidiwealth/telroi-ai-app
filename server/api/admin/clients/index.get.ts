@@ -3,7 +3,6 @@
 // row into memory. Scales to large numbers of clients without slow loads.
 import { inArray, sql, desc, ilike, or, and, eq, count } from 'drizzle-orm';
 import { requirePlatformAdmin } from '~/server/utils/platform';
-import { OperatorClient } from '~/server/utils/telroi/operator';
 import { useDb, schema } from '~/server/db';
 import { requiresProvisioning } from '~/server/utils/regions';
 
@@ -51,12 +50,6 @@ export default defineEventHandler(async (event) => {
     : [];
   const walletByTid = new Map(wallets.map((w) => [w.tenantId, w]));
 
-  let provisioned = new Set<string>();
-  try {
-    const op = await OperatorClient.fromPlatform();
-    provisioned = new Set(await op.listDomains());
-  } catch { /* operator unreachable — DB list still complete */ }
-
   const now = Date.now();
   const clients = tenants.map((t) => {
     const tid = t.id;
@@ -70,9 +63,9 @@ export default defineEventHandler(async (event) => {
     const effectivePlan = trialActive ? (t.trialPlan as string) : (t.plan as string);
     return {
       tenantId: tid, name: t.name, slug: t.slug,
-      domain: t.telroiDomain || `${t.slug}.telroi.ai`,
+      domain: `${t.slug}.telroi.ai`,
       createdAt: t.createdAt,
-      provisioned: t.telroiDomain ? provisioned.has(t.telroiDomain) : false,
+      provisioned: t.provisionState === 'provisioned',
       requiresProvisioning: requiresProvisioning(t.country),
       plan: effectivePlan, basePlan: t.plan, onTrial: trialActive,
       sandbox: t.sandboxMode,

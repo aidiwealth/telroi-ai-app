@@ -7,7 +7,7 @@ import { encrypt } from '~/server/utils/crypto';
 import { testProvider } from '~/server/utils/providers';
 
 const Body = z.object({
-  kind: z.enum(['twilio', 'telnyx', 'sotel']),
+  kind: z.enum(['twilio', 'telnyx']),
   credentials: z.record(z.any())
 });
 

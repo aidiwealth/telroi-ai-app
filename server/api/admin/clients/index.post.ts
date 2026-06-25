@@ -86,30 +86,18 @@ export default defineEventHandler(async (event) => {
   let provisioned = false;
   let provisionError: string | null = null;
   if (p.data.provisionNow) {
+    // Mark the workspace live. Voice provisioning on our own Asterisk PBX happens
+    // separately (SIP endpoints are provisioned per-device via the provisioning
+    // agent), so client creation no longer calls an external operator.
     try {
-      const { OperatorClient, resolveDomainDefaults } = await import('~/server/utils/telroi/operator');
-      const op = await OperatorClient.fromPlatform();
-      const defaults = await resolveDomainDefaults(op, settings);
-      try {
-        await op.createDomain(fullDomain, {
-          name: fullDomain, accessURL: `https://${fullDomain}`,
-          client: p.data.client, language: p.data.language,
-          accountsLimit: p.data.accountsLimit, maxLines: p.data.maxLines, billingType: 'demo',
-          ...defaults
-        });
-      } catch (e: any) {
-        const msg = e?.data?.error?.message || e?.message || '';
-        const exists = e?.statusCode === 409 || /exist/i.test(typeof msg === 'string' ? msg : JSON.stringify(msg));
-        if (!exists) throw e;
-      }
       await db.update(schema.tenants)
-        .set({ telroiApiKeyEnc: settings?.operatorApiKeyEnc ?? null, provisionState: 'provisioned', wentLiveAt: new Date() })
+        .set({ provisionState: 'provisioned', wentLiveAt: new Date() })
         .where(eq(schema.tenants.id, tenant.id));
       provisioned = true;
     } catch (e: any) {
-      const m = e?.data?.error?.message || e?.message || String(e);
+      const m = e?.message || String(e);
       provisionError = typeof m === 'string' ? m : JSON.stringify(m);
-      console.error('[admin create] eager provisioning failed (client still created locally)', e);
+      console.error('[admin create] marking provisioned failed (client still created locally)', e);
     }
   }
 
