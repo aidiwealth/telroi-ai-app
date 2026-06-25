@@ -20,6 +20,7 @@ import { startCache, lookupNumber, isBlacklisted, agentGreeting, resolveEndpoint
 import { logCall } from './call-log.ts';
 import { closeDb } from './db.ts';
 import { bridgeToEndpoint } from './bridge.ts';
+import { startProvisionAgent } from './provision-agent.ts';
 
 // Endpoint to bridge "person" routes to. For now this is a fixed stand-in
 // (test1) to prove bridging; later, route_target maps to the client's real
@@ -45,6 +46,9 @@ async function main() {
   } else {
     log('Cache ready:', cacheStats());
   }
+
+  // -- Start the provisioning agent (no-op if PROVISION_AGENT_SECRET is unset) --
+  startProvisionAgent();
 
   // -- Connect to ARI (local Asterisk on this box) --
   log(`Connecting to ARI at ${config.ari.url} as app "${config.ari.appName}"...`);
