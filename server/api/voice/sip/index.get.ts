@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   // (separate from calling/routing vendors). null = no BYOD SIP.
   const sipVendor = (tenant?.sipDeviceVendor as string | null) || null;
   const available = !!sipVendor;
-  const selfServe = available && ['twilio', 'telnyx'].includes(sipVendor as string);
+  const selfServe = available && ['twilio', 'telnyx', 'telroi'].includes(sipVendor as string);
 
   const settings = await platformSettings().catch(() => null);
   const proxy = settings?.sipProxyDomain || null;

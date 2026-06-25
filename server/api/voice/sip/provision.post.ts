@@ -2,13 +2,14 @@
 // the carrier (first vendor available to the client by region/creds/override);
 // the client never chooses or sees a vendor. Owner/admin only. Returns the
 // generic, vendor-neutral connection details + any one-time password.
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { availableSipVendors } from '~/server/utils/sip';
 import { masterCarrierCreds, platformSettings } from '~/server/utils/platform';
 import { twilio, telnyx } from '~/server/utils/providers';
 import { encrypt, randomToken } from '~/server/utils/crypto';
+import { agentProvision, provisionAgentConfigured } from '~/server/utils/provision-agent';
 import { logEvent } from '~/server/utils/logs';
 
 export default defineEventHandler(async (event) => {
@@ -66,10 +67,19 @@ export default defineEventHandler(async (event) => {
       secretEnc: oneTimeSecret ? encrypt(oneTimeSecret) : null,
       domain: 'sip.telnyx.com', meta: { credentialId: cred.id }
     }).returning();
+  } else if (vendor === 'telroi' || vendor === 'asterisk') {
+    if (!provisionAgentConfigured()) {
+      throw apiError('sip_manual', 'SIP setup for your account is handled by our team — contact support to enable it.', 409);
+    }
+    const result = await agentProvision(s.tenantId, label);
+    oneTimeSecret = result.password;
+    [row] = await db.insert(schema.sipEndpoints).values({
+      tenantId: s.tenantId, provider: 'telroi', kind: 'registration',
+      externalId: result.username, label, sipUsername: result.username,
+      secretEnc: encrypt(result.password),
+      domain: result.domain, meta: { transport: result.transport, context: result.context }
+    }).returning();
   } else {
-    // Digidite inbound registration needs details the client doesn't supply in
-    // this self-serve flow; it's arranged at the admin level. If telroi is the
-    // only available vendor, surface a neutral message.
     throw apiError('sip_manual', 'SIP setup for your account is handled by our team — contact support to enable it.', 409);
   }
 

@@ -6,6 +6,7 @@ import { useDb, schema } from '~/server/db';
 import { masterCarrierCreds } from '~/server/utils/platform';
 import { twilio, telnyx } from '~/server/utils/providers';
 import { telroiFor } from '~/server/utils/tenant';
+import { agentDeprovision, provisionAgentConfigured } from '~/server/utils/provision-agent';
 import { logEvent } from '~/server/utils/logs';
 
 export default defineEventHandler(async (event) => {
@@ -24,8 +25,12 @@ export default defineEventHandler(async (event) => {
     if (ep.provider === 'twilio' && creds?.twilio && ep.externalId) await twilio.deleteSipTrunk(creds.twilio, ep.externalId);
     else if (ep.provider === 'telnyx' && creds?.telnyx && ep.externalId) await telnyx.deleteConnection(creds.telnyx, ep.externalId);
     else if (ep.provider === 'telroi' && ep.externalId) {
-      const client = await telroiFor(s.tenantId);
-      await client.deleteSipRegistration(ep.externalId);
+      if (/^tnt_[a-f0-9]{8}$/.test(ep.externalId) && provisionAgentConfigured()) {
+        await agentDeprovision(ep.externalId);
+      } else {
+        const client = await telroiFor(s.tenantId);
+        await client.deleteSipRegistration(ep.externalId);
+      }
     }
   } catch (e: any) {
     // Surface vendor failure but still allow removing the local record if vendor

@@ -18,6 +18,8 @@ export default defineNuxtConfig({
     jwtSecret: process.env.JWT_SECRET || 'dev-insecure-secret-change-me',
     cronSecret: process.env.CRON_SECRET || '',
     encryptionKey: process.env.ENCRYPTION_KEY || '', // 32-byte base64
+    provisionAgentUrl: process.env.PROVISION_AGENT_URL || '',
+    provisionAgentSecret: process.env.PROVISION_AGENT_SECRET || '',
     emailProvider: process.env.EMAIL_PROVIDER || 'resend', // resend (default) | console | termii
     resendApiKey: process.env.RESEND_API_KEY || '',
     emailFrom: process.env.EMAIL_FROM || 'Telroi <hello@telroi.ai>',
