@@ -83,6 +83,21 @@ function chownToAsterisk(path: string): void {
   }
 }
 
+// The pjsip.conf include `#include "pjsip.d/*.conf"` ERRORS if the glob matches
+// zero files, which makes Asterisk fail to load the ENTIRE pjsip.conf (dropping
+// all endpoints/transports). So we keep a harmless placeholder file in the dir
+// at all times — provisioning ensures it exists, and deprovisioning never lets
+// the directory go empty.
+const PLACEHOLDER = `${PJSIP_D}/00-placeholder.conf`;
+function ensurePlaceholder(): void {
+  try {
+    if (!existsSync(PLACEHOLDER)) {
+      writeFileSync(PLACEHOLDER, '; placeholder so pjsip.d/*.conf always matches at least one file\n', { mode: 0o640 });
+      chownToAsterisk(PLACEHOLDER);
+    }
+  } catch { /* best effort */ }
+}
+
 function pjsipReload(): void {
   execFileSync('asterisk', ['-rx', 'pjsip reload'], { stdio: 'pipe' });
 }
@@ -97,6 +112,7 @@ export function provisionEndpoint(tenantId: string, label: string): ProvisionRes
   const password = genPassword();
   const configPath = `${PJSIP_D}/${username}.conf`;
 
+  ensurePlaceholder();
   writeFileSync(configPath, endpointConfig(username, password, tenantId, label), { mode: 0o640 });
   chownToAsterisk(configPath);
   pjsipReload();
@@ -116,6 +132,7 @@ export function deprovisionEndpoint(username: string): { removed: boolean } {
   const configPath = `${PJSIP_D}/${username}.conf`;
   const existed = existsSync(configPath);
   if (existed) rmSync(configPath, { force: true });
+  ensurePlaceholder(); // never let the directory go empty (would break the include)
   pjsipReload();
   return { removed: existed };
 }
