@@ -48,20 +48,6 @@ export async function telnyxVoiceToken() {
   };
 }
 
-// ── Digidite WebRTC/SIP: the browser SIP.js client registers against the
-// gateway with these credentials. ──
-export async function digiditeVoiceToken() {
-  const { digidite } = await voiceCredentials();
-  if (!digidite) throw new Error('Digidite Voice not configured');
-  return {
-    provider: 'digidite',
-    wsServer: digidite.wsServer,
-    sipDomain: digidite.sipDomain,
-    sipUsername: digidite.sipUsername,
-    sipPassword: digidite.sipPassword,
-    callerId: digidite.callerId
-  };
-}
 
 
 export async function asteriskVoiceToken() {

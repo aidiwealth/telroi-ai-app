@@ -8,7 +8,7 @@
 import { eq, and, desc } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 import { masterCarrierCreds } from './platform';
-import { voiceCredentials } from './voice-credentials';
+import { provisionAgentConfigured } from './provision-agent';
 import { isNigeria } from './countries';
 
 export type VoiceProvider = 'digidite' | 'telnyx' | 'twilio' | 'asterisk';
@@ -21,12 +21,11 @@ export interface DialIntent {
   reason: string;            // why this provider was chosen (for logs/debugging)
 }
 
-// Map our schema's provider naming: 'telroi' (PBX) == Digidite.
+// Map our schema's provider naming: 'telroi' is our own Asterisk PBX.
 function normalize(p: string): VoiceProvider {
-  if (p === 'telroi' || p === 'digidite' || p === 'pbx') return 'digidite';
+  if (p === 'telroi' || p === 'digidite' || p === 'pbx' || p === 'asterisk') return 'telroi';
   if (p === 'telnyx') return 'telnyx';
   if (p === 'twilio') return 'twilio';
-  if (p === 'asterisk') return 'asterisk';
   return 'telnyx';
 }
 
