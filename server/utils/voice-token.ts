@@ -55,7 +55,6 @@ export async function asteriskVoiceToken(identity: string) {
   const { and, eq } = await import('drizzle-orm');
   const { decrypt, encrypt } = await import('~/server/utils/crypto');
   const { agentProvision, provisionAgentConfigured } = await import('~/server/utils/provision-agent');
-  const { useRuntimeConfig } = await import('#imports');
 
   if (!provisionAgentConfigured()) throw new Error('Voice platform is not configured');
 
@@ -84,9 +83,8 @@ export async function asteriskVoiceToken(identity: string) {
     });
   }
 
-  const cfg = useRuntimeConfig();
   const sipDomain = process.env.SIP_DOMAIN || 'sip.telroi.ai';
-  const wsServer = cfg.public?.sipWsServer || `wss://${sipDomain}:8089/ws`;
+  const wsServer = (useRuntimeConfig().public as any)?.sipWsServer || `wss://${sipDomain}:8089/ws`;
 
   return { provider: 'telroi', sipUsername, sipPassword, sipDomain, wsServer };
 }
