@@ -35,7 +35,8 @@ async function agentCall(path: string, body: unknown): Promise<any> {
   const res = await fetch(`${url}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(12000)
   });
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.ok) {
@@ -70,4 +71,23 @@ export async function agentOriginate(args: {
 }): Promise<AgentOriginateResult> {
   const j = await agentCall('/originate', args);
   return { callid: j.callid, agentChannelId: j.agentChannelId };
+}
+
+export async function ensureWebrtcEndpoint(tenantId: string): Promise<{ created: boolean; sipUsername: string }> {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq } = await import('drizzle-orm');
+  const { encrypt } = await import('~/server/utils/crypto');
+  const db = useDb();
+  const rows = await db.select().from(schema.sipEndpoints)
+    .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
+  const existing = rows.find((r: any) => (r.meta as any)?.webrtc === true && r.secretEnc);
+  if (existing) return { created: false, sipUsername: existing.sipUsername! };
+  const result = await agentProvision(tenantId, 'browser-dialer', true);
+  await db.insert(schema.sipEndpoints).values({
+    tenantId, provider: 'telroi', kind: 'registration',
+    externalId: result.username, label: 'browser-dialer', sipUsername: result.username,
+    secretEnc: encrypt(result.password), domain: result.domain,
+    meta: { transport: result.transport, webrtc: true }
+  });
+  return { created: true, sipUsername: result.username };
 }
