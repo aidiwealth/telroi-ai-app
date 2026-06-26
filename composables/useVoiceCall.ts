@@ -77,7 +77,7 @@ export function useVoiceCall() {
         });
         telnyxClient.connect();
       } else if (provider === 'digidite' || provider === 'telroi' || provider === 'asterisk') {
-        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/sip.js/0.21.2/sip.min.js');
+        await loadScript('https://cdn.jsdelivr.net/npm/sip.js@0.21.2/dist/sip.min.js');
         const SIP = (window as any).SIP;
         const uri = SIP.UserAgent.makeURI(`sip:${tok.sipUsername}@${tok.sipDomain}`);
         sipUA = new SIP.UserAgent({
