@@ -79,7 +79,7 @@ export async function originateCall(opts: OriginateOptions): Promise<OriginateRe
       dest.once('StasisEnd', () => { void cleanup('destination left'); });
       try {
         await dest.originate({
-          endpoint: `PJSIP/${to}@${trunk}`,
+          endpoint: trunk ? `PJSIP/${to}@${trunk}` : `PJSIP/${to}`,
           app: 'telroi',
           appArgs: 'dialed',
           callerId: opts.callerId || 'Telroi',

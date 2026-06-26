@@ -90,8 +90,8 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
         const to = String(body.to || '').trim();
         const trunk = String(body.trunk || '').trim();
         const callerId = body.callerId ? String(body.callerId).slice(0, 64) : undefined;
-        if (!agentEndpoint || !to || !trunk) {
-          return send(res, 400, { ok: false, error: 'agentEndpoint, to, and trunk are required' });
+        if (!agentEndpoint || !to) {
+          return send(res, 400, { ok: false, error: 'agentEndpoint and to are required' });
         }
         try {
           const result = await originateCall({ client: ari, agentEndpoint, to, trunk, callerId });
