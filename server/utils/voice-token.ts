@@ -50,21 +50,45 @@ export async function telnyxVoiceToken() {
 
 
 
-export async function asteriskVoiceToken() {
-  const { asterisk } = await voiceCredentials();
-  if (!asterisk || !asterisk.sipGateway) throw new Error('Asterisk SIP trunk not configured');
-  return {
-    provider: 'asterisk',
-    sipGateway: asterisk.sipGateway,
-    sipPort: asterisk.sipPort || 5060,
-    transport: asterisk.transport || 'udp',
-    sipDomain: asterisk.sipDomain || asterisk.sipGateway,
-    authUser: asterisk.authUser || '',
-    authPass: asterisk.authPass || '',
-    callerId: asterisk.callerId || (asterisk.dids && asterisk.dids[0]) || '',
-    dids: asterisk.dids || [],
-    apiBaseUrl: asterisk.apiBaseUrl || '', ariAppName: asterisk.ariAppName || ''
-  };
+export async function asteriskVoiceToken(identity: string) {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq } = await import('drizzle-orm');
+  const { decrypt, encrypt } = await import('~/server/utils/crypto');
+  const { agentProvision, provisionAgentConfigured } = await import('~/server/utils/provision-agent');
+  const { useRuntimeConfig } = await import('#imports');
+
+  if (!provisionAgentConfigured()) throw new Error('Voice platform is not configured');
+
+  const m = /^tenant_([0-9a-f-]+)_/.exec(identity);
+  const tenantId = m ? m[1] : identity;
+
+  const db = useDb();
+  const rows = await db.select().from(schema.sipEndpoints)
+    .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
+  let ep = rows.find((r: any) => (r.meta as any)?.webrtc === true && r.secretEnc);
+
+  let sipUsername: string;
+  let sipPassword: string;
+  if (ep) {
+    sipUsername = ep.sipUsername!;
+    sipPassword = decrypt(ep.secretEnc!);
+  } else {
+    const result = await agentProvision(tenantId, 'browser-dialer', true);
+    sipUsername = result.username;
+    sipPassword = result.password;
+    await db.insert(schema.sipEndpoints).values({
+      tenantId, provider: 'telroi', kind: 'registration',
+      externalId: result.username, label: 'browser-dialer', sipUsername: result.username,
+      secretEnc: encrypt(result.password), domain: result.domain,
+      meta: { transport: result.transport, webrtc: true }
+    });
+  }
+
+  const cfg = useRuntimeConfig();
+  const sipDomain = process.env.SIP_DOMAIN || 'sip.telroi.ai';
+  const wsServer = cfg.public?.sipWsServer || `wss://${sipDomain}:8089/ws`;
+
+  return { provider: 'telroi', sipUsername, sipPassword, sipDomain, wsServer };
 }
 
 

@@ -55,6 +55,7 @@ export default defineNuxtConfig({
     pipedriveClientId: process.env.PIPEDRIVE_CLIENT_ID || '',
     pipedriveClientSecret: process.env.PIPEDRIVE_CLIENT_SECRET || '',
     public: {
+      sipWsServer: process.env.SIP_WS_SERVER || '',
       appName: 'Telroi',
       appBaseUrl: process.env.APP_BASE_URL || 'http://localhost:3000',
       rootDomain: process.env.ROOT_DOMAIN || 'telroi.ai',

@@ -44,8 +44,8 @@ async function agentCall(path: string, body: unknown): Promise<any> {
   return json;
 }
 
-export async function agentProvision(tenantId: string, label: string): Promise<AgentProvisionResult> {
-  const j = await agentCall('/provision', { tenantId, label });
+export async function agentProvision(tenantId: string, label: string, webrtc = false): Promise<AgentProvisionResult> {
+  const j = await agentCall('/provision', { tenantId, label, webrtc });
   return {
     username: j.username, password: j.password, domain: j.domain,
     transport: j.transport, context: j.context, configPath: j.configPath

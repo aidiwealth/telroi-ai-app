@@ -2,7 +2,7 @@
 // Real in-browser calling. Loads the provider's WebRTC SDK, requests the
 // microphone (this is what triggers the browser mic prompt), registers with a
 // server-issued token/credential, and connects a call with live two-way audio.
-// Supports Twilio Voice, Telnyx WebRTC, and Digidite (SIP.js over WebSocket).
+// Supports Twilio Voice, Telnyx WebRTC, and Telroi Voice / Asterisk (SIP.js over WebSocket).
 import { ref } from 'vue';
 
 type CallState = 'idle' | 'acquiring_mic' | 'connecting' | 'ringing' | 'in_call' | 'ended' | 'error';
@@ -76,7 +76,7 @@ export function useVoiceCall() {
           if (st === 'hangup' || st === 'destroy') endCall(opts.onEnd);
         });
         telnyxClient.connect();
-      } else if (provider === 'digidite') {
+      } else if (provider === 'digidite' || provider === 'telroi' || provider === 'asterisk') {
         await loadScript('https://cdnjs.cloudflare.com/ajax/libs/sip.js/0.21.2/sip.min.js');
         const SIP = (window as any).SIP;
         const uri = SIP.UserAgent.makeURI(`sip:${tok.sipUsername}@${tok.sipDomain}`);
@@ -123,7 +123,7 @@ export function useVoiceCall() {
     try {
       if (provider === 'twilio' && activeConn) activeConn.disconnect?.();
       if (provider === 'telnyx' && activeConn) activeConn.hangup?.();
-      if (provider === 'digidite' && activeConn) { activeConn.bye?.().catch(() => {}); activeConn.cancel?.().catch(() => {}); }
+      if ((provider === 'digidite' || provider === 'telroi' || provider === 'asterisk') && activeConn) { activeConn.bye?.().catch(() => {}); activeConn.cancel?.().catch(() => {}); }
     } catch { /* */ }
     state.value = 'ended';
     cleanup();
