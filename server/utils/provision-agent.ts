@@ -80,7 +80,7 @@ export async function ensureWebrtcEndpoint(tenantId: string): Promise<{ created:
   const db = useDb();
   const rows = await db.select().from(schema.sipEndpoints)
     .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
-  const existing = rows.find((r: any) => (r.meta as any)?.webrtc === true && r.secretEnc);
+  const existing = rows.find((r: any) => r.secretEnc && (((r.meta as any)?.webrtc) || r.label === 'browser-dialer'));
   if (existing) return { created: false, sipUsername: existing.sipUsername! };
   const result = await agentProvision(tenantId, 'browser-dialer', true);
   await db.insert(schema.sipEndpoints).values({

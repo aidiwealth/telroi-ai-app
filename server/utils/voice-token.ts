@@ -59,7 +59,7 @@ export async function asteriskVoiceToken(identity: string) {
   const db = useDb();
   const rows = await db.select().from(schema.sipEndpoints)
     .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
-  const ep = rows.find((r: any) => (r.meta as any)?.webrtc === true && r.secretEnc);
+  const ep = rows.find((r: any) => r.secretEnc && (((r.meta as any)?.webrtc) || r.label === 'browser-dialer'));
   if (!ep) {
     throw Object.assign(new Error('Browser calling is not set up yet for this workspace.'), {
       statusCode: 409, data: { error: { code: 'webrtc_not_provisioned' } }
@@ -74,7 +74,6 @@ export async function asteriskVoiceToken(identity: string) {
 export async function voiceTokenFor(provider: string, identity: string) {
   if (provider === 'twilio') return await twilioVoiceToken(identity);
   if (provider === 'telnyx') return await telnyxVoiceToken();
-  if (provider === 'digidite') return await digiditeVoiceToken();
-  if (provider === 'asterisk') return await asteriskVoiceToken();
+  if (provider === 'telroi' || provider === 'asterisk') return await asteriskVoiceToken(identity);
   throw new Error(`Unknown voice provider: ${provider}`);
 }
