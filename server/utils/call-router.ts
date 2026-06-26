@@ -13,7 +13,6 @@ import { and, eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 import { apiError } from './api';
 import { masterCarrierCreds } from './platform';
-import { TelroiClient } from './telroi/client';
 import { twilio, telnyx } from './providers';
 
 export interface PlaceCallArgs {
@@ -47,9 +46,11 @@ export async function placeCall(args: PlaceCallArgs) {
 
   switch (provider) {
     case 'telroi': {
-      // Telroi's OWN Digitide PBX (master subdomain + key) — its own route.
-      if (!master.telroiPbx) throw apiError('no_carrier', 'Telroi PBX is not configured', 503);
-      const client = new TelroiClient({ domain: master.telroiPbx.domain, apiKey: master.telroiPbx.apiKey });
+      // Telroi Voice — our OWN Asterisk PBX. Origination runs via the control-app
+      // agent (rings the agent's device, dials the destination out through the
+      // region's trunk, bridges them).
+      const { AsteriskClient } = await import('./telroi/asterisk-client');
+      const client = AsteriskClient.forTenant({ id: args.tenantId });
       return await client.makeCall({ phone: args.to, user: args.user, group: args.group, clid: args.fromTelnum });
     }
     case 'twilio': {

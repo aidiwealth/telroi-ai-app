@@ -56,3 +56,18 @@ export async function agentDeprovision(username: string): Promise<{ removed: boo
   const j = await agentCall('/deprovision', { username });
   return { removed: !!j.removed };
 }
+
+export interface AgentOriginateResult {
+  callid: string;
+  agentChannelId: string;
+}
+
+// Originate a click-to-call via the PBX agent: ring `agentEndpoint` (the agent's
+// registered device, e.g. "PJSIP/tnt_xxx"), then dial `to` out through `trunk`
+// (an Asterisk trunk endpoint, e.g. "kasooko-endpoint") and bridge them.
+export async function agentOriginate(args: {
+  agentEndpoint: string; to: string; trunk: string; callerId?: string;
+}): Promise<AgentOriginateResult> {
+  const j = await agentCall('/originate', args);
+  return { callid: j.callid, agentChannelId: j.agentChannelId };
+}

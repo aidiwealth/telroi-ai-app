@@ -47,9 +47,6 @@ async function main() {
     log('Cache ready:', cacheStats());
   }
 
-  // -- Start the provisioning agent (no-op if PROVISION_AGENT_SECRET is unset) --
-  startProvisionAgent();
-
   // -- Connect to ARI (local Asterisk on this box) --
   log(`Connecting to ARI at ${config.ari.url} as app "${config.ari.appName}"...`);
   let client: Ari.Client;
@@ -64,12 +61,16 @@ async function main() {
     log(`Connected. Asterisk ${info.system?.version}`);
   } catch { log('Connected to ARI.'); }
 
+  // -- Start the provisioning agent now that ARI is up; pass the client so the
+  //    /originate endpoint can place outbound calls. (No-op if no secret set.) --
+  startProvisionAgent(client);
+
   // -- Handle each call entering Stasis --
   client.on('StasisStart', async (event, channel) => {
     // Outbound bridge legs we originate (the callee side) enter Stasis too,
     // marked with appArgs 'dialed'. The bridge module handles those — do NOT
     // re-route them as if they were inbound callers.
-    if (event.args?.[0] === 'dialed') {
+    if (event.args?.[0] === 'dialed' || event.args?.[0] === 'agent') {
       return;
     }
     const dialedDid = event.args?.[0] || channel.dialplan?.exten || '';
