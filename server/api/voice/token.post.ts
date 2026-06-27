@@ -5,8 +5,11 @@ import { voiceTokenFor } from '~/server/utils/voice-token';
 import { resolveLiveCallProvider } from '~/server/utils/live-call-provider';
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
-  // Use the tenant's default vendor (country-based / number carrier).
-  const dial = await resolveLiveCallProvider({ tenantId: s.tenantId, configuredProvider: 'auto' });
+  const body = await readBody<any>(event).catch(() => ({}));
+  const selectedFrom = (body?.from || '').trim();
+  // Use the tenant's default vendor, preferring the customer's SELECTED from-number
+  // so routing follows the number the customer chose to call from.
+  const dial = await resolveLiveCallProvider({ tenantId: s.tenantId, configuredProvider: 'auto', preferredFromNumber: selectedFrom || null });
   if (dial.provider === 'telroi') {
     try {
       const { ensureWebrtcEndpoint } = await import('~/server/utils/provision-agent');
@@ -20,12 +23,13 @@ export default defineEventHandler(async (event) => {
   // the customer ever dealing with routes. ruach->81, kasooko->82, sotel->83.
   let dialPrefix = '';
   try {
-    if (dial.fromNumber) {
+    const lookupNum = selectedFrom || dial.fromNumber;
+    if (lookupNum) {
       const { useDb, schema } = await import('~/server/db');
       const { and, eq } = await import('drizzle-orm');
       const db = useDb();
       const [sub] = await db.select().from(schema.numberSubscriptions)
-        .where(and(eq(schema.numberSubscriptions.tenantId, s.tenantId), eq(schema.numberSubscriptions.telnum, dial.fromNumber)))
+        .where(and(eq(schema.numberSubscriptions.tenantId, s.tenantId), eq(schema.numberSubscriptions.telnum, lookupNum)))
         .limit(1);
       const raw = sub?.provider || '';
       dialPrefix = raw === 'ruach' ? '81' : raw === 'kasooko' ? '82' : raw === 'sotel' ? '83' : '';

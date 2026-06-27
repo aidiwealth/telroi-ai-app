@@ -31,6 +31,14 @@ function normalize(p: string): VoiceProvider {
 
 // The number a Live Call dials FROM: prefer a number assigned to the chosen
 // team/department, else the tenant's first active number.
+async function providerOfNumber(tenantId: string, telnum: string): Promise<VoiceProvider | null> {
+  const db = useDb();
+  const [sub] = await db.select().from(schema.numberSubscriptions)
+    .where(and(eq(schema.numberSubscriptions.tenantId, tenantId), eq(schema.numberSubscriptions.telnum, telnum)))
+    .limit(1);
+  return sub?.provider ? normalize(sub.provider) : null;
+}
+
 async function resolveFromNumber(tenantId: string, teamId?: string | null): Promise<{ telnum: string | null; provider: VoiceProvider | null }> {
   const db = useDb();
   if (teamId) {
@@ -54,7 +62,7 @@ export async function resolveLiveCallProvider(opts: {
   preferredFromNumber?: string | null;  // explicit caller-ID (e.g. admin's per-region support number)
 }): Promise<DialIntent> {
   const from = opts.preferredFromNumber
-    ? { telnum: opts.preferredFromNumber, provider: null as VoiceProvider | null }
+    ? { telnum: opts.preferredFromNumber, provider: await providerOfNumber(opts.tenantId, opts.preferredFromNumber) }
     : await resolveFromNumber(opts.tenantId, opts.teamId);
 
   // 1. Decide the provider.

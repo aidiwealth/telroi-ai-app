@@ -140,6 +140,7 @@ async function startCall() {
   try {
     await voice.startCall({
       to: phone.value,
+      from: from.value,
       tokenEndpoint: props.tokenEndpoint || '/api/voice/token',
       onEnd: async (secs) => {
         stopRinging(); stopDuration();

@@ -38,17 +38,17 @@ export function useVoiceCall() {
   }
 
   // Fetch a token from the given endpoint (client dialer or admin support).
-  async function getToken(tokenEndpoint: string) {
-    const r = await fetch(tokenEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  async function getToken(tokenEndpoint: string, from?: string) {
+    const r = await fetch(tokenEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: from || '' }) });
     if (!r.ok) throw new Error('Could not get a voice token. Provider may not be configured.');
     return await r.json();
   }
 
-  async function startCall(opts: { to: string; tokenEndpoint: string; onEnd?: (secs: number) => void }) {
+  async function startCall(opts: { to: string; from?: string; tokenEndpoint: string; onEnd?: (secs: number) => void }) {
     error.value = null;
     try {
       await ensureMic();                       // mic prompt
-      const tok = await getToken(opts.tokenEndpoint);
+      const tok = await getToken(opts.tokenEndpoint, opts.from);
       provider = tok.provider;
       state.value = 'connecting';
 
