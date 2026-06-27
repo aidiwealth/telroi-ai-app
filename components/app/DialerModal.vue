@@ -78,7 +78,7 @@ const voice = useVoiceCall();
 // Map the real voice-call state onto the dialer's phase + handle billing on end.
 watch(voice.state, (st) => {
   if (st === 'acquiring_mic' || st === 'connecting' || st === 'ringing') phase.value = 'calling';
-  else if (st === 'in_call') { if (phase.value !== 'in_call') { stopRinging(); phase.value = 'in_call'; startDuration(); } }
+  else if (st === 'in_call') { if (phase.value !== 'in_call') { stopRinging(); toneConnect(); phase.value = 'in_call'; startDuration(); } }
   else if (st === 'error') { stopRinging(); phase.value = 'idle'; toast.err(voice.error.value || 'Call failed'); }
 });
 
@@ -104,6 +104,45 @@ const ringDots = ref(0);
 const ringText = computed(() => 'Ringing' + '.'.repeat(ringDots.value));
 let ringTimer: ReturnType<typeof setInterval> | null = null;
 
+// ---- Call audio tones (Web Audio API; synthesized in-browser, no files) ----
+let audioCtx: AudioContext | null = null;
+let ringbackTimer: ReturnType<typeof setInterval> | null = null;
+function ac(): AudioContext {
+  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+// Play a tone: freq pair (dual for realism), duration, gain.
+function tone(freqs: number[], durMs: number, gainVal = 0.12) {
+  try {
+    const ctx = ac();
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(gainVal, ctx.currentTime);
+    gain.gain.setValueAtTime(gainVal, ctx.currentTime + durMs / 1000 - 0.02);
+    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + durMs / 1000);
+    gain.connect(ctx.destination);
+    freqs.forEach((f) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine'; osc.frequency.value = f;
+      osc.connect(gain);
+      osc.start(); osc.stop(ctx.currentTime + durMs / 1000);
+    });
+  } catch { /* audio not available */ }
+}
+// Ringback: the classic 'ring ... ring' (440+480Hz, 2s on / 4s off, US-style but shortened for feel).
+function startRingback() {
+  stopRingback();
+  const ring = () => tone([440, 480], 1500, 0.1);
+  ring();
+  ringbackTimer = setInterval(ring, 3000);
+}
+function stopRingback() { if (ringbackTimer) { clearInterval(ringbackTimer); ringbackTimer = null; } }
+// Connect: short rising double-beep.
+function toneConnect() { tone([523], 90, 0.14); setTimeout(() => tone([784], 110, 0.14), 110); }
+// Drop/hangup: short descending double-beep.
+function toneDrop() { tone([440], 120, 0.12); setTimeout(() => tone([330], 160, 0.12), 130); }
+
+
 // In-call duration
 const seconds = ref(0);
 const lastDur = ref(0);
@@ -123,8 +162,9 @@ function backspace() { phone.value = phone.value.slice(0, -1); }
 function startRinging() {
   ringDots.value = 0;
   ringTimer = setInterval(() => { ringDots.value = (ringDots.value + 1) % 4; }, 500);
+  startRingback();
 }
-function stopRinging() { if (ringTimer) { clearInterval(ringTimer); ringTimer = null; } }
+function stopRinging() { if (ringTimer) { clearInterval(ringTimer); ringTimer = null; } stopRingback(); }
 function startDuration() {
   seconds.value = 0;
   durTimer = setInterval(() => { seconds.value += 1; }, 1000);
@@ -143,7 +183,7 @@ async function startCall() {
       from: from.value,
       tokenEndpoint: props.tokenEndpoint || '/api/voice/token',
       onEnd: async (secs) => {
-        stopRinging(); stopDuration();
+        stopRinging(); stopDuration(); toneDrop();
         lastDur.value = secs || seconds.value;
         phase.value = 'ended';
         // Meter + charge the completed call to the wallet.
@@ -192,7 +232,7 @@ onMounted(async () => {
   catch { /* */ }
   if (props.autoStart && props.initialPhone) startCall();
 });
-onUnmounted(() => { stopRinging(); stopDuration(); });
+onUnmounted(() => { stopRinging(); stopDuration(); stopRingback(); if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; } });
 </script>
 
 <style scoped>
