@@ -23,7 +23,7 @@ export interface DialIntent {
 
 // Map our schema's provider naming: 'telroi' is our own Asterisk PBX.
 function normalize(p: string): VoiceProvider {
-  if (p === 'telroi' || p === 'digidite' || p === 'pbx' || p === 'asterisk') return 'telroi';
+  if (p === 'telroi' || p === 'digidite' || p === 'pbx' || p === 'asterisk' || p === 'ruach' || p === 'sotel' || p === 'kasooko') return 'telroi';
   if (p === 'telnyx') return 'telnyx';
   if (p === 'twilio') return 'twilio';
   return 'telnyx';
