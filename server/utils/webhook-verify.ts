@@ -64,3 +64,24 @@ export async function verifyAsteriskSecret(event: any): Promise<boolean | null> 
   try { return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)); } catch { return false; }
 }
 
+export async function verifySotelSecret(event: any): Promise<boolean | null> {
+  const given = getHeader(event, 'x-telroi-sotel-secret');
+  if (!given) return null;
+  const s = await platformSettings();
+  const enc = (s as any)?.sotelWebhookSecretEnc;
+  if (!enc) return null;
+  let secret: string;
+  try { secret = decrypt(enc); } catch { return null; }
+  try { return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)); } catch { return false; }
+}
+
+export async function verifyRuachSecret(event: any): Promise<boolean | null> {
+  const given = getHeader(event, 'x-telroi-ruach-secret');
+  if (!given) return null;
+  const s = await platformSettings();
+  const enc = (s as any)?.ruachWebhookSecretEnc;
+  if (!enc) return null;
+  let secret: string;
+  try { secret = decrypt(enc); } catch { return null; }
+  try { return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)); } catch { return false; }
+}

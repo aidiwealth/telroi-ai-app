@@ -62,7 +62,7 @@ export class AsteriskClient {
   }
 
   // === STEP 1 — real outbound origination ===================================
-  async makeCall(body: { phone: string; user?: string; group?: string; clid?: string; show_phone?: boolean }): Promise<{ callid: string; clid?: string }> {
+  async makeCall(body: { phone: string; user?: string; group?: string; clid?: string; show_phone?: boolean; trunk?: string }): Promise<{ callid: string; clid?: string }> {
     if (!provisionAgentConfigured()) {
       throw Object.assign(new Error('PBX agent not configured'), {
         statusCode: 503, data: { error: { code: 'agent_unconfigured', message: 'Voice platform is not configured.' } }
@@ -70,7 +70,7 @@ export class AsteriskClient {
     }
     const agentEndpoint = await this.agentEndpointFor(body.user);
     const region = detectRegion(body.phone);
-    const trunk = trunkForRegion(region);
+    const trunk = body.trunk || trunkForRegion(region);
     const r = await agentOriginate({
       agentEndpoint,
       to: body.phone.replace(/[^\d+]/g, ''),

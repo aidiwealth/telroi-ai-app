@@ -17,11 +17,11 @@ export function detectRegion(raw: string): string {
 
 export function providersForRegion(region: string): string[] {
   switch (region) {
-    case 'NG': return ['telroi', 'asterisk'];
+    case 'NG': return ['telroi', 'asterisk', 'ruach', 'sotel', 'kasooko'];
     case 'US':
     case 'CA':
     case 'GB': return ['twilio', 'telnyx', 'asterisk'];
-    default: return ['telroi', 'asterisk'];
+    default: return ['telroi', 'asterisk', 'ruach', 'sotel', 'kasooko'];
   }
 }
 

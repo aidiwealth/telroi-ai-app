@@ -73,6 +73,9 @@
             <select v-model="draft.provider" class="ad-input">
               <option value="telroi">Digidite (Telroi PBX)</option>
               <option value="asterisk">Core Asterisk (global SIP trunk)</option>
+              <option value="ruach">Ruach (NG SIP trunk)</option>
+              <option value="sotel">Sotel (NG SIP trunk)</option>
+              <option value="kasooko">Kasooko (NG SIP trunk)</option>
             </select>
           </div>
           <div class="ad-field">
@@ -150,7 +153,7 @@ async function buy(n: any) {
 
 const PROV: Record<string, string[]> = { NG: ['Telroi', 'Asterisk'], US: ['Twilio', 'Telnyx', 'Asterisk'], CA: ['Twilio', 'Telnyx', 'Asterisk'], GB: ['Twilio', 'Telnyx', 'Asterisk'] };
 function providersFor(r: string) { return PROV[r] || ['Telroi']; }
-function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice' } as any)[p] || p; }
+function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice', ruach: 'Ruach', sotel: 'Sotel', kasooko: 'Kasooko' } as any)[p] || p; }
 function regionLabel(r: string) { return ({ NG: 'Nigeria', US: 'United States', CA: 'Canada', GB: 'United Kingdom' } as any)[r] || r; }
 
 async function load() {
