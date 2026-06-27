@@ -54,14 +54,15 @@ export async function placeCall(args: PlaceCallArgs) {
       return await client.makeCall({ phone: args.to, user: args.user, group: args.group, clid: args.fromTelnum });
     }
     case 'ruach':
-    case 'sotel': {
+    case 'sotel':
+    case 'kasooko': {
       // Ruach / Sotel — NG SIP trunks that live as routes on our OWN Asterisk PBX.
       // Same PBX origination path as 'telroi', but the destination leg goes out
       // the carrier's trunk endpoint. The from-number is presented as caller ID
       // (it's the customer's purchased DID on that carrier).
       const { AsteriskClient } = await import('./telroi/asterisk-client');
       const client = AsteriskClient.forTenant({ id: args.tenantId });
-      const trunk = provider === 'ruach' ? 'ruach-endpoint' : 'sotel-endpoint';
+      const trunk = `${provider}-endpoint`;  // ruach/sotel/kasooko -> <provider>-endpoint
       return await client.makeCall({ phone: args.to, user: args.user, group: args.group, clid: args.fromTelnum, trunk });
     }
     case 'twilio': {

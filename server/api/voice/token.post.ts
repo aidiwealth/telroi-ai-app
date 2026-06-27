@@ -15,9 +15,26 @@ export default defineEventHandler(async (event) => {
       throw apiError('voice_not_configured', e?.message || 'Browser calling could not be set up. Try again.', 503);
     }
   }
+  // Resolve the from-number's BOUND vendor (set by admin in inventory) to a PBX
+  // dial prefix, so browser calls route out the correct Asterisk trunk WITHOUT
+  // the customer ever dealing with routes. ruach->81, kasooko->82, sotel->83.
+  let dialPrefix = '';
+  try {
+    if (dial.fromNumber) {
+      const { useDb, schema } = await import('~/server/db');
+      const { and, eq } = await import('drizzle-orm');
+      const db = useDb();
+      const [sub] = await db.select().from(schema.numberSubscriptions)
+        .where(and(eq(schema.numberSubscriptions.tenantId, s.tenantId), eq(schema.numberSubscriptions.telnum, dial.fromNumber)))
+        .limit(1);
+      const raw = sub?.provider || '';
+      dialPrefix = raw === 'ruach' ? '81' : raw === 'kasooko' ? '82' : raw === 'sotel' ? '83' : '';
+    }
+  } catch { /* no prefix -> default routing */ }
+
   try {
     const tok = await voiceTokenFor(dial.provider, `tenant_${s.tenantId}_${s.userId}`);
-    return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready };
+    return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready, dialPrefix };
   } catch (e: any) {
     throw apiError('voice_not_configured', e?.message || 'Voice provider not configured', 503);
   }

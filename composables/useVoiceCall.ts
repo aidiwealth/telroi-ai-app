@@ -84,7 +84,8 @@ export function useVoiceCall() {
           authorizationUsername: tok.sipUsername, authorizationPassword: tok.sipPassword
         });
         await sipUA.start();
-        const target = SIP.UserAgent.makeURI(`sip:${opts.to}@${tok.sipDomain}`);
+        const dialNumber = (tok.dialPrefix || '') + opts.to;
+        const target = SIP.UserAgent.makeURI(`sip:${dialNumber}@${tok.sipDomain}`);
         const inviter = new SIP.Inviter(sipUA, target, { sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false } } });
         activeConn = inviter;
         inviter.stateChange.addListener((st: string) => {
