@@ -91,16 +91,6 @@
             <input v-model="form.authPass" type="password" class="ad-input mono" :placeholder="editingCarrier?.authPassSet ? '•••••••• (blank to keep)' : 'blank for IP-auth'" />
           </div>
 
-          <div class="ad-field">
-            <label>From user / trunk number</label>
-            <input v-model="form.fromUser" class="ad-input mono" placeholder="2342094008749" />
-          </div>
-          <div class="ad-field">
-            <label>Default caller ID</label>
-            <input v-model="form.callerId" class="ad-input mono" placeholder="2342094008749" />
-            <span class="ad-hint">Fallback only. Per-customer caller-ID resolves securely at call time.</span>
-          </div>
-
           <div class="ad-field car-span2">
             <label>Inbound webhook secret {{ editingCarrier?.webhookSecretSet ? '· set' : '' }}</label>
             <input v-model="form.webhookSecret" type="password" class="ad-input mono" :placeholder="editingCarrier?.webhookSecretSet ? '•••••••• (blank to keep)' : 'shared secret for inbound callbacks'" />
@@ -152,7 +142,7 @@ const error = ref('');
 const blankForm = () => ({
   name: '', displayName: '', prefix: '', region: 'NG',
   sipGateway: '', sipPort: 5060, transport: 'udp', sipDomain: '',
-  authUser: '', authPass: '', fromUser: '', callerId: '',
+  authUser: '', authPass: '',
   webhookSecret: '', enabled: true
 });
 const form = reactive(blankForm());
@@ -205,8 +195,7 @@ function edit(c: Carrier) {
   form.name = c.name; form.displayName = c.displayName; form.prefix = c.prefix;
   form.region = c.region; form.sipGateway = c.sipGateway; form.sipPort = c.sipPort;
   form.transport = c.transport; form.sipDomain = c.sipDomain || '';
-  form.authUser = c.authUser || ''; form.fromUser = c.fromUser || '';
-  form.callerId = c.callerId || ''; form.enabled = c.enabled;
+  form.authUser = c.authUser || ''; form.enabled = c.enabled;
   form.authPass = ''; form.webhookSecret = '';
   isEdit.value = true;
   editingCarrier.value = c;
@@ -229,8 +218,6 @@ async function save() {
     if (form.sipDomain) payload.sipDomain = form.sipDomain;
     if (form.authUser) payload.authUser = form.authUser;
     if (form.authPass) payload.authPass = form.authPass;
-    if (form.fromUser) payload.fromUser = form.fromUser;
-    if (form.callerId) payload.callerId = form.callerId;
     if (form.webhookSecret) payload.webhookSecret = form.webhookSecret;
 
     await $fetch<any>('/api/admin/carriers', { method: 'POST', body: payload });

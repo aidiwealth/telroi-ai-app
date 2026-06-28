@@ -29,8 +29,6 @@ export default defineEventHandler(async (event) => {
   const sipDomain = raw.sipDomain ? String(raw.sipDomain).trim() : null;
   const authUser = raw.authUser ? String(raw.authUser).trim() : null;
   const authPass = raw.authPass ? String(raw.authPass) : null;
-  const fromUser = raw.fromUser ? String(raw.fromUser).trim() : null;
-  const callerId = raw.callerId ? String(raw.callerId).trim() : null;
   const webhookSecret = raw.webhookSecret ? String(raw.webhookSecret) : null;
   const codecs = Array.isArray(raw.codecs) && raw.codecs.length ? raw.codecs.map(String) : null;
   const enabled = raw.enabled !== false;
@@ -58,8 +56,7 @@ export default defineEventHandler(async (event) => {
       await agentCarrierUpsert({
         name, displayName, prefix, sipGateway, sipPort, transport,
         sipDomain: sipDomain || undefined, authUser: authUser || undefined,
-        authPass: authPassPlain, fromUser: fromUser || undefined,
-        callerId: callerId || undefined, codecs: codecs || undefined
+        authPass: authPassPlain, codecs: codecs || undefined
       });
       pushed = true;
     } catch (e: any) {
@@ -70,7 +67,7 @@ export default defineEventHandler(async (event) => {
   // 2) Upsert the DB record.
   const values: any = {
     name, displayName, prefix, region, sipGateway, sipPort, transport,
-    sipDomain, authUser, authPassEnc, fromUser, callerId,
+    sipDomain, authUser, authPassEnc, fromUser: null, callerId: null,
     codecs: codecs ?? ['ulaw', 'alaw'], webhookSecretEnc, enabled,
     status: pushed ? 'live' : (isScaffold ? 'scaffold' : 'disabled'),
     pushedAt: pushed ? new Date() : (existing?.pushedAt ?? null),
