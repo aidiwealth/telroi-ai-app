@@ -25,3 +25,10 @@ Files install to `/etc/asterisk/`. After changes: `asterisk -rx "dialplan reload
 - ARI (8088) is localhost-only + firewalled
 - UFW active: only 22, 80, 5060/udp, 8089, 8443, 10000-20000/udp open
 - fail2ban asterisk jail bans SIP auth abuse
+
+## nginx provisioning-agent proxy (nginx-provision-agent.conf)
+Reverse-proxies the PBX agent (127.0.0.1:8090) to the public 8443 endpoint the web app calls.
+Uses an explicit path allowlist (/provision, /deprovision, /health, /carrier/upsert, /carrier/remove).
+Lives at /etc/nginx/sites-available/provision-agent (symlinked into sites-enabled).
+NOTE: After adding new location blocks, run `systemctl restart nginx` — a `reload` does NOT
+reliably pick up new location blocks.
