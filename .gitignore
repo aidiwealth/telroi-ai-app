@@ -10,3 +10,7 @@ server/db/migrations
 *.patch
 phase*.sh
 step*.sh
+
+# PBX: never commit configs with real secrets (only sanitized templates in pbx-config/)
+pbx-config/*.real.conf
+pbx-config/secrets.md
