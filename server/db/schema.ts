@@ -1053,3 +1053,30 @@ export interface ConnectWorkflow {
   action: 'crm_write' | 'webhook' | 'sms_notify';
   config: Record<string, any>;
 }
+
+// Platform carrier trunks (Ruach/Kasooko/Sotel + any added via admin). These are
+// shared infrastructure (one trunk serves all tenants), managed by superadmins.
+// The authoritative Asterisk config is generated on the PBX by the provisioning
+// agent (carrier-core.ts); this table is the app-side record + secrets store.
+export const carriers = pgTable('carriers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),       // slug: lowercase a-z0-9 (e.g. "ruach")
+  displayName: text('display_name').notNull(),
+  prefix: text('prefix').notNull().unique(),    // dial prefix, e.g. "81"
+  region: text('region').notNull().default('NG'),
+  sipGateway: text('sip_gateway').notNull(),    // gateway IP or host
+  sipPort: integer('sip_port').notNull().default(5060),
+  transport: text('transport').notNull().default('udp'),  // udp|tcp|tls
+  sipDomain: text('sip_domain'),                // dial domain (default = gateway)
+  authUser: text('auth_user'),                  // blank => IP-auth
+  authPassEnc: text('auth_pass_enc'),           // encrypted
+  fromUser: text('from_user'),                  // trunk From user / default CID number
+  callerId: text('caller_id'),                  // default CID (fallback if ODBC empty)
+  codecs: jsonb('codecs').$type<string[]>().default(['ulaw', 'alaw']),
+  webhookSecretEnc: text('webhook_secret_enc'), // encrypted inbound webhook secret
+  enabled: boolean('enabled').notNull().default(true),
+  status: text('status').notNull().default('unknown'),  // last-known PBX status
+  pushedAt: timestamp('pushed_at', { withTimezone: true }), // last successful PBX push
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});

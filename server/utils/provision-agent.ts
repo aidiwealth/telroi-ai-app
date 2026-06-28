@@ -91,3 +91,20 @@ export async function ensureWebrtcEndpoint(tenantId: string): Promise<{ created:
   });
   return { created: true, sipUsername: result.username };
 }
+
+// ─── Carrier (SIP trunk) management — calls the PBX agent to generate/remove
+// the Asterisk trunk config (pjsip.d + extensions.d) and reload. ──────────────
+export interface CarrierAgentInput {
+  name: string; displayName?: string; prefix: string;
+  sipGateway: string; sipPort?: number; transport?: string; sipDomain?: string;
+  authUser?: string; authPass?: string; fromUser?: string; callerId?: string;
+  codecs?: string[];
+}
+export async function agentCarrierUpsert(input: CarrierAgentInput): Promise<{ name: string; prefix: string; pjsipPath: string; extensionsPath: string }> {
+  const j = await agentCall('/carrier/upsert', input);
+  return { name: j.name, prefix: j.prefix, pjsipPath: j.pjsipPath, extensionsPath: j.extensionsPath };
+}
+export async function agentCarrierRemove(name: string): Promise<{ removed: boolean }> {
+  const j = await agentCall('/carrier/remove', { name });
+  return { removed: j.removed };
+}
