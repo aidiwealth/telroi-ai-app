@@ -12,6 +12,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type Ari from 'ari-client';
 import { provisionEndpoint, deprovisionEndpoint } from './provision-core.ts';
+import { upsertCarrier, removeCarrier, type CarrierInput } from './carrier-core.ts';
 import { originateCall } from './originate.ts';
 
 const SECRET = process.env.PROVISION_AGENT_SECRET || '';
@@ -104,6 +105,37 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
         }
       }
 
+      // POST /carrier/upsert  { name, prefix, sipGateway, ... } -> writes trunk +
+      // routes to Asterisk and reloads. Idempotent (create or edit).
+      if (req.method === 'POST' && req.url === '/carrier/upsert') {
+        const body = await readJson(req) as CarrierInput;
+        if (!body.name || !body.prefix || !body.sipGateway) {
+          return send(res, 400, { ok: false, error: 'name, prefix, sipGateway required' });
+        }
+        try {
+          const result = upsertCarrier(body);
+          log(`carrier upserted: ${result.name} (prefix ${result.prefix})`);
+          return send(res, 200, { ok: true, ...result });
+        } catch (e) {
+          log(`carrier upsert failed: ${(e as Error).message}`);
+          return send(res, 400, { ok: false, error: (e as Error).message });
+        }
+      }
+
+      // POST /carrier/remove  { name } -> deletes trunk + routes, reloads.
+      if (req.method === 'POST' && req.url === '/carrier/remove') {
+        const body = await readJson(req);
+        const name = String(body.name || '').trim();
+        if (!name) return send(res, 400, { ok: false, error: 'name required' });
+        try {
+          const result = removeCarrier(name);
+          log(`carrier removed: ${name} (existed=${result.removed})`);
+          return send(res, 200, { ok: true, ...result });
+        } catch (e) {
+          return send(res, 400, { ok: false, error: (e as Error).message });
+        }
+      }
+
       // GET /health -> liveness (still requires auth)
       if (req.method === 'GET' && req.url === '/health') {
         return send(res, 200, { ok: true, ari: !!ari });
@@ -117,7 +149,7 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
   });
 
   server.listen(PORT, BIND, () => {
-    log(`listening on ${BIND}:${PORT} (POST /provision, /deprovision, /originate)`);
+    log(`listening on ${BIND}:${PORT} (POST /provision, /deprovision, /originate, /carrier/upsert, /carrier/remove)`);
   });
   return server;
 }
