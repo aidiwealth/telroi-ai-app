@@ -569,8 +569,6 @@ const pwSet = ref(false);
 const saving = ref(false);
 const saved = ref(false);
 
-// Carrier master accounts (Digidite/PBX merged into the operator credential;
-// pbxDomain/pbxKey remain only as an optional override, not shown by default).
 const cfg = ref<any>({});
 const supportNumbers = ref<{ telnum: string; region: string; provider: string }[]>([]);
 const supportRegion = reactive<{ NG: string; INTL: string }>({ NG: '', INTL: '' });
@@ -786,7 +784,6 @@ onMounted(async () => {
     captcha.provider = s.captchaProvider || 'turnstile';
     captcha.siteKey = s.captchaSiteKey || '';
     captcha.secretSet = !!s.captchaSecretSet;
-    tnConn.value = '';
   } catch { await navigateTo('/admin/login'); }
   try { integ.value = await $fetch<any>('/api/admin/integrations'); } catch { /* */ }
   await loadSupport();
