@@ -9,45 +9,13 @@
       <button v-for="t in tabs" :key="t.id" class="set-tab" :class="{ on: activeTab === t.id }" @click="activeTab = t.id">{{ t.label }}</button>
     </nav>
 
-    <!-- Digidite account (single credential: provisioning + default NG carrier) -->
+    <!-- Voice carriers moved to the dedicated Carriers page -->
     <section v-show="activeTab === 'voice'" class="set-card">
       <div class="set-card-head">
         <div>
-          <h2 class="set-card-title">Digidite account</h2>
-          <p class="set-card-desc">Telroi's master Digidite credential. One account, two jobs: it provisions new client subdomains (the boss/operator API) <em>and</em> serves as the default carrier route for Nigerian numbers. You don't need a separate PBX account.</p>
+          <h2 class="set-card-title">Voice carriers</h2>
+          <p class="set-card-desc">Carrier configuration (Telroi Asterisk SIP trunks and Twilio/Telnyx for other countries) now lives on its own page. <NuxtLink to="/admin/carriers" class="inline-link">Open Carriers →</NuxtLink></p>
         </div>
-      </div>
-      <div class="set-grid">
-        <div class="ad-field"><label>Digidite domain</label>
-          <input v-model="operatorDomain" class="ad-input mono" placeholder="telroiai.digitaltide.io" />
-          <span class="ad-hint">Used for both provisioning and the NG carrier route.</span>
-        </div>
-        <div class="ad-field"><label>Client domain suffix</label>
-          <input v-model="clientDomainSuffix" class="ad-input mono" placeholder="digitaltide.io" />
-          <span class="ad-hint">New clients become <em>subdomain</em>.{{ clientDomainSuffix }}</span>
-        </div>
-        <div class="ad-field"><label>Digidite username</label>
-          <input v-model="operatorUsername" class="ad-input mono" placeholder="operator login" />
-          <span class="ad-hint">Operator account login (sent as Basic auth).</span>
-        </div>
-        <div class="ad-field"><label>Digidite password {{ pwSet ? '· set, leave blank to keep' : '' }}</label>
-          <input v-model="operatorPassword" class="ad-input mono" type="password" :placeholder="pwSet ? '••••••••••••' : 'operator password'" />
-        </div>
-        <div class="ad-field set-span"><label>Digidite API key {{ keySet ? '· set, leave blank to keep' : '' }}</label>
-          <input v-model="operatorApiKey" class="ad-input mono" type="password" :placeholder="keySet ? '••••••••••••' : 'boss / X-API-KEY'" />
-        </div>
-        <div class="ad-field"><label>Digidite route ID</label>
-          <input v-model="operatorRouteId" class="ad-input mono" placeholder="route UUID from Digidite portal" />
-          <span class="ad-hint">From your Digidite portal's route list. Leave blank to auto-pick the first available route.</span>
-        </div>
-        <div class="ad-field"><label>Digidite dialplan ID</label>
-          <input v-model="operatorDialplanId" class="ad-input mono" placeholder="dialplan UUID from Digidite portal" />
-          <span class="ad-hint">From your Digidite portal's dialplan list. Leave blank to auto-pick the first available dialplan.</span>
-        </div>
-      </div>
-      <div class="set-actions">
-        <button class="btn btn-signal" :disabled="saving || !operatorDomain" @click="save">{{ saving ? 'Saving…' : 'Save Digidite account' }}</button>
-        <span v-if="saved" class="ad-saved">✓ Saved</span>
       </div>
     </section>
 
@@ -116,140 +84,7 @@
       </div>
     </section>
 
-    <!-- Carrier master accounts -->
-    <section v-show="activeTab === 'voice'" class="set-card">
-      <div class="set-card-head">
-        <div>
-          <h2 class="set-card-title">Other carrier accounts</h2>
-          <p class="set-card-desc">Digidite (above) is the default route for Nigerian numbers. These carriers handle other regions — Twilio/Telnyx for US/CA/UK. Customers never see these.</p>
-        </div>
-      </div>
 
-      <div class="set-carrier">
-        <div class="set-carrier-top">
-          <span class="set-carrier-name">Twilio</span>
-          <span class="set-pill" :class="{ on: cfg.twilioSet }">{{ cfg.twilioSet ? 'Configured' : 'Not set' }}</span>
-        </div>
-        <div class="set-grid">
-          <div class="ad-field"><label>Account SID</label><input v-model="twSid" class="ad-input mono" placeholder="AC…" /></div>
-          <div class="ad-field"><label>Auth token {{ cfg.twilioSet ? '· set' : '' }}</label><input v-model="twToken" type="password" class="ad-input mono" :placeholder="cfg.twilioSet ? '••••••••' : 'auth token'" /></div>
-        </div>
-      </div>
-
-      <div class="set-carrier">
-        <div class="set-carrier-top">
-          <span class="set-carrier-name">Telnyx</span>
-          <span class="set-pill" :class="{ on: cfg.telnyxSet }">{{ cfg.telnyxSet ? 'Configured' : 'Not set' }}</span>
-        </div>
-        <div class="set-grid">
-          <div class="ad-field"><label>API key {{ cfg.telnyxSet ? '· set' : '' }}</label><input v-model="tnKey" type="password" class="ad-input mono" :placeholder="cfg.telnyxSet ? '••••••••' : 'KEY…'" /></div>
-          <div class="ad-field"><label>Connection ID</label><input v-model="tnConn" class="ad-input mono" placeholder="connection id" /></div>
-        </div>
-      </div>
-
-      <div class="set-carrier">
-        <div class="set-carrier-top">
-          <span class="set-carrier-name">Client SIP masking <span class="pay-cur">hide carrier from clients</span></span>
-        </div>
-        <div class="set-grid">
-          <div class="ad-field set-span">
-            <label>Telroi SIP proxy domain (optional)</label>
-            <input v-model="sipProxyDomain" class="ad-input mono" placeholder="sip.telroi.ai" />
-            <span class="ad-hint">When set, clients see this Telroi-branded host instead of the carrier's real SIP hostname. Requires a real SIP proxy/SBC or CNAME pointing at the carrier. Leave blank to show the raw host under a neutral label.</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="set-carrier">
-        <div class="set-carrier-top">
-          <span class="set-carrier-name">Browser voice — in-app &amp; Live Call widget</span>
-          <span class="ad-hint">These power real in-browser calls (microphone, ringing, audio) for the dialer and the Live Call widget. Each is separate from the provisioning keys above.</span>
-        </div>
-
-        <div class="set-subcard">
-          <div class="set-carrier-name">Twilio Voice <span class="set-pill" :class="{ on: cfg.twilioVoiceSet }">{{ cfg.twilioVoiceSet ? 'Configured' : 'Not set' }}</span></div>
-          <div class="set-grid">
-            <div class="ad-field"><label>API Key SID</label><input v-model="twVoice.apiKeySid" class="ad-input mono" placeholder="SK…" /></div>
-            <div class="ad-field"><label>API Key Secret {{ cfg.twilioVoiceSet ? '· set' : '' }}</label><input v-model="twVoice.apiKeySecret" type="password" class="ad-input mono" :placeholder="cfg.twilioVoiceSet ? '••••••••' : 'secret'" /></div>
-            <div class="ad-field"><label>TwiML App SID</label><input v-model="twVoice.twimlAppSid" class="ad-input mono" placeholder="AP…" /></div>
-            <div class="ad-field"><label>Caller ID (your Twilio number)</label><input v-model="twVoice.callerId" class="ad-input mono" placeholder="+1…" /></div>
-          </div>
-        </div>
-
-        <div class="set-subcard">
-          <div class="set-carrier-name">Telnyx WebRTC <span class="set-pill" :class="{ on: cfg.telnyxVoiceSet }">{{ cfg.telnyxVoiceSet ? 'Configured' : 'Not set' }}</span></div>
-          <div class="set-grid">
-            <div class="ad-field"><label>SIP username (credential)</label><input v-model="tnVoice.sipUsername" class="ad-input mono" placeholder="user" /></div>
-            <div class="ad-field"><label>SIP password {{ cfg.telnyxVoiceSet ? '· set' : '' }}</label><input v-model="tnVoice.sipPassword" type="password" class="ad-input mono" :placeholder="cfg.telnyxVoiceSet ? '••••••••' : 'password'" /></div>
-            <div class="ad-field"><label>Connection ID</label><input v-model="tnVoice.connectionId" class="ad-input mono" placeholder="connection id" /></div>
-            <div class="ad-field"><label>Caller ID</label><input v-model="tnVoice.callerId" class="ad-input mono" placeholder="+…" /></div>
-          </div>
-        </div>
-
-        <div class="set-subcard">
-          <div class="set-carrier-name">Digidite (Nigeria) WebRTC/SIP <span class="set-pill" :class="{ on: cfg.digiditeVoiceSet }">{{ cfg.digiditeVoiceSet ? 'Configured' : 'Not set' }}</span></div>
-          <div class="set-grid">
-            <div class="ad-field"><label>WebSocket server</label><input v-model="dgVoice.wsServer" class="ad-input mono" placeholder="wss://gateway.digidite…/ws" /></div>
-            <div class="ad-field"><label>SIP domain</label><input v-model="dgVoice.sipDomain" class="ad-input mono" placeholder="sip.digidite…" /></div>
-            <div class="ad-field"><label>SIP username</label><input v-model="dgVoice.sipUsername" class="ad-input mono" placeholder="user" /></div>
-            <div class="ad-field"><label>SIP password {{ cfg.digiditeVoiceSet ? '· set' : '' }}</label><input v-model="dgVoice.sipPassword" type="password" class="ad-input mono" :placeholder="cfg.digiditeVoiceSet ? '••••••••' : 'password'" /></div>
-            <div class="ad-field"><label>Caller ID</label>
-              <select v-model="dgVoice.callerId" class="select">
-                <option value="">— Select a provisioned Digidite number —</option>
-                <option v-for="n in digiditeNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }}</option>
-              </select>
-              <span v-if="!digiditeNumbers.length" class="ad-hint">No numbers assigned to Digidite yet. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink> first.</span>
-            </div>
-          </div>
-        </div>
-
-
-        <!-- Our outbound IP to whitelist (shared by all IP-authenticated SIP vendors) -->
-        <div class="set-ipbanner">
-          <div class="set-ipbanner-label">Outbound / signaling IP to whitelist</div>
-          <p class="set-card-desc" style="margin:2px 0 10px">Give this IP to any SIP vendor that whitelists by address. Sourced from your deployment; override here if your egress IP differs.</p>
-          <div class="set-ip-row">
-            <code class="set-ip mono">{{ outboundSipIp || 'Not set' }}</code>
-            <button class="btn btn-ghost btn-sm" type="button" @click="copy(outboundSipIp)">Copy</button>
-            <input v-model="outboundSipIp" class="ad-input mono" placeholder="Override (e.g. 203.0.113.10)" style="max-width:240px" />
-          </div>
-        </div>
-
-        <!-- Core Asterisk (global) -->
-        <div class="set-subcard">
-          <div class="set-carrier-name">Core Asterisk (global) <span class="set-pill" :class="{ on: cfg.asteriskVoiceSet }">{{ cfg.asteriskVoiceSet ? 'Configured' : 'Not set' }}</span></div>
-          <p class="set-card-desc" style="margin:4px 0 12px">Self-hosted Asterisk on a separate server, IP-authenticated. Powers calls for all countries. Supports a SIP trunk and an AMI/ARI REST API for origination. Whitelist the outbound IP above on your Asterisk server. Assign numbers to Asterisk under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</p>
-          <div class="set-grid">
-            <div class="ad-field"><label>SIP gateway (server IP or host)</label><input v-model="asteriskVoice.sipGateway" class="ad-input mono" placeholder="asterisk.yourdomain.com" /></div>
-            <div class="ad-field"><label>Port</label><input v-model.number="asteriskVoice.sipPort" type="number" class="ad-input mono" placeholder="5060" /></div>
-            <div class="ad-field"><label>Transport</label>
-              <select v-model="asteriskVoice.transport" class="select"><option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option></select>
-            </div>
-            <div class="ad-field"><label>SIP domain (optional)</label><input v-model="asteriskVoice.sipDomain" class="ad-input mono" placeholder="leave blank to use gateway" /></div>
-            <div class="ad-field"><label>Auth username (optional — blank if IP-auth)</label><input v-model="asteriskVoice.authUser" class="ad-input mono" placeholder="(none for IP-authenticated)" /></div>
-            <div class="ad-field"><label>Auth password {{ cfg.asteriskVoiceSet ? '· set' : '' }}</label><input v-model="asteriskVoice.authPass" type="password" class="ad-input mono" :placeholder="cfg.asteriskVoiceSet ? '••••••••' : '(none for IP-authenticated)'" /></div>
-            <div class="ad-field set-span"><label class="set-sub-label">AMI / ARI REST API (optional — for API-driven origination)</label></div>
-            <div class="ad-field"><label>API base URL (ARI)</label><input v-model="asteriskVoice.apiBaseUrl" class="ad-input mono" placeholder="https://asterisk.yourdomain.com:8088/ari" /></div>
-            <div class="ad-field"><label>ARI app name</label><input v-model="asteriskVoice.ariAppName" class="ad-input mono" placeholder="telroi" /></div>
-            <div class="ad-field"><label>API username</label><input v-model="asteriskVoice.apiUsername" class="ad-input mono" placeholder="ari user" /></div>
-            <div class="ad-field"><label>API password {{ cfg.asteriskVoiceSet ? '· set' : '' }}</label><input v-model="asteriskVoice.apiPassword" type="password" class="ad-input mono" :placeholder="cfg.asteriskVoiceSet ? '••••••••' : 'ARI secret'" /></div>
-            <div class="ad-field"><label>Default caller ID</label>
-              <select v-model="asteriskVoice.callerId" class="select">
-                <option value="">— Select a provisioned Asterisk number —</option>
-                <option v-for="n in asteriskNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }}</option>
-              </select>
-              <span v-if="!asteriskNumbers.length" class="ad-hint">No numbers assigned to Asterisk yet. Add them under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</span>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <div class="set-actions">
-        <button class="btn btn-signal" :disabled="savingCarriers" @click="saveCarriers">{{ savingCarriers ? 'Saving…' : 'Save carriers' }}</button>
-        <span v-if="savedCarriers" class="ad-saved">✓ Saved</span>
-      </div>
-    </section>
 
     <!-- ── Speech & OTP: vendor selection + OTP policy ── -->
     <section v-show="activeTab === 'speech'" class="set-card">
@@ -508,7 +343,7 @@
         <button class="btn btn-signal" :disabled="savingSupport" @click="saveSupport">{{ savingSupport ? 'Saving…' : 'Save support line' }}</button>
         <span v-if="savedSupport" class="ad-saved">✓ Saved</span>
       </div>
-      <p class="int-help" v-if="!support.ready">The support line auto-provisions once the Digidite account above is configured. Save after configuring it to activate.</p>
+      <p class="int-help" v-if="!support.ready">The support line auto-provisions once a voice carrier is configured under <NuxtLink to="/admin/carriers" class="inline-link">Carriers</NuxtLink>. Save after configuring it to activate.</p>
     </section>
 
     <!-- Developer docs subdomain -->
@@ -729,13 +564,6 @@ const emailStatus = computed(() => {
   return 'Console (dev)';
 });
 
-const operatorDomain = ref('');
-const operatorApiKey = ref('');
-const operatorUsername = ref('');
-const operatorPassword = ref('');
-const clientDomainSuffix = ref('digitaltide.io');
-const operatorDialplanId = ref('');
-const operatorRouteId = ref('');
 const keySet = ref(false);
 const pwSet = ref(false);
 const saving = ref(false);
@@ -744,22 +572,11 @@ const saved = ref(false);
 // Carrier master accounts (Digidite/PBX merged into the operator credential;
 // pbxDomain/pbxKey remain only as an optional override, not shown by default).
 const cfg = ref<any>({});
-const pbxDomain = ref(''); const pbxKey = ref('');
-const twSid = ref(''); const twToken = ref('');
-const tnKey = ref(''); const tnConn = ref('');
-const twVoice = reactive({ apiKeySid: '', apiKeySecret: '', twimlAppSid: '', callerId: '' });
-const tnVoice = reactive({ sipUsername: '', sipPassword: '', connectionId: '', callerId: '' });
-const dgVoice = reactive({ wsServer: '', sipDomain: '', sipUsername: '', sipPassword: '', callerId: '' });
-const asteriskVoice = reactive<any>({ sipGateway: '', sipPort: 5060, transport: 'udp', sipDomain: '', authUser: '', authPass: '', callerId: '', apiBaseUrl: '', apiUsername: '', apiPassword: '', ariAppName: '' });
-const asteriskNumbers = ref<{ telnum: string; region: string; status: string }[]>([]);
-const outboundSipIp = ref('');
-const digiditeNumbers = ref<{ telnum: string }[]>([]);
 const supportNumbers = ref<{ telnum: string; region: string; provider: string }[]>([]);
 const supportRegion = reactive<{ NG: string; INTL: string }>({ NG: '', INTL: '' });
 const supportNumbersNG = computed(() => supportNumbers.value.filter((n) => ['telroi'].includes(n.provider)));
 const supportNumbersINTL = computed(() => supportNumbers.value.filter((n) => !['telroi'].includes(n.provider)));
 function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx' } as any)[p] || p; }
-const sipProxyDomain = ref('');
 
 // Inbound webhooks config
 const wh = reactive<any>({ urls: { twilio: '', telnyx: '', pbx: '', asterisk: '' }, enabled: {}, secretsSet: {}, telnyxSecret: '', pbxSecret: '', asteriskSecret: '' });
@@ -786,8 +603,6 @@ async function saveWebhooks() {
   finally { whSaving.value = false; }
 }
 function copy(text: string) { if (import.meta.client && navigator.clipboard) navigator.clipboard.writeText(text); }
-const savingCarriers = ref(false);
-const savedCarriers = ref(false);
 const integ = ref<any>(null);
 
 // ── Speech & OTP vendor selection + policy ──
@@ -948,37 +763,18 @@ async function savePayments() {
 onMounted(async () => {
   try {
     const s = await $fetch<any>('/api/admin/settings');
-    operatorDomain.value = s.operatorDomain;
-    clientDomainSuffix.value = s.clientDomainSuffix;
     keySet.value = s.operatorKeySet;
-    operatorUsername.value = s.operatorUsername || '';
     pwSet.value = !!s.operatorPasswordSet;
-    operatorDialplanId.value = s.operatorDialplanId || '';
-    operatorRouteId.value = s.operatorRouteId || '';
     cfg.value = s;
     hydrateSpeech(s);
     docsDomain.value = s.docsDomain || '';
     statusDomain.value = s.statusDomain || '';
-    pbxDomain.value = s.telroiPbxDomain || '';
-    sipProxyDomain.value = s.sipProxyDomain || '';
-    if (s.asteriskVoice) {
-      Object.assign(asteriskVoice, {
-        sipGateway: s.asteriskVoice.sipGateway || '', sipPort: s.asteriskVoice.sipPort || 5060,
-        transport: s.asteriskVoice.transport || 'udp', sipDomain: s.asteriskVoice.sipDomain || '',
-        authUser: s.asteriskVoice.authUser || '', authPass: '', callerId: s.asteriskVoice.callerId || '',
-        apiBaseUrl: s.asteriskVoice.apiBaseUrl || '', apiUsername: s.asteriskVoice.apiUsername || '',
-        apiPassword: '', ariAppName: s.asteriskVoice.ariAppName || ''
-      });
-    }
-    outboundSipIp.value = s.outboundSipIp || '';
     // Pre-fill per-region support numbers.
     if (s.supportNumbersByRegion) {
       supportRegion.NG = s.supportNumbersByRegion.NG || '';
       supportRegion.INTL = s.supportNumbersByRegion.INTL || '';
     }
     // DIDs + caller-ID options come from numbers assigned to carriers in inventory.
-    try { const an = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'asterisk' } }); asteriskNumbers.value = an.numbers || []; } catch { /* */ }
-    try { const dn = await $fetch<any>('/api/admin/carrier/numbers', { query: { provider: 'telroi' } }); digiditeNumbers.value = dn.numbers || []; } catch { /* */ }
     try {
       const all = await $fetch<any>('/api/admin/carrier/numbers');
       // All assignable support numbers — NG and international (Twilio/Telnyx).
@@ -998,52 +794,7 @@ onMounted(async () => {
   await loadWebhooks();
 });
 
-async function saveCarriers() {
-  savingCarriers.value = true; savedCarriers.value = false;
-  try {
-    const body: any = {};
-    if (pbxDomain.value) body.telroiPbxDomain = pbxDomain.value;
-    if (pbxKey.value) body.telroiPbxKey = pbxKey.value;
-    if (twSid.value && twToken.value) { body.twilioAccountSid = twSid.value; body.twilioAuthToken = twToken.value; }
-    if (tnKey.value) { body.telnyxApiKey = tnKey.value; body.telnyxConnectionId = tnConn.value; }
-    // Browser-voice creds — only include a provider when its required fields are filled.
-    if (twVoice.apiKeySid && twVoice.apiKeySecret && twVoice.twimlAppSid) body.twilioVoice = { ...twVoice };
-    if (tnVoice.sipUsername && tnVoice.sipPassword) body.telnyxVoice = { ...tnVoice };
-    if (dgVoice.wsServer && dgVoice.sipUsername && dgVoice.sipPassword) body.digiditeVoice = { ...dgVoice };
-    // Core Asterisk (global) — include when a gateway is set. DIDs from inventory.
-    if (asteriskVoice.sipGateway) {
-      const dids = asteriskNumbers.value.map((n) => n.telnum);
-      body.asteriskVoice = { ...asteriskVoice, sipPort: Number(asteriskVoice.sipPort) || 5060, dids };
-    }
-    // Our outbound IP for vendors to whitelist (admin override of env default).
-    body.outboundSipIp = outboundSipIp.value || '';
-    body.sipProxyDomain = sipProxyDomain.value;
-    await $fetch('/api/admin/settings', { method: 'POST', body });
-    cfg.value = await $fetch<any>('/api/admin/settings');
-    pbxKey.value = twToken.value = tnKey.value = '';
-    twVoice.apiKeySecret = ''; tnVoice.sipPassword = ''; dgVoice.sipPassword = '';
-    savedCarriers.value = true;
-  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
-  finally { savingCarriers.value = false; }
-}
 
-async function save() {
-  saving.value = true; saved.value = false;
-  try {
-    const body: any = { operatorDomain: operatorDomain.value, clientDomainSuffix: clientDomainSuffix.value };
-    if (operatorApiKey.value) body.operatorApiKey = operatorApiKey.value;
-    body.operatorUsername = operatorUsername.value;
-    if (operatorPassword.value) body.operatorPassword = operatorPassword.value;
-    body.operatorDialplanId = operatorDialplanId.value;
-    body.operatorRouteId = operatorRouteId.value;
-    await $fetch<any>('/api/admin/settings', { method: 'POST', body });
-    keySet.value = true;
-    operatorApiKey.value = '';
-    saved.value = true;
-  } catch (e: any) {
-    alert(e?.data?.error?.message || 'Save failed');
-  } finally { saving.value = false; }
-}
 </script>
 
 <style scoped>
