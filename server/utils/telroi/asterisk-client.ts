@@ -414,8 +414,36 @@ export class AsteriskClient {
 
   // listNumbers / getNumber remain DB reads via the sandbox for now (read-only,
   // migrated in a later step alongside call history).
-  listNumbers(q: Record<string, any> = {}) { return (this.sim as any).listNumbers?.(q); }
-  getNumber(telnum: string) { return (this.sim as any).getNumber?.(telnum); }
+  // === Numbers — real reads from number_subscriptions (the Numbers page). ====
+  private subToNumber(n: any) {
+    return {
+      telnum: n.telnum,
+      name: n.region || undefined,
+      type: n.routeType,
+      enabled: n.status === 'active',
+      disabled: n.status !== 'active',
+      location: n.region || undefined,
+      user: n.routeType === 'person' ? (n.routeTarget || undefined) : undefined,
+      group: n.routeType === 'department' ? (n.departmentId || undefined) : undefined,
+      status: n.status
+    };
+  }
+
+  async listNumbers(_q: Record<string, any> = {}): Promise<{ items: any[]; info: any }> {
+    const db = useDb();
+    const rows = await db.select().from(schema.numberSubscriptions)
+      .where(eq(schema.numberSubscriptions.tenantId, this.tenantId));
+    const items = rows.map((n) => this.subToNumber(n));
+    return { items, info: { search: '', total: items.length, start: 0, limit: items.length } };
+  }
+
+  async getNumber(telnum: string): Promise<any> {
+    const db = useDb();
+    const [n] = await db.select().from(schema.numberSubscriptions)
+      .where(and(eq(schema.numberSubscriptions.tenantId, this.tenantId), eq(schema.numberSubscriptions.telnum, telnum)))
+      .limit(1);
+    return n ? this.subToNumber(n) : { telnum, enabled: false };
+  }
   // === STEP 6 — real blacklist (writes the blacklist table the control-app
   // cache reads; inbound handler rejects matching callers within ~30s) ========
   async blacklist(_q: Record<string, any> = {}): Promise<Array<{ telnum: string; comment?: string }>> {
