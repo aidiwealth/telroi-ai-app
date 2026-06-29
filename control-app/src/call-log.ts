@@ -94,7 +94,7 @@ export function logOutbound(input: OutboundLogInput): void {
         .where(eq(schema.sipEndpoints.sipUsername, username))
         .limit(1);
       if (!ep?.tenantId) { console.error(`[call-log] logOutbound: no tenant for ${username}`); return; }
-      const callid = input.callid || `out-${username}-${input.startEpoch || Date.now()}`;
+      const callid = input.callid || `out-${username}-${input.startEpoch || Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = input.startEpoch ? new Date(input.startEpoch * 1000) : new Date();
       const status = mapDialStatus(input.dialstatus);
       await db.insert(schema.callEvents).values({
@@ -109,7 +109,7 @@ export function logOutbound(input: OutboundLogInput): void {
         raw: { agent: username, dialed: input.dialed, dialstatus: input.dialstatus, carrier: input.carrier }
       }).onConflictDoUpdate({
         target: [schema.callEvents.tenantId, schema.callEvents.callid],
-        set: { status: sql`excluded.status`, duration: sql`excluded.duration`, phone: sql`excluded.phone` }
+        set: { status: sql`excluded.status`, duration: sql`excluded.duration`, phone: sql`excluded.phone`, carrier: sql`excluded.carrier`, raw: sql`excluded.raw` }
       });
       console.log(`[call-log] outbound logged: ${username} -> ${input.dialed} (${status}, ${input.duration ?? '?'}s via ${input.carrier || '?'})`);
     } catch (err) {
