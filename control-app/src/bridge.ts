@@ -24,6 +24,9 @@ export interface BridgeOptions {
   endpoint: string;         // e.g. "PJSIP/test1"
   callerIdNum?: string;     // caller id to present to the callee
   ringTimeoutSec?: number;  // how long to ring the target before giving up
+  // Reports real call lifecycle so the caller can log it: 'answered' when the
+  // callee picks up, then a terminal status ('ended' | 'no-answer' | 'failed').
+  onStatus?: (status: 'answered' | 'ended' | 'no-answer' | 'failed') => void;
 }
 
 // Bridge the caller to the endpoint. Resolves when the bridge is set up (or the
@@ -40,11 +43,19 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
   // Track the outbound (callee) channel so we can clean it up.
   let callee: Ari.Channel | null = null;
   let cleanedUp = false;
+  let wasAnswered = false;
 
   const cleanup = async (reason: string) => {
     if (cleanedUp) return;
     cleanedUp = true;
     log(`cleanup bridge ${bridge.id} (${reason})`);
+    if (opts.onStatus) {
+      let terminal: 'ended' | 'no-answer' | 'failed';
+      if (wasAnswered) terminal = 'ended';
+      else if (reason === 'originate failed' || reason === 'failed to add caller' || reason === 'bridge add failed') terminal = 'failed';
+      else terminal = 'no-answer';
+      try { opts.onStatus(terminal); } catch { /* logging must never break teardown */ }
+    }
     try { if (callee) await callee.hangup(); } catch { /* gone */ }
     try { await bridge.destroy(); } catch { /* gone */ }
   };
@@ -74,6 +85,8 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
     try {
       await ch.answer();
       await bridge.addChannel({ channel: ch.id });
+      wasAnswered = true;
+      if (opts.onStatus) { try { opts.onStatus('answered'); } catch { /* never break the call */ } }
       log(`bridged: ${caller.id} <-> ${ch.id}`);
     } catch (err) {
       log(`failed to bridge callee: ${(err as Error)?.message}`);

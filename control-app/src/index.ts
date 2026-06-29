@@ -104,8 +104,15 @@ async function main() {
         return;
       }
 
-      // 3) Log the call (async, fire-and-forget to NYC)
-      logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'answered', direction: 'in' });
+      // 3) Log the call as RINGING (async, fire-and-forget). The real outcome
+      //    (answered / ended / no-answer / failed) is upserted by the bridge's
+      //    onStatus callback as the call progresses. We record the dialed DID in
+      //    raw so the history can show which number was called.
+      logCall({
+        tenantId: route.tenantId, callid: chId, phone: callerNum,
+        status: 'ringing', direction: 'in',
+        raw: { did: dialedDid, callerName }
+      });
 
       // 4) Route per config
       log(`  OK tenant=${route.tenantId} routeType=${route.routeType}`);
@@ -140,7 +147,10 @@ async function main() {
               caller: channel,
               endpoint,
               callerIdNum: callerNum || 'Telroi',
-              ringTimeoutSec: 30
+              ringTimeoutSec: 30,
+              onStatus: (status) => {
+                logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in' });
+              }
             });
             // Bridging is now managed by bridge.ts (it owns teardown on hangup).
             // We do NOT hang up here — the call is live.
