@@ -101,12 +101,72 @@ export class AsteriskClient {
   editGroup(id: string, b: Record<string, any>) { return (this.sim as any).editGroup?.(id, b); }
   deleteGroup(id: string) { return (this.sim as any).deleteGroup?.(id); }
   changeGroupUsers(id: string, b: Record<string, any>) { return (this.sim as any).changeGroupUsers?.(id, b); }
-  // Numbers
+  // === STEP 2 — real number routing (writes the authoritative DB record the
+  // control-app cache reads at call time; propagates within the cache refresh) ==
+  // Look up a tenant-scoped subscription by telnum.
+  private async subFor(telnum: string) {
+    const db = useDb();
+    const [sub] = await db.select().from(schema.numberSubscriptions)
+      .where(and(eq(schema.numberSubscriptions.tenantId, this.tenantId), eq(schema.numberSubscriptions.telnum, telnum)))
+      .limit(1);
+    if (!sub) throw Object.assign(new Error('Number not found for this tenant'), {
+      statusCode: 404, data: { error: { code: 'not_found', message: 'Number not found.' } }
+    });
+    return sub;
+  }
+
+  // Translate the various caller body shapes into number_subscriptions columns.
+  //   { type:'avm', avm:{ mode:'ai', van_id } }   -> ai
+  //   { type:'user', user } / { routeType:'person', target }  -> person
+  //   { type:'group', group } / { routeType:'department', departmentId } -> department
+  async editNumberRoute(telnum: string, body: Record<string, any>): Promise<{ telnum: string; routeType: string }> {
+    const sub = await this.subFor(telnum);
+    const db = useDb();
+    const b = body || {};
+    const type = (b.routeType || b.type || '').toString();
+
+    const vals: Record<string, any> = {};
+    if (type === 'ai' || type === 'avm') {
+      vals.routeType = 'ai';
+      vals.routeAgentId = b.agentId || b.avm?.agent_id || sub.routeAgentId || null;
+      vals.routeTarget = null;
+      vals.routeEscalateTo = b.escalateTo || b.avm?.escalate_to || null;
+      vals.routeEscalateAfter = b.escalateAfter ?? b.avm?.escalate_after ?? 0;
+    } else if (type === 'department' || type === 'group') {
+      vals.routeType = 'department';
+      vals.departmentId = b.departmentId || b.group || sub.departmentId || null;
+      vals.routeTarget = null;
+      vals.routeAgentId = null;
+    } else {
+      // person (default)
+      vals.routeType = 'person';
+      vals.routeTarget = b.target || b.user || b.extension || sub.routeTarget || null;
+      vals.routeAgentId = null;
+    }
+
+    await db.update(schema.numberSubscriptions).set(vals)
+      .where(eq(schema.numberSubscriptions.id, sub.id));
+    return { telnum, routeType: vals.routeType };
+  }
+
+  async enableNumber(telnum: string): Promise<void> {
+    const sub = await this.subFor(telnum);
+    const db = useDb();
+    await db.update(schema.numberSubscriptions).set({ status: 'active' })
+      .where(eq(schema.numberSubscriptions.id, sub.id));
+  }
+
+  async disableNumber(telnum: string): Promise<void> {
+    const sub = await this.subFor(telnum);
+    const db = useDb();
+    await db.update(schema.numberSubscriptions).set({ status: 'suspended' })
+      .where(eq(schema.numberSubscriptions.id, sub.id));
+  }
+
+  // listNumbers / getNumber remain DB reads via the sandbox for now (read-only,
+  // migrated in a later step alongside call history).
   listNumbers(q: Record<string, any> = {}) { return (this.sim as any).listNumbers?.(q); }
   getNumber(telnum: string) { return (this.sim as any).getNumber?.(telnum); }
-  editNumberRoute(telnum: string, b: Record<string, any>) { return (this.sim as any).editNumberRoute?.(telnum, b); }
-  enableNumber(telnum: string) { return (this.sim as any).enableNumber?.(telnum); }
-  disableNumber(telnum: string) { return (this.sim as any).disableNumber?.(telnum); }
   // Blacklist / DND / SIP
   blacklist(q: Record<string, any> = {}) { return (this.sim as any).blacklist?.(q); }
   addBlacklist(b: any) { return (this.sim as any).addBlacklist?.(b); }
