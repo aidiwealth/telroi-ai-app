@@ -101,11 +101,14 @@ export class AsteriskClient {
 
   // Map a call_events row -> the TelroiCall shape callers expect.
   private rowToCall(e: any) {
+    const raw = (e.raw || {}) as Record<string, any>;
     return {
       uid: e.callid,
       type: e.direction || e.type || 'out',          // in | out
       status: e.status || 'completed',
       client: e.phone || '\u2014',
+      destination: raw.did || (e.direction === 'out' ? e.phone : undefined) || undefined,
+      telnum_name: raw.callerName || undefined,
       user: e.user || undefined,
       start: (e.startedAt || e.createdAt)?.toISOString?.() || String(e.startedAt || e.createdAt),
       wait: e.wait || 0,
