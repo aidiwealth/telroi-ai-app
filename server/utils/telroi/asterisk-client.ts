@@ -9,7 +9,8 @@
 // working until each capability is built on ARI in later steps. As each method
 // is implemented for real here, it's removed from the delegated set.
 
-import { agentOriginate, provisionAgentConfigured } from '~/server/utils/provision-agent';
+import { agentOriginate, agentProvision, agentDeprovision, provisionAgentConfigured } from '~/server/utils/provision-agent';
+import { encrypt } from '~/server/utils/crypto';
 import { SandboxTelroiClient } from './sandbox-client';
 import { useDb, schema } from '~/server/db';
 import { and, eq, gte, lte, desc } from 'drizzle-orm';
@@ -194,9 +195,57 @@ export class AsteriskClient {
     return depts.map((d) => ({ id: d.id, name: d.name, ext: '' }));
   }
 
-  addUser(b: Record<string, any>) { return (this.sim as any).addUser?.(b); }
-  editUser(login: string, b: Record<string, any>) { return (this.sim as any).editUser?.(login, b); }
-  deleteUser(login: string) { return (this.sim as any).deleteUser?.(login); }
+  // === STEP 4 (write half) — provision/deprovision PBX agent extensions ======
+  // addUser creates a real PJSIP endpoint (desk extension) via the provisioning
+  // agent and persists a sip_endpoints row (same pattern as ensureWebrtcEndpoint,
+  // but webrtc=false). The calling endpoint (agents.post.ts) handles linking
+  // memberships.pbxLogin afterward. DND still delegates (needs a schema column).
+  async addUser(body: Record<string, any>): Promise<any> {
+    const login = String(body?.login || '').trim();
+    if (!login) throw new Error('login required');
+    if (!provisionAgentConfigured()) {
+      return (this.sim as any).addUser?.(body);
+    }
+    const db = useDb();
+    const existingRows = await db.select().from(schema.sipEndpoints)
+      .where(and(eq(schema.sipEndpoints.tenantId, this.tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
+    const already = existingRows.find((r: any) => r.label === login || r.sipUsername === login);
+    if (already) {
+      return { login, name: body.name, email: body.email, ext: already.sipUsername || login };
+    }
+    const result = await agentProvision(this.tenantId, login, false);
+    await db.insert(schema.sipEndpoints).values({
+      tenantId: this.tenantId, provider: 'telroi', kind: 'registration',
+      externalId: result.username, label: login, sipUsername: result.username,
+      secretEnc: encrypt(result.password), domain: result.domain,
+      meta: { transport: result.transport, agent: true }
+    });
+    return { login, name: body.name, email: body.email, ext: result.username };
+  }
+
+  async editUser(login: string, _body: Record<string, any>): Promise<any> {
+    return this.getUser(login);
+  }
+
+  async deleteUser(login: string): Promise<void> {
+    const db = useDb();
+    const rows = await db.select().from(schema.sipEndpoints)
+      .where(and(eq(schema.sipEndpoints.tenantId, this.tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
+    const ep = rows.find((r: any) => r.sipUsername === login || r.label === login);
+    if (ep) {
+      if (provisionAgentConfigured() && ep.sipUsername) {
+        try { await agentDeprovision(ep.sipUsername); } catch { /* endpoint may already be gone */ }
+      }
+      await db.delete(schema.sipEndpoints).where(eq(schema.sipEndpoints.id, ep.id));
+    }
+    try {
+      await db.update(schema.memberships).set({ pbxLogin: null })
+        .where(and(eq(schema.memberships.tenantId, this.tenantId), eq(schema.memberships.pbxLogin, login)));
+    } catch { /* best-effort */ }
+  }
+
+  // DND has no per-membership storage column yet; keep delegating until the
+  // schema migration (memberships.dnd) is reviewed + applied.
   getDnd(login: string) { return (this.sim as any).getDnd?.(login); }
   setDnd(login: string, on: boolean) { return (this.sim as any).setDnd?.(login, on); }
   // Groups / departments
