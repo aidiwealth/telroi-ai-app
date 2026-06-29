@@ -151,13 +151,52 @@ export class AsteriskClient {
   async innerHistoryJson(query: Record<string, any> = {}): Promise<any[]> {
     return this.historyJson(query);
   }
-  // Users / agents
-  listUsers(q: Record<string, any> = {}) { return (this.sim as any).listUsers?.(q); }
-  getUser(login: string, q: Record<string, any> = {}) { return (this.sim as any).getUser?.(login, q); }
+  // === STEP 4 (read half) — real user/agent reads from memberships =========
+  // Writes (addUser/editUser/deleteUser) + DND still delegate to sandbox: they
+  // need PJSIP provisioning + a DND schema column, deferred to a focused task.
+  async listUsers(_q: Record<string, any> = {}): Promise<{ items: any[]; info: any }> {
+    const db = useDb();
+    const rows = await db.select({
+      userId: schema.memberships.userId, role: schema.memberships.role,
+      pbxLogin: schema.memberships.pbxLogin, name: schema.users.name, email: schema.users.email
+    }).from(schema.memberships)
+      .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+      .where(eq(schema.memberships.tenantId, this.tenantId));
+    const items = rows.map((x, i) => ({
+      login: x.pbxLogin || (x.email || `user${i}`).split('@')[0],
+      name: x.name || x.email || undefined,
+      email: x.email || undefined,
+      ext: x.pbxLogin || String(1001 + i),
+      role: x.role,
+      status: 'unknown'
+    }));
+    return { items, info: { search: '', total: items.length, start: 0, limit: items.length } };
+  }
+
+  async getUser(login: string, _q: Record<string, any> = {}): Promise<any> {
+    const all = await this.listUsers();
+    return all.items.find((u: any) => u.login === login) || { login, name: login };
+  }
+
+  async userGroups(login: string): Promise<Array<{ id: string; name: string; ext: string }>> {
+    const db = useDb();
+    const rows = await db.select({
+      userId: schema.memberships.userId, pbxLogin: schema.memberships.pbxLogin, email: schema.users.email
+    }).from(schema.memberships)
+      .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+      .where(eq(schema.memberships.tenantId, this.tenantId));
+    const me = rows.find((r) => (r.pbxLogin || (r.email || '').split('@')[0]) === login);
+    if (!me) return [];
+    const depts = await db.select({ id: schema.departments.id, name: schema.departments.name })
+      .from(schema.departmentMembers)
+      .innerJoin(schema.departments, eq(schema.departmentMembers.departmentId, schema.departments.id))
+      .where(and(eq(schema.departmentMembers.tenantId, this.tenantId), eq(schema.departmentMembers.userId, me.userId)));
+    return depts.map((d) => ({ id: d.id, name: d.name, ext: '' }));
+  }
+
   addUser(b: Record<string, any>) { return (this.sim as any).addUser?.(b); }
   editUser(login: string, b: Record<string, any>) { return (this.sim as any).editUser?.(login, b); }
   deleteUser(login: string) { return (this.sim as any).deleteUser?.(login); }
-  userGroups(login: string) { return (this.sim as any).userGroups?.(login); }
   getDnd(login: string) { return (this.sim as any).getDnd?.(login); }
   setDnd(login: string, on: boolean) { return (this.sim as any).setDnd?.(login, on); }
   // Groups / departments
