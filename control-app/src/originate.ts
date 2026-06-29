@@ -14,6 +14,7 @@
 // caller already in Stasis; here the agent leg is originated by us).
 
 import type Ari from 'ari-client';
+import { logCall } from './call-log.ts';
 
 function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[originate]', ...args);
@@ -45,6 +46,13 @@ export async function originateCall(opts: OriginateOptions): Promise<OriginateRe
   const bridge = client.Bridge();
   await bridge.create({ type: 'mixing' });
   log(`bridge ${bridge.id} created for click-to-call ${agentEndpoint} -> ${to} via ${trunk}`);
+  if (opts.tenantId) {
+    logCall({
+      tenantId: opts.tenantId, callid: bridge.id, direction: 'out',
+      phone: to, status: 'placed', carrier: (trunk || '').replace(/-endpoint$/, '') || undefined,
+      raw: opts.user ? { user: opts.user } : {}
+    });
+  }
 
   const agentChan = client.Channel();
   let destChan: Ari.Channel | null = null;
@@ -99,6 +107,9 @@ export async function originateCall(opts: OriginateOptions): Promise<OriginateRe
         await ch.answer().catch(() => {});
         await bridge.addChannel({ channel: ch.id });
         log(`bridged: agent ${agentChan.id} <-> destination ${ch.id}`);
+        if (opts.tenantId) {
+          logCall({ tenantId: opts.tenantId, callid: bridge.id, direction: 'out', phone: to, status: 'answered' });
+        }
       } catch (err) {
         log(`failed to bridge destination: ${(err as Error)?.message}`);
         void cleanup('destination bridge-add failed');

@@ -75,7 +75,9 @@ export class AsteriskClient {
       agentEndpoint,
       to: body.phone.replace(/[^\d+]/g, ''),
       trunk,
-      callerId: body.clid
+      callerId: body.clid,
+      tenantId: this.tenantId,
+      user: body.user
     });
     return { callid: r.callid, clid: body.clid };
   }

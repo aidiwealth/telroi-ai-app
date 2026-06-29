@@ -67,7 +67,7 @@ export interface AgentOriginateResult {
 // registered device, e.g. "PJSIP/tnt_xxx"), then dial `to` out through `trunk`
 // (an Asterisk trunk endpoint, e.g. "kasooko-endpoint") and bridge them.
 export async function agentOriginate(args: {
-  agentEndpoint: string; to: string; trunk: string; callerId?: string;
+  agentEndpoint: string; to: string; trunk: string; callerId?: string; tenantId?: string; user?: string;
 }): Promise<AgentOriginateResult> {
   const j = await agentCall('/originate', args);
   return { callid: j.callid, agentChannelId: j.agentChannelId };
