@@ -68,9 +68,10 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
   const server = http.createServer(async (req, res) => {
     try {
       if (req.method === 'GET' && (req.url || '').startsWith('/log-outbound')) {
+        const ip = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+        if (ip !== '127.0.0.1' && ip !== '::1') return send(res, 403, { ok: false, error: 'forbidden' });
         const u = new URL(req.url || '', 'http://127.0.0.1');
         const q = u.searchParams;
-        if (!querySecretOk(q.get('secret'))) return send(res, 401, { ok: false, error: 'unauthorized' });
         logOutbound({
           agentUsername: q.get('agent') || '',
           dialed: q.get('dialed') || '',
