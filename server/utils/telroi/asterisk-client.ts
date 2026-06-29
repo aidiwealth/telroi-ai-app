@@ -200,12 +200,86 @@ export class AsteriskClient {
   getDnd(login: string) { return (this.sim as any).getDnd?.(login); }
   setDnd(login: string, on: boolean) { return (this.sim as any).setDnd?.(login, on); }
   // Groups / departments
-  listGroups(q: Record<string, any> = {}) { return (this.sim as any).listGroups?.(q); }
-  getGroup(id: string) { return (this.sim as any).getGroup?.(id); }
-  addGroup(b: Record<string, any>) { return (this.sim as any).addGroup?.(b); }
-  editGroup(id: string, b: Record<string, any>) { return (this.sim as any).editGroup?.(id, b); }
-  deleteGroup(id: string) { return (this.sim as any).deleteGroup?.(id); }
-  changeGroupUsers(id: string, b: Record<string, any>) { return (this.sim as any).changeGroupUsers?.(id, b); }
+  // === STEP 3 — real departments/ring-groups (CRUD on departments +
+  // department_members). Call-time ring distribution (simultaneous/round-robin)
+  // is read from ringStrategy by the control-app; that distribution logic is a
+  // separate task. These methods own the team + membership records. ==========
+  private groupRow(d: any) {
+    return {
+      id: d.id, name: d.name, ext: '',
+      call_order: d.ringStrategy,
+      timeout: { time: d.ringTimeout, target: 'hangup' },
+      users: [] as any[]
+    };
+  }
+
+  async listGroups(_q: Record<string, any> = {}): Promise<{ items: any[]; info: any }> {
+    const db = useDb();
+    const rows = await db.select().from(schema.departments)
+      .where(eq(schema.departments.tenantId, this.tenantId));
+    const items = rows.map((d) => this.groupRow(d));
+    return { items, info: { search: '', total: items.length, start: 0, limit: items.length } };
+  }
+
+  async getGroup(id: string): Promise<any> {
+    const db = useDb();
+    const [d] = await db.select().from(schema.departments)
+      .where(and(eq(schema.departments.tenantId, this.tenantId), eq(schema.departments.id, id))).limit(1);
+    return d ? this.groupRow(d) : { id, name: 'Team' };
+  }
+
+  private groupVals(body: Record<string, any>) {
+    const b = body || {};
+    const vals: Record<string, any> = {};
+    if (b.name !== undefined) vals.name = b.name;
+    if (b.description !== undefined) vals.description = b.description;
+    const order = b.call_order || b.ringStrategy;
+    if (order !== undefined) vals.ringStrategy = order;
+    const timeout = b.timeout?.time ?? b.ringTimeout;
+    if (timeout !== undefined) vals.ringTimeout = Number(timeout);
+    return vals;
+  }
+
+  async addGroup(body: Record<string, any>): Promise<any> {
+    const db = useDb();
+    const vals = this.groupVals(body);
+    if (!vals.name) vals.name = 'Team';
+    const [created] = await db.insert(schema.departments)
+      .values({ tenantId: this.tenantId, ...vals }).returning();
+    return this.groupRow(created);
+  }
+
+  async editGroup(id: string, body: Record<string, any>): Promise<any> {
+    const db = useDb();
+    const vals = this.groupVals(body);
+    if (Object.keys(vals).length) {
+      await db.update(schema.departments).set(vals)
+        .where(and(eq(schema.departments.tenantId, this.tenantId), eq(schema.departments.id, id)));
+    }
+    return this.getGroup(id);
+  }
+
+  async deleteGroup(id: string): Promise<void> {
+    const db = useDb();
+    await db.delete(schema.departments)
+      .where(and(eq(schema.departments.tenantId, this.tenantId), eq(schema.departments.id, id)));
+  }
+
+  async changeGroupUsers(id: string, body: Record<string, any>): Promise<void> {
+    const db = useDb();
+    const raw = (body?.users ?? body?.userIds ?? []) as any[];
+    const userIds = raw.map((u) => (typeof u === 'string' ? u : u?.userId || u?.id)).filter(Boolean);
+    const [dept] = await db.select().from(schema.departments)
+      .where(and(eq(schema.departments.tenantId, this.tenantId), eq(schema.departments.id, id))).limit(1);
+    if (!dept) return;
+    await db.delete(schema.departmentMembers)
+      .where(and(eq(schema.departmentMembers.tenantId, this.tenantId), eq(schema.departmentMembers.departmentId, id)));
+    for (const userId of userIds) {
+      await db.insert(schema.departmentMembers)
+        .values({ tenantId: this.tenantId, departmentId: id, userId })
+        .onConflictDoNothing();
+    }
+  }
   // === STEP 2 — real number routing (writes the authoritative DB record the
   // control-app cache reads at call time; propagates within the cache refresh) ==
   // Look up a tenant-scoped subscription by telnum.
