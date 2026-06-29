@@ -233,10 +233,42 @@ export class AsteriskClient {
   // migrated in a later step alongside call history).
   listNumbers(q: Record<string, any> = {}) { return (this.sim as any).listNumbers?.(q); }
   getNumber(telnum: string) { return (this.sim as any).getNumber?.(telnum); }
-  // Blacklist / DND / SIP
-  blacklist(q: Record<string, any> = {}) { return (this.sim as any).blacklist?.(q); }
-  addBlacklist(b: any) { return (this.sim as any).addBlacklist?.(b); }
-  deleteBlacklist(t: string[]) { return (this.sim as any).deleteBlacklist?.(t); }
+  // === STEP 6 — real blacklist (writes the blacklist table the control-app
+  // cache reads; inbound handler rejects matching callers within ~30s) ========
+  async blacklist(_q: Record<string, any> = {}): Promise<Array<{ telnum: string; comment?: string }>> {
+    const db = useDb();
+    const rows = await db.select().from(schema.blacklist)
+      .where(eq(schema.blacklist.tenantId, this.tenantId));
+    return rows.map((r) => ({ telnum: r.telnum, comment: r.comment || undefined }));
+  }
+
+  async addBlacklist(entries: Array<{ telnum: string; comment?: string }>): Promise<void> {
+    const db = useDb();
+    const list = Array.isArray(entries) ? entries : [entries];
+    for (const e of list) {
+      if (!e?.telnum) continue;
+      const [existing] = await db.select().from(schema.blacklist)
+        .where(and(eq(schema.blacklist.tenantId, this.tenantId), eq(schema.blacklist.telnum, e.telnum))).limit(1);
+      if (!existing) {
+        await db.insert(schema.blacklist).values({ tenantId: this.tenantId, telnum: e.telnum, comment: e.comment || null });
+      } else if (e.comment !== undefined) {
+        await db.update(schema.blacklist).set({ comment: e.comment || null }).where(eq(schema.blacklist.id, existing.id));
+      }
+    }
+  }
+
+  async deleteBlacklist(telnums: string[]): Promise<void> {
+    const db = useDb();
+    const list = Array.isArray(telnums) ? telnums : [telnums];
+    for (const telnum of list) {
+      if (!telnum) continue;
+      await db.delete(schema.blacklist)
+        .where(and(eq(schema.blacklist.tenantId, this.tenantId), eq(schema.blacklist.telnum, telnum)));
+    }
+  }
+
+  // Anonymous-caller block has no per-tenant storage yet; keep the sandbox no-op
+  // until a tenant setting + dialplan check is added (separate task).
   getAnonymousBlock() { return (this.sim as any).getAnonymousBlock?.(); }
   setAnonymousBlock(on: boolean) { return (this.sim as any).setAnonymousBlock?.(on); }
   sipRegistrations(q: Record<string, any> = {}) { return (this.sim as any).sipRegistrations?.(q); }
