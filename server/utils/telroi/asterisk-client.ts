@@ -102,12 +102,21 @@ export class AsteriskClient {
   // Map a call_events row -> the TelroiCall shape callers expect.
   private rowToCall(e: any) {
     const raw = (e.raw || {}) as Record<string, any>;
+    const normalizeStatus = (st: string | null | undefined): string => {
+      const v = (st || '').toLowerCase();
+      if (v === 'answered' || v === 'ended' || v === 'success') return 'answered';
+      if (v === 'no-answer' || v === 'noanswer' || v === 'missed' || v === 'cancelled') return 'missed';
+      if (v === 'failed' || v === 'blacklisted' || v === 'rejected' || v === 'congestion') return 'failed';
+      if (v === 'ringing' || v === 'in-progress') return 'ringing';
+      return v || 'answered';
+    };
     return {
       uid: e.callid,
       type: e.direction || e.type || 'out',          // in | out
-      status: e.status || 'completed',
+      status: normalizeStatus(e.status),
       client: e.phone || '\u2014',
       destination: raw.did || (e.direction === 'out' ? e.phone : undefined) || undefined,
+      diversion: raw.did || undefined,
       telnum_name: raw.callerName || undefined,
       user: e.user || undefined,
       start: (e.startedAt || e.createdAt)?.toISOString?.() || String(e.startedAt || e.createdAt),
