@@ -14,6 +14,7 @@ import type Ari from 'ari-client';
 import { provisionEndpoint, deprovisionEndpoint } from './provision-core.ts';
 import { upsertCarrier, removeCarrier, type CarrierInput } from './carrier-core.ts';
 import { originateCall } from './originate.ts';
+import { logOutbound } from './call-log.ts';
 
 const SECRET = process.env.PROVISION_AGENT_SECRET || '';
 const PORT = parseInt(process.env.PROVISION_AGENT_PORT || '8090', 10);
@@ -80,6 +81,20 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
         const result = deprovisionEndpoint(username);
         log(`deprovisioned ${username} (removed=${result.removed})`);
         return send(res, 200, { ok: true, ...result });
+      }
+
+      if (req.method === 'POST' && req.url === '/log-outbound') {
+        const body = await readJson(req);
+        logOutbound({
+          agentUsername: String(body.agent || ''),
+          dialed: String(body.dialed || ''),
+          carrier: body.carrier ? String(body.carrier) : undefined,
+          dialstatus: body.dialstatus ? String(body.dialstatus) : undefined,
+          duration: body.duration != null ? Number(body.duration) : undefined,
+          startEpoch: body.start != null ? Number(body.start) : undefined,
+          callid: body.callid ? String(body.callid) : undefined
+        });
+        return send(res, 200, { ok: true });
       }
 
       // POST /originate { agentEndpoint, to, trunk, callerId } -> { callid }
