@@ -12,7 +12,7 @@
 import { agentOriginate, provisionAgentConfigured } from '~/server/utils/provision-agent';
 import { SandboxTelroiClient } from './sandbox-client';
 import { useDb, schema } from '~/server/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, lte, desc } from 'drizzle-orm';
 import { detectRegion } from '~/server/utils/regions';
 
 // Map a destination region to the Asterisk trunk endpoint that carries its
@@ -82,9 +82,73 @@ export class AsteriskClient {
 
   // === STEPS 2-6 — delegated to simulation until built on ARI ================
   // History
-  historyJson(q: Record<string, any>) { return this.sim.historyJson(q); }
-  historyCsv(q: Record<string, any>) { return (this.sim as any).historyCsv?.(q); }
-  innerHistoryJson(q: Record<string, any>) { return (this.sim as any).innerHistoryJson?.(q); }
+  // === STEP 5 — real call history (read-only, sourced from call_events) =======
+  // Translate period -> a since-date window.
+  private periodSince(period?: string): Date | null {
+    const now = Date.now();
+    switch ((period || '').toString()) {
+      case 'day': return new Date(now - 1 * 24 * 3600 * 1000);
+      case 'week': return new Date(now - 7 * 24 * 3600 * 1000);
+      case 'month': return new Date(now - 30 * 24 * 3600 * 1000);
+      case 'quarter': return new Date(now - 90 * 24 * 3600 * 1000);
+      case 'all': return null;
+      default: return new Date(now - 30 * 24 * 3600 * 1000); // sensible default
+    }
+  }
+
+  // Map a call_events row -> the TelroiCall shape callers expect.
+  private rowToCall(e: any) {
+    return {
+      uid: e.callid,
+      type: e.direction || e.type || 'out',          // in | out
+      status: e.status || 'completed',
+      client: e.phone || '\u2014',
+      user: e.user || undefined,
+      start: (e.startedAt || e.createdAt)?.toISOString?.() || String(e.startedAt || e.createdAt),
+      wait: e.wait || 0,
+      duration: e.duration || 0,
+      record: e.recordingUrl || undefined,
+      rating: e.rating ?? undefined
+    };
+  }
+
+  async historyJson(query: Record<string, any> = {}): Promise<any[]> {
+    const db = useDb();
+    const conds: any[] = [eq(schema.callEvents.tenantId, this.tenantId)];
+    const since = this.periodSince(query.period);
+    if (since) conds.push(gte(schema.callEvents.startedAt, since));
+    if (query.start) conds.push(gte(schema.callEvents.startedAt, new Date(query.start)));
+    if (query.end) conds.push(lte(schema.callEvents.startedAt, new Date(query.end)));
+    if (query.type === 'in' || query.type === 'out') conds.push(eq(schema.callEvents.direction, query.type));
+    if (query.user) conds.push(eq(schema.callEvents.user, String(query.user)));
+
+    const limit = Math.min(Number(query.limit) || 100, 50000);
+    const rows = await db.select().from(schema.callEvents)
+      .where(and(...conds))
+      .orderBy(desc(schema.callEvents.startedAt))
+      .limit(limit);
+    return rows.map((e) => this.rowToCall(e));
+  }
+
+  // CSV serialization mirrors the columns the export endpoint expects.
+  async historyCsv(query: Record<string, any> = {}): Promise<string> {
+    const calls = await this.historyJson(query);
+    const esc = (v: any) => {
+      const s = v == null ? '' : String(v);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const header = ['Date', 'Direction', 'Status', 'From/Client', 'Agent', 'Number', 'Wait (s)', 'Duration (s)', 'Rating'];
+    let out = header.map(esc).join(',') + '\n';
+    for (const c of calls) {
+      out += [c.start, c.type, c.status, c.client, c.user || '', (c as any).diversion || '', c.wait ?? '', c.duration ?? '', c.rating ?? ''].map(esc).join(',') + '\n';
+    }
+    return out;
+  }
+
+  // Raw variant — same source rows, used by the optimize endpoints.
+  async innerHistoryJson(query: Record<string, any> = {}): Promise<any[]> {
+    return this.historyJson(query);
+  }
   // Users / agents
   listUsers(q: Record<string, any> = {}) { return (this.sim as any).listUsers?.(q); }
   getUser(login: string, q: Record<string, any> = {}) { return (this.sim as any).getUser?.(login, q); }
