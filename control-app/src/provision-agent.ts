@@ -35,6 +35,14 @@ function authOk(req: http.IncomingMessage): boolean {
   return crypto.timingSafeEqual(provided, expected);
 }
 
+function querySecretOk(secret: string | null): boolean {
+  if (!SECRET || !secret) return false;
+  const provided = Buffer.from(secret);
+  const expected = Buffer.from(SECRET);
+  if (provided.length !== expected.length) return false;
+  return crypto.timingSafeEqual(provided, expected);
+}
+
 function send(res: http.ServerResponse, code: number, body: unknown) {
   res.writeHead(code, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
@@ -59,6 +67,22 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
 
   const server = http.createServer(async (req, res) => {
     try {
+      if (req.method === 'GET' && (req.url || '').startsWith('/log-outbound')) {
+        const u = new URL(req.url || '', 'http://127.0.0.1');
+        const q = u.searchParams;
+        if (!querySecretOk(q.get('secret'))) return send(res, 401, { ok: false, error: 'unauthorized' });
+        logOutbound({
+          agentUsername: q.get('agent') || '',
+          dialed: q.get('dialed') || '',
+          carrier: q.get('carrier') || undefined,
+          dialstatus: q.get('dialstatus') || undefined,
+          duration: q.get('duration') != null ? Number(q.get('duration')) : undefined,
+          startEpoch: q.get('start') != null ? Number(q.get('start')) : undefined,
+          callid: q.get('callid') || undefined
+        });
+        return send(res, 200, { ok: true });
+      }
+
       if (!authOk(req)) return send(res, 401, { ok: false, error: 'unauthorized' });
 
       // POST /provision  { tenantId, label } -> { username, password, domain, ... }
