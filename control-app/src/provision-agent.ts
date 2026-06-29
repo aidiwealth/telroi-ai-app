@@ -77,6 +77,7 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
           dialed: q.get('dialed') || '',
           carrier: q.get('carrier') || undefined,
           dialstatus: q.get('dialstatus') || undefined,
+          hangupcause: q.get('hangupcause') || undefined,
           duration: q.get('duration') != null ? Number(q.get('duration')) : undefined,
           startEpoch: q.get('start') != null ? Number(q.get('start')) : undefined,
           callid: q.get('callid') || undefined

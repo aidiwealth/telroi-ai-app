@@ -64,12 +64,13 @@ export interface OutboundLogInput {
   dialed: string;
   carrier?: string;
   dialstatus?: string;
+  hangupcause?: string;
   duration?: number;
   startEpoch?: number;
   callid?: string;
 }
 
-function mapDialStatus(s?: string): string {
+function mapDialStatus(s?: string, hangupcause?: string, duration?: number): string {
   switch ((s || '').toUpperCase()) {
     case 'ANSWER': return 'answered';
     case 'NOANSWER':
@@ -80,8 +81,13 @@ function mapDialStatus(s?: string): string {
     case 'DONTCALL':
     case 'TORTURE':
     case 'INVALIDARGS': return 'failed';
-    default: return s ? 'failed' : 'answered';
   }
+  if (duration && duration > 0) return 'answered';
+  const cause = Number(hangupcause);
+  if (cause === 17) return 'failed';
+  if (cause === 18 || cause === 19) return 'missed';
+  if (cause === 0 || Number.isNaN(cause)) return 'missed';
+  return 'failed';
 }
 
 export function logOutbound(input: OutboundLogInput): void {
@@ -96,7 +102,7 @@ export function logOutbound(input: OutboundLogInput): void {
       if (!ep?.tenantId) { console.error(`[call-log] logOutbound: no tenant for ${username}`); return; }
       const callid = input.callid || `out-${username}-${input.startEpoch || Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = input.startEpoch ? new Date(input.startEpoch * 1000) : new Date();
-      const status = mapDialStatus(input.dialstatus);
+      const status = mapDialStatus(input.dialstatus, input.hangupcause, input.duration);
       await db.insert(schema.callEvents).values({
         tenantId: ep.tenantId,
         callid,
@@ -106,7 +112,7 @@ export function logOutbound(input: OutboundLogInput): void {
         carrier: input.carrier || null,
         startedAt,
         duration: input.duration ?? null,
-        raw: { agent: username, dialed: input.dialed, dialstatus: input.dialstatus, carrier: input.carrier }
+        raw: { agent: username, dialed: input.dialed, dialstatus: input.dialstatus, hangupcause: input.hangupcause, carrier: input.carrier }
       }).onConflictDoUpdate({
         target: [schema.callEvents.tenantId, schema.callEvents.callid],
         set: { status: sql`excluded.status`, duration: sql`excluded.duration`, phone: sql`excluded.phone`, carrier: sql`excluded.carrier`, raw: sql`excluded.raw` }
