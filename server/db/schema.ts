@@ -240,6 +240,8 @@ export const memberships = pgTable('memberships', {
   // Set when an extension is created for them, so the People page joins by a
   // stored fact rather than guessing from email — secure + reliable.
   pbxLogin: text('pbx_login'),
+  // Per-membership Do Not Disturb: when true, this agent is not rung on inbound.
+  dnd: boolean('dnd').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
   uniq: uniqueIndex('memberships_user_tenant_idx').on(t.userId, t.tenantId)

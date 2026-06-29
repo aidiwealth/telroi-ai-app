@@ -244,10 +244,31 @@ export class AsteriskClient {
     } catch { /* best-effort */ }
   }
 
-  // DND has no per-membership storage column yet; keep delegating until the
-  // schema migration (memberships.dnd) is reviewed + applied.
-  getDnd(login: string) { return (this.sim as any).getDnd?.(login); }
-  setDnd(login: string, on: boolean) { return (this.sim as any).setDnd?.(login, on); }
+  // DND now backed by memberships.dnd. Resolve the membership by login
+  // (pbxLogin or email local-part), then read/write the flag.
+  private async membershipForLogin(login: string) {
+    const db = useDb();
+    const rows = await db.select({
+      mid: schema.memberships.id, dnd: schema.memberships.dnd,
+      pbxLogin: schema.memberships.pbxLogin, email: schema.users.email
+    }).from(schema.memberships)
+      .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+      .where(eq(schema.memberships.tenantId, this.tenantId));
+    return rows.find((r) => (r.pbxLogin || (r.email || '').split('@')[0]) === login);
+  }
+
+  async getDnd(login: string): Promise<{ state: boolean }> {
+    const m = await this.membershipForLogin(login);
+    return { state: !!m?.dnd };
+  }
+
+  async setDnd(login: string, on: boolean): Promise<void> {
+    const m = await this.membershipForLogin(login);
+    if (!m) return;
+    const db = useDb();
+    await db.update(schema.memberships).set({ dnd: !!on })
+      .where(eq(schema.memberships.id, m.mid));
+  }
   // Groups / departments
   // === STEP 3 — real departments/ring-groups (CRUD on departments +
   // department_members). Call-time ring distribution (simultaneous/round-robin)
