@@ -91,6 +91,8 @@ rewrite_contact=yes
 [${c.name}-aor]
 type=aor
 contact=sip:${c.sipGateway}:${port}
+qualify_frequency=60
+qualify_timeout=3
 
 [${c.name}-identify]
 type=identify
