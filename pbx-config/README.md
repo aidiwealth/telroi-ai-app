@@ -32,3 +32,21 @@ Uses an explicit path allowlist (/provision, /deprovision, /health, /carrier/ups
 Lives at /etc/nginx/sites-available/provision-agent (symlinked into sites-enabled).
 NOTE: After adding new location blocks, run `systemctl restart nginx` — a `reload` does NOT
 reliably pick up new location blocks.
+
+## Per-carrier generated config (pjsip.d/ and extensions.d/)
+Carriers are now provisioned through the admin Carriers page, which writes one file
+per carrier via the provisioning agent:
+- `pjsip.d/carrier-<name>.conf` — pure-transport trunk (endpoint/aor/identify, no
+  hardcoded number; caller ID comes from the secure per-customer ODBC lookup).
+- `extensions.d/carrier-<name>.conf` — outbound route `_<prefix>234XXXXXXXXXX` with
+  reject-on-no-DID (Hangup 21 if the caller owns no DID on that carrier), plus the
+  `[from-<name>]` inbound context.
+Ruach (81) and Kasooko (82) were migrated from hand-written inline config to this
+generated format. Sotel (83) is a disabled DB scaffold until real credentials exist.
+
+### ⚠️ LOAD-BEARING INCLUDE — do not remove
+`pjsip.conf` ends with `#include "pjsip.d/*.conf"`. This line loads ALL per-tenant and
+per-carrier endpoints. If it is removed, every carrier + WebRTC tenant endpoint
+silently disappears (calls fail) even though the .conf files still exist on disk.
+When editing pjsip.conf near the end of the file (e.g. removing a trunk block), make
+sure this include line survives. A greedy regex that matches to end-of-file will eat it.
