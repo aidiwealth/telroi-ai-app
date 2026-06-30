@@ -14,12 +14,15 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useAuthStore } from '~/stores/auth';
+// While a call is live we must NOT auto-logout (it would drop the user off the
+// PBX mid-call). useCallActive is a shared flag set by IncomingCall.
+const callActive = useCallActive();
 
 // Inactivity auto-logout. Defaults: sign out after 5 minutes idle, warn 60s
 // before. Activity (mouse/keyboard/scroll/touch/visibility) resets the timer.
 // Durations are props so they can be tuned without code changes.
 const props = withDefaults(defineProps<{ idleMs?: number; warnMs?: number; mode?: 'client' | 'admin' }>(), {
-  idleMs: 5 * 60 * 1000, // 5 minutes
+  idleMs: 30 * 60 * 1000, // 30 minutes
   warnMs: 60 * 1000,     // warn 60s before logout
   mode: 'client'
 });
@@ -49,6 +52,7 @@ function startTimers() {
 }
 
 function showWarning() {
+  if (callActive.value) { startTimers(); return; }
   warning.value = true;
   countdown.value = Math.round(props.warnMs / 1000);
   tick = setInterval(() => {
@@ -72,6 +76,7 @@ function stayActive() {
 }
 
 async function logoutNow() {
+  if (callActive.value) { startTimers(); return; }
   clearTimers();
   warning.value = false;
   if (props.mode === 'admin') {

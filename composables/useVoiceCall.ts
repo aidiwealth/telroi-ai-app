@@ -26,6 +26,7 @@ export function useVoiceCall() {
   const incoming = ref(false);
   const incomingFrom = ref<string>('');
   const registered = ref(false);
+  const muted = ref(false);
   let device: any = null;       // Twilio Device
   let activeConn: any = null;   // Twilio Connection / Telnyx call / SIP session
   let telnyxClient: any = null;
@@ -122,6 +123,19 @@ export function useVoiceCall() {
     } catch { /* */ }
   }
 
+  // Mute/unmute the local mic by toggling the outgoing audio track(s) on the
+  // active session's peer connection. Works for inbound and outbound calls.
+  function toggleMute() {
+    try {
+      const pc = activeConn?.sessionDescriptionHandler?.peerConnection;
+      if (!pc) return muted.value;
+      const next = !muted.value;
+      pc.getSenders().forEach((sn: any) => { if (sn.track && sn.track.kind === 'audio') sn.track.enabled = !next; });
+      muted.value = next;
+    } catch { /* */ }
+    return muted.value;
+  }
+
   function hangup() { endCall(); }
 
   function endCall(onEnd?: (secs: number) => void) {
@@ -142,6 +156,7 @@ export function useVoiceCall() {
     try { telnyxClient?.disconnect?.(); } catch { /* */ }
     try { sipUA?.stop?.(); } catch { /* */ }
     mediaStream = null; device = null; activeConn = null; telnyxClient = null; sipUA = null;
+    muted.value = false;
   }
 
   // ── Inbound: register persistently and listen for incoming calls ──────────
@@ -190,6 +205,7 @@ export function useVoiceCall() {
 
   async function acceptIncoming() {
     if (!incomingInvitation) return;
+    stopRingtone();
     try {
       await ensureMic();
       const inv = incomingInvitation;
@@ -212,17 +228,19 @@ export function useVoiceCall() {
   }
 
   function rejectIncoming() {
+    stopRingtone();
     try { incomingInvitation?.reject?.(); } catch { /* */ }
     incoming.value = false;
     incomingInvitation = null;
   }
 
   async function stopReceiving() {
+    stopRingtone();
     try { if (recvRegisterer) await recvRegisterer.unregister(); } catch { /* */ }
     try { await recvUA?.stop?.(); } catch { /* */ }
     recvRegisterer = null; recvUA = null; incomingInvitation = null;
     incoming.value = false; registered.value = false;
   }
 
-  return { state, error, callId, incoming, incomingFrom, registered, startCall, hangup, startReceiving, acceptIncoming, rejectIncoming, stopReceiving };
+  return { state, error, callId, incoming, incomingFrom, registered, muted, startCall, hangup, toggleMute, startReceiving, acceptIncoming, rejectIncoming, stopReceiving };
 }
