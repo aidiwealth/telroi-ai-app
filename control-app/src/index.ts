@@ -16,10 +16,10 @@
 
 import Ari from 'ari-client';
 import { config } from './config.ts';
-import { startCache, lookupNumber, isBlacklisted, agentGreeting, resolveEndpoint, cacheReady, cacheStats } from './cache.ts';
+import { startCache, lookupNumber, isBlacklisted, agentGreeting, resolveEndpoint, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
 import { logCall } from './call-log.ts';
 import { closeDb } from './db.ts';
-import { bridgeToEndpoint } from './bridge.ts';
+import { bridgeToEndpoint, bridgeToDepartment } from './bridge.ts';
 import { startProvisionAgent } from './provision-agent.ts';
 
 // Endpoint to bridge "person" routes to. For now this is a fixed stand-in
@@ -124,8 +124,29 @@ async function main() {
           break;
         }
         case 'department': {
-          log(`     Department route -> ${route.departmentId}. (Bridge to department: later stage)`);
-          await playAndHangup(client, channel, 'sound:hello-world');
+          const deptEndpoints = resolveDepartmentEndpoints(route.departmentId);
+          log(`     Department route -> ${route.departmentId} :: ${deptEndpoints.length} member endpoint(s)`);
+          if (deptEndpoints.length === 0) {
+            log(`     department has no reachable members — playing no-service`);
+            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
+            await playAndHangup(client, channel, 'sound:ss-noservice');
+            break;
+          }
+          try {
+            await bridgeToDepartment({
+              client,
+              caller: channel,
+              endpoints: deptEndpoints,
+              callerIdNum: callerNum || 'Telroi',
+              ringTimeoutSec: 25,
+              onStatus: (status) => {
+                logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in' });
+              }
+            });
+          } catch (err) {
+            log(`     department bridge failed: ${(err as Error)?.message} — playing fallback`);
+            await playAndHangup(client, channel, 'sound:ss-noservice');
+          }
           break;
         }
         case 'person':
