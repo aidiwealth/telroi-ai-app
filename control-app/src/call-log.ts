@@ -20,6 +20,7 @@ export interface CallLogInput {
   carrier?: string;           // ruach | kasooko | telroi ...
   startedAt?: Date;
   duration?: number;
+  user?: string;
   raw?: Record<string, unknown>;
 }
 
@@ -37,13 +38,15 @@ export function logCall(input: CallLogInput): void {
         carrier: input.carrier ?? null,
         startedAt: input.startedAt ?? new Date(),
         duration: input.duration ?? null,
+        user: input.user ?? null,
         raw: input.raw ?? {}
       }).onConflictDoUpdate({
         target: [schema.callEvents.tenantId, schema.callEvents.callid],
         set: {
           status: sql`excluded.status`,
-          duration: sql`excluded.duration`,
+          duration: sql`coalesce(excluded.duration, ${schema.callEvents.duration})`,
           phone: sql`excluded.phone`,
+          user: sql`coalesce(excluded.user, ${schema.callEvents.user})`,
           // Merge raw rather than overwrite: status-update calls pass an empty
           // raw, and the inbound insert that carries {did, callerName} can race
           // behind them. Concatenating keeps existing keys so the DID is never

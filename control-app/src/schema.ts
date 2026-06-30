@@ -86,6 +86,7 @@ export const callEvents = pgTable('call_events', {
   carrier: text('carrier'),
   startedAt: timestamp('started_at', { withTimezone: true }),
   duration: integer('duration'),
+  user: text('user'),
   raw: jsonb('raw').$type<Record<string, unknown>>().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({

@@ -139,8 +139,12 @@ async function main() {
               endpoints: deptEndpoints,
               callerIdNum: callerNum || 'Telroi',
               ringTimeoutSec: 25,
-              onStatus: (status) => {
-                logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in' });
+              onStatus: (status, details) => {
+                const agent = details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined;
+                logCall({
+                  tenantId: route.tenantId, callid: chId, phone: callerNum,
+                  status, direction: 'in', duration: details?.duration, user: agent
+                });
               }
             });
           } catch (err) {
@@ -169,8 +173,12 @@ async function main() {
               endpoint,
               callerIdNum: callerNum || 'Telroi',
               ringTimeoutSec: 30,
-              onStatus: (status) => {
-                logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in' });
+              onStatus: (status, details) => {
+                logCall({
+                  tenantId: route.tenantId, callid: chId, phone: callerNum,
+                  status, direction: 'in', duration: details?.duration,
+                  user: username || undefined
+                });
               }
             });
             // Bridging is now managed by bridge.ts (it owns teardown on hangup).

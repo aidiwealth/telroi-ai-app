@@ -26,7 +26,7 @@ export interface BridgeOptions {
   ringTimeoutSec?: number;  // how long to ring the target before giving up
   // Reports real call lifecycle so the caller can log it: 'answered' when the
   // callee picks up, then a terminal status ('ended' | 'no-answer' | 'failed').
-  onStatus?: (status: 'answered' | 'ended' | 'no-answer' | 'failed') => void;
+  onStatus?: (status: 'answered' | 'ended' | 'no-answer' | 'failed', details?: { duration?: number }) => void;
 }
 
 // Bridge the caller to the endpoint. Resolves when the bridge is set up (or the
@@ -44,6 +44,7 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
   let callee: Ari.Channel | null = null;
   let cleanedUp = false;
   let wasAnswered = false;
+  let answeredAt = 0;
 
   const cleanup = async (reason: string) => {
     if (cleanedUp) return;
@@ -54,7 +55,8 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
       if (wasAnswered) terminal = 'ended';
       else if (reason === 'originate failed' || reason === 'failed to add caller' || reason === 'bridge add failed') terminal = 'failed';
       else terminal = 'no-answer';
-      try { opts.onStatus(terminal); } catch { /* logging must never break teardown */ }
+      const duration = answeredAt ? Math.round((Date.now() - answeredAt) / 1000) : 0;
+      try { opts.onStatus(terminal, { duration }); } catch { /* logging must never break teardown */ }
     }
     try { if (callee) await callee.hangup(); } catch { /* gone */ }
     try { await bridge.destroy(); } catch { /* gone */ }
@@ -86,6 +88,7 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
       await ch.answer();
       await bridge.addChannel({ channel: ch.id });
       wasAnswered = true;
+      answeredAt = Date.now();
       if (opts.onStatus) { try { opts.onStatus('answered'); } catch { /* never break the call */ } }
       log(`bridged: ${caller.id} <-> ${ch.id}`);
     } catch (err) {
@@ -121,7 +124,7 @@ export interface DepartmentBridgeOptions {
   endpoints: string[];
   callerIdNum?: string;
   ringTimeoutSec?: number;
-  onStatus?: (status: 'answered' | 'ended' | 'no-answer' | 'failed') => void;
+  onStatus?: (status: 'answered' | 'ended' | 'no-answer' | 'failed', details?: { duration?: number; endpoint?: string }) => void;
 }
 
 export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise<void> {
@@ -139,7 +142,10 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
   log(`dept bridge ${bridge.id} created for caller ${caller.id} -> ${endpoints.length} member(s)`);
 
   const callees: Ari.Channel[] = [];
+  const channelEndpoint = new Map<string, string>();
   let answeredId: string | null = null;
+  let answeredEndpoint: string | null = null;
+  let answeredAt = 0;
   let cleanedUp = false;
   let wasAnswered = false;
 
@@ -152,7 +158,8 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
       if (wasAnswered) terminal = 'ended';
       else if (reason === 'all failed') terminal = 'failed';
       else terminal = 'no-answer';
-      try { opts.onStatus(terminal); } catch { /* never break teardown */ }
+      const duration = answeredAt ? Math.round((Date.now() - answeredAt) / 1000) : 0;
+      try { opts.onStatus(terminal, { duration, endpoint: answeredEndpoint || undefined }); } catch { /* never break teardown */ }
     }
     for (const ch of callees) { try { await ch.hangup(); } catch { /* gone */ } }
     try { await bridge.destroy(); } catch { /* gone */ }
@@ -171,12 +178,14 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
     if (!callees.some((c) => c.id === ch.id)) return;
     if (answeredId) { try { await ch.hangup(); } catch { /* gone */ } return; }
     answeredId = ch.id;
+    answeredEndpoint = channelEndpoint.get(ch.id) || null;
+    answeredAt = Date.now();
     log(`dept: ${ch.id} answered first -> bridging; cancelling other legs`);
     try {
       await ch.answer();
       await bridge.addChannel({ channel: ch.id });
       wasAnswered = true;
-      if (opts.onStatus) { try { opts.onStatus('answered'); } catch { /* noop */ } }
+      if (opts.onStatus) { try { opts.onStatus('answered', { endpoint: answeredEndpoint || undefined }); } catch { /* noop */ } }
       for (const other of callees) {
         if (other.id !== ch.id) { try { await other.hangup(); } catch { /* gone */ } }
       }
@@ -194,6 +203,7 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
   await Promise.all(endpoints.map(async (endpoint) => {
     const ch = client.Channel();
     callees.push(ch);
+    channelEndpoint.set(ch.id, endpoint);
     try {
       await ch.originate({ endpoint, app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
       log(`dept originating to ${endpoint} (ring ${ringTimeout}s)`);
