@@ -10,6 +10,28 @@ export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   const q = getQuery(event);
   const client = await telroiFor(s.tenantId);
+
+  // Resolve agent sip-usernames to the person's display name so the Agent
+  // column shows a name rather than "tnt_ab12cd34". `user` holds the SIP
+  // username (memberships.pbx_login); join through to the user's name.
+  async function resolveAgentNames(list: any[]) {
+    try {
+      const logins = Array.from(new Set((list || []).map((c) => c.user).filter(Boolean)));
+      if (!logins.length) return;
+      const rows = await useDb().select({
+        pbxLogin: schema.memberships.pbxLogin,
+        name: schema.users.name,
+        email: schema.users.email
+      }).from(schema.memberships)
+        .innerJoin(schema.users, eq(schema.memberships.userId, schema.users.id))
+        .where(and(eq(schema.memberships.tenantId, s.tenantId), inArray(schema.memberships.pbxLogin, logins as string[])));
+      const byLogin = new Map(rows.map((r) => [r.pbxLogin, r.name || r.email || undefined]));
+      for (const c of list) {
+        if (c.user && byLogin.get(c.user)) c.user_name = byLogin.get(c.user);
+      }
+    } catch { /* name resolution is best-effort */ }
+  }
+
   const calls = await client.historyJson({
     period: q.period, type: q.type, limit: q.limit ?? 100,
     user: q.user, client: q.client, diversion: q.diversion,
@@ -65,8 +87,10 @@ export default defineEventHandler(async (event) => {
       }));
     const merged = [...localCalls, ...(calls as any[])]
       .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
+    await resolveAgentNames(merged);
     return { calls: merged };
   } catch {
+    await resolveAgentNames(calls as any[]);
     return { calls };
   }
 });
