@@ -17,6 +17,7 @@
 // (see call-log.ts), so the caller never waits on a write either.
 // ───────────────────────────────────────────────────────────────────────────
 import { db, schema } from './db.ts';
+import { eq, and } from 'drizzle-orm';
 import { config } from './config.ts';
 
 export interface NumberRoute {
@@ -40,6 +41,8 @@ interface CacheState {
   agentGreetings: Map<string, string>;
   // sip_endpoints.id -> sip_username  (Option B: route_target holds the id)
   sipEndpoints: Map<string, string>;
+  // departmentId -> [sip_username, ...]  (members who can take calls; ring-all)
+  departmentEndpoints: Map<string, string[]>;
   loadedAt: number;
   ok: boolean;
 }
@@ -49,6 +52,7 @@ let state: CacheState = {
   blacklist: new Set(),
   agentGreetings: new Map(),
   sipEndpoints: new Map(),
+  departmentEndpoints: new Map(),
   loadedAt: 0,
   ok: false
 };
@@ -132,8 +136,32 @@ export async function refreshCache(): Promise<void> {
       if (e.sipUsername) sipEndpoints.set(e.id, e.sipUsername);
     }
 
-    state = { numbers, blacklist, agentGreetings, sipEndpoints, loadedAt: Date.now(), ok: true };
-    log(`refreshed: ${numbers.size} numbers, ${blacklist.size} blacklist entries, ${agentGreetings.size} agent greetings, ${sipEndpoints.size} sip endpoints`);
+    // department_members JOIN memberships -> departmentId -> [pbxLogin, ...].
+    const deptEndpoints = new Map<string, string[]>();
+    const dm = await db.select({
+      departmentId: schema.departmentMembers.departmentId,
+      userId: schema.departmentMembers.userId,
+      tenantId: schema.departmentMembers.tenantId,
+      canTakeCalls: schema.departmentMembers.canTakeCalls,
+      pbxLogin: schema.memberships.pbxLogin
+    })
+      .from(schema.departmentMembers)
+      .leftJoin(
+        schema.memberships,
+        and(
+          eq(schema.memberships.userId, schema.departmentMembers.userId),
+          eq(schema.memberships.tenantId, schema.departmentMembers.tenantId)
+        )
+      );
+    for (const m of dm) {
+      if (!m.canTakeCalls || !m.pbxLogin) continue;
+      const arr = deptEndpoints.get(m.departmentId) || [];
+      if (!arr.includes(m.pbxLogin)) arr.push(m.pbxLogin);
+      deptEndpoints.set(m.departmentId, arr);
+    }
+
+    state = { numbers, blacklist, agentGreetings, sipEndpoints, departmentEndpoints: deptEndpoints, loadedAt: Date.now(), ok: true };
+    log(`refreshed: ${numbers.size} numbers, ${blacklist.size} blacklist entries, ${agentGreetings.size} agent greetings, ${sipEndpoints.size} sip endpoints, ${deptEndpoints.size} departments`);
   } catch (err) {
     // On failure, keep the previous (stale) cache rather than wiping it — a brief
     // NYC blip shouldn't break call routing. Just log and try again next tick.
@@ -168,6 +196,12 @@ export function agentGreeting(agentId: string | null): string | null {
 export function resolveEndpoint(endpointId: string | null): string | null {
   if (!endpointId) return null;
   return state.sipEndpoints.get(endpointId) || null;
+}
+
+export function resolveDepartmentEndpoints(departmentId: string | null): string[] {
+  if (!departmentId) return [];
+  const logins = state.departmentEndpoints.get(departmentId) || [];
+  return logins.map((u) => `PJSIP/${u}`);
 }
 
 export function cacheReady(): boolean {

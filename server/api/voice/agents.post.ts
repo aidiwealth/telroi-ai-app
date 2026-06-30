@@ -23,13 +23,16 @@ export default defineEventHandler(async (event) => {
   const created = await client.addUser(p.data);
 
   // Store the explicit link on the membership if we can resolve the person.
+  // IMPORTANT: store the REAL provisioned SIP username (created.ext = tnt_xxx),
+  // not the typed login — department ringing originates to PJSIP/<pbx_login>.
+  const deviceUsername = (created as any)?.ext || p.data.login;
   if (p.data.email) {
     try {
       const db = useDb();
       const [u] = await db.select({ id: schema.users.id }).from(schema.users)
         .where(eq(schema.users.email, p.data.email)).limit(1);
       if (u) {
-        await db.update(schema.memberships).set({ pbxLogin: p.data.login })
+        await db.update(schema.memberships).set({ pbxLogin: deviceUsername })
           .where(and(eq(schema.memberships.tenantId, s.tenantId), eq(schema.memberships.userId, u.id)));
       }
     } catch { /* link best-effort; extension still created */ }
