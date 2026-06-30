@@ -205,7 +205,6 @@ export function useVoiceCall() {
 
   async function acceptIncoming() {
     if (!incomingInvitation) return;
-    stopRingtone();
     try {
       // Let SIP.js's session-description handler acquire the mic via the
       // constraints below — do NOT call ensureMic() first, or two concurrent
@@ -231,14 +230,12 @@ export function useVoiceCall() {
   }
 
   function rejectIncoming() {
-    stopRingtone();
     try { incomingInvitation?.reject?.(); } catch { /* */ }
     incoming.value = false;
     incomingInvitation = null;
   }
 
   async function stopReceiving() {
-    stopRingtone();
     try { if (recvRegisterer) await recvRegisterer.unregister(); } catch { /* */ }
     try { await recvUA?.stop?.(); } catch { /* */ }
     recvRegisterer = null; recvUA = null; incomingInvitation = null;
