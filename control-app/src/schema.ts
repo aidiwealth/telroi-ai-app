@@ -11,7 +11,7 @@
 // point at the same Postgres tables). Only the columns the control app actually
 // reads or writes are declared here. If you add a routing column in the main
 // app that the control app needs, mirror it here.
-import { pgTable, uuid, text, timestamp, integer, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // We only need tenant id for FK targets; declared minimally.
 export const tenants = pgTable('tenants', {
@@ -56,6 +56,24 @@ export const sipEndpoints = pgTable('sip_endpoints', {
   label: text('label'),
   sipUsername: text('sip_username'),
   domain: text('domain')
+});
+
+// Minimal: membership links a user to a tenant and holds their PBX login
+// (the SIP username we ring for department members). Option 1: one device/user.
+export const memberships = pgTable('memberships', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  tenantId: uuid('tenant_id').notNull(),
+  pbxLogin: text('pbx_login')
+});
+
+// Minimal: a user's membership in a department, with the can-take-calls flag.
+export const departmentMembers = pgTable('department_members', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  departmentId: uuid('department_id').notNull(),
+  tenantId: uuid('tenant_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  canTakeCalls: boolean('can_take_calls').notNull().default(true)
 });
 
 export const callEvents = pgTable('call_events', {
