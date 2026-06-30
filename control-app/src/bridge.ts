@@ -113,3 +113,102 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
     throw err;
   }
 }
+
+// ── Department routing: ring multiple members, first to answer wins ──────────
+export interface DepartmentBridgeOptions {
+  client: Ari.Client;
+  caller: Ari.Channel;
+  endpoints: string[];
+  callerIdNum?: string;
+  ringTimeoutSec?: number;
+  onStatus?: (status: 'answered' | 'ended' | 'no-answer' | 'failed') => void;
+}
+
+export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise<void> {
+  const { client, caller } = opts;
+  const endpoints = (opts.endpoints || []).filter(Boolean);
+  const ringTimeout = opts.ringTimeoutSec ?? 25;
+
+  if (endpoints.length === 0) {
+    if (opts.onStatus) { try { opts.onStatus('no-answer'); } catch { /* noop */ } }
+    return;
+  }
+
+  const bridge = client.Bridge();
+  await bridge.create({ type: 'mixing' });
+  log(`dept bridge ${bridge.id} created for caller ${caller.id} -> ${endpoints.length} member(s)`);
+
+  const callees: Ari.Channel[] = [];
+  let answeredId: string | null = null;
+  let cleanedUp = false;
+  let wasAnswered = false;
+
+  const cleanup = async (reason: string) => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    log(`cleanup dept bridge ${bridge.id} (${reason})`);
+    if (opts.onStatus) {
+      let terminal: 'ended' | 'no-answer' | 'failed';
+      if (wasAnswered) terminal = 'ended';
+      else if (reason === 'all failed') terminal = 'failed';
+      else terminal = 'no-answer';
+      try { opts.onStatus(terminal); } catch { /* never break teardown */ }
+    }
+    for (const ch of callees) { try { await ch.hangup(); } catch { /* gone */ } }
+    try { await bridge.destroy(); } catch { /* gone */ }
+  };
+
+  try {
+    await bridge.addChannel({ channel: caller.id });
+  } catch (err) {
+    await cleanup('failed to add caller');
+    throw err;
+  }
+  caller.once('StasisEnd', () => { void cleanup('caller left'); });
+  caller.once('ChannelDestroyed', () => { void cleanup('caller destroyed'); });
+
+  const onMemberStasisStart = async (_event: unknown, ch: Ari.Channel) => {
+    if (!callees.some((c) => c.id === ch.id)) return;
+    if (answeredId) { try { await ch.hangup(); } catch { /* gone */ } return; }
+    answeredId = ch.id;
+    log(`dept: ${ch.id} answered first -> bridging; cancelling other legs`);
+    try {
+      await ch.answer();
+      await bridge.addChannel({ channel: ch.id });
+      wasAnswered = true;
+      if (opts.onStatus) { try { opts.onStatus('answered'); } catch { /* noop */ } }
+      for (const other of callees) {
+        if (other.id !== ch.id) { try { await other.hangup(); } catch { /* gone */ } }
+      }
+      ch.once('ChannelDestroyed', () => { void cleanup('member hung up'); });
+      ch.once('StasisEnd', () => { void cleanup('member left'); });
+      log(`dept bridged: ${caller.id} <-> ${ch.id}`);
+    } catch (err) {
+      log(`dept failed to bridge member: ${(err as Error)?.message}`);
+      void cleanup('bridge add failed');
+    }
+  };
+  client.on('StasisStart', onMemberStasisStart as never);
+
+  let originateFailures = 0;
+  await Promise.all(endpoints.map(async (endpoint) => {
+    const ch = client.Channel();
+    callees.push(ch);
+    try {
+      await ch.originate({ endpoint, app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
+      log(`dept originating to ${endpoint} (ring ${ringTimeout}s)`);
+    } catch (err) {
+      originateFailures++;
+      log(`dept originate to ${endpoint} failed: ${(err as Error)?.message}`);
+    }
+  }));
+
+  if (originateFailures === endpoints.length) { await cleanup('all failed'); return; }
+
+  setTimeout(() => {
+    if (!answeredId && !cleanedUp) {
+      log(`dept ring timeout (${ringTimeout}s) — no answer`);
+      void cleanup('ring timeout');
+    }
+  }, (ringTimeout + 2) * 1000);
+}
