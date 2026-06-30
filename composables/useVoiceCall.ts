@@ -207,7 +207,9 @@ export function useVoiceCall() {
     if (!incomingInvitation) return;
     stopRingtone();
     try {
-      await ensureMic();
+      // Let SIP.js's session-description handler acquire the mic via the
+      // constraints below — do NOT call ensureMic() first, or two concurrent
+      // getUserMedia requests fight over the device and accept() fails.
       const inv = incomingInvitation;
       await inv.accept({ sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false } } });
       activeConn = inv;
@@ -220,6 +222,7 @@ export function useVoiceCall() {
         if (st === 'Terminated') { state.value = 'ended'; activeConn = null; cleanup(); }
       });
     } catch (e: any) {
+      console.error('[voice] acceptIncoming failed:', e);
       error.value = e?.message || 'Could not answer the call';
       state.value = 'error';
       incoming.value = false;
