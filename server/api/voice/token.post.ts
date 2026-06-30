@@ -12,8 +12,8 @@ export default defineEventHandler(async (event) => {
   const dial = await resolveLiveCallProvider({ tenantId: s.tenantId, configuredProvider: 'auto', preferredFromNumber: selectedFrom || null });
   if (dial.provider === 'telroi') {
     try {
-      const { ensureWebrtcEndpoint } = await import('~/server/utils/provision-agent');
-      await ensureWebrtcEndpoint(s.tenantId);
+      const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
+      await ensureUserWebrtcEndpoint(s.tenantId, s.userId);
     } catch (e: any) {
       throw apiError('voice_not_configured', e?.message || 'Browser calling could not be set up. Try again.', 503);
     }

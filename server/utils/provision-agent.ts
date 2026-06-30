@@ -92,6 +92,40 @@ export async function ensureWebrtcEndpoint(tenantId: string): Promise<{ created:
   return { created: true, sipUsername: result.username };
 }
 
+// Per-user WebRTC endpoint. Each user gets their OWN registered device so that
+// inbound routing (which rings memberships.pbx_login) can reach the specific
+// person who's online in their browser. Aligns three things: the endpoint we
+// provision, the credentials the token issues, and the pbx_login routing rings.
+export async function ensureUserWebrtcEndpoint(tenantId: string, userId: string): Promise<{ created: boolean; sipUsername: string }> {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq } = await import('drizzle-orm');
+  const { encrypt } = await import('~/server/utils/crypto');
+  const db = useDb();
+  const rows = await db.select().from(schema.sipEndpoints)
+    .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
+  const mine = rows.find((r: any) => r.secretEnc && (r.meta as any)?.webrtc && (r.meta as any)?.userId === userId);
+  let sipUsername: string;
+  let created = false;
+  if (mine) {
+    sipUsername = mine.sipUsername!;
+  } else {
+    const result = await agentProvision(tenantId, `user-${userId.slice(0, 8)}`, true);
+    await db.insert(schema.sipEndpoints).values({
+      tenantId, provider: 'telroi', kind: 'registration',
+      externalId: result.username, label: `user-${userId.slice(0, 8)}`, sipUsername: result.username,
+      secretEnc: encrypt(result.password), domain: result.domain,
+      meta: { transport: result.transport, webrtc: true, userId }
+    });
+    sipUsername = result.username;
+    created = true;
+  }
+  try {
+    await db.update(schema.memberships).set({ pbxLogin: sipUsername })
+      .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.userId, userId)));
+  } catch { /* membership may not exist yet; endpoint still usable */ }
+  return { created, sipUsername };
+}
+
 // ─── Carrier (SIP trunk) management — calls the PBX agent to generate/remove
 // the Asterisk trunk config (pjsip.d + extensions.d) and reload. ──────────────
 export interface CarrierAgentInput {

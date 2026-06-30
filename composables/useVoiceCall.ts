@@ -23,10 +23,16 @@ export function useVoiceCall() {
   const error = ref<string | null>(null);
   const callId = ref<string | null>(null);
   const startedAt = ref<number>(0);
+  const incoming = ref(false);
+  const incomingFrom = ref<string>('');
+  const registered = ref(false);
   let device: any = null;       // Twilio Device
   let activeConn: any = null;   // Twilio Connection / Telnyx call / SIP session
   let telnyxClient: any = null;
-  let sipUA: any = null;
+  let sipUA: any = null;        // outbound UserAgent (per-call)
+  let recvUA: any = null;       // persistent receiving UserAgent
+  let recvRegisterer: any = null;
+  let incomingInvitation: any = null;
   let provider = '';
   let mediaStream: MediaStream | null = null;
 
@@ -138,5 +144,85 @@ export function useVoiceCall() {
     mediaStream = null; device = null; activeConn = null; telnyxClient = null; sipUA = null;
   }
 
-  return { state, error, callId, startCall, hangup };
+  // ── Inbound: register persistently and listen for incoming calls ──────────
+  async function startReceiving(opts: { tokenEndpoint: string; from?: string }) {
+    try {
+      const tok = await getToken(opts.tokenEndpoint, opts.from);
+      if (!(tok.provider === 'telroi' || tok.provider === 'asterisk' || tok.provider === 'digidite')) {
+        return false;
+      }
+      const SIP = await import('sip.js');
+      const uri = SIP.UserAgent.makeURI(`sip:${tok.sipUsername}@${tok.sipDomain}`);
+      recvUA = new SIP.UserAgent({
+        uri,
+        transportOptions: { server: tok.wsServer },
+        authorizationUsername: tok.sipUsername,
+        authorizationPassword: tok.sipPassword,
+        delegate: {
+          onInvite: (invitation: any) => {
+            if (incoming.value || state.value === 'in_call') {
+              try { invitation.reject(); } catch { /* */ }
+              return;
+            }
+            incomingInvitation = invitation;
+            incoming.value = true;
+            incomingFrom.value = invitation?.remoteIdentity?.uri?.user
+              || invitation?.remoteIdentity?.displayName || 'Unknown';
+            invitation.stateChange?.addListener?.((st: string) => {
+              if (st === 'Terminated' && incoming.value) {
+                incoming.value = false; incomingInvitation = null;
+              }
+            });
+          }
+        }
+      });
+      await recvUA.start();
+      recvRegisterer = new SIP.Registerer(recvUA);
+      await recvRegisterer.register();
+      registered.value = true;
+      return true;
+    } catch (e: any) {
+      error.value = e?.message || 'Could not start receiving calls';
+      registered.value = false;
+      return false;
+    }
+  }
+
+  async function acceptIncoming() {
+    if (!incomingInvitation) return;
+    try {
+      await ensureMic();
+      const inv = incomingInvitation;
+      await inv.accept({ sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false } } });
+      activeConn = inv;
+      provider = 'telroi';
+      incoming.value = false;
+      state.value = 'in_call';
+      startedAt.value = Date.now();
+      attachSipAudio(inv);
+      inv.stateChange?.addListener?.((st: string) => {
+        if (st === 'Terminated') { state.value = 'ended'; activeConn = null; cleanup(); }
+      });
+    } catch (e: any) {
+      error.value = e?.message || 'Could not answer the call';
+      state.value = 'error';
+      incoming.value = false;
+      incomingInvitation = null;
+    }
+  }
+
+  function rejectIncoming() {
+    try { incomingInvitation?.reject?.(); } catch { /* */ }
+    incoming.value = false;
+    incomingInvitation = null;
+  }
+
+  async function stopReceiving() {
+    try { if (recvRegisterer) await recvRegisterer.unregister(); } catch { /* */ }
+    try { await recvUA?.stop?.(); } catch { /* */ }
+    recvRegisterer = null; recvUA = null; incomingInvitation = null;
+    incoming.value = false; registered.value = false;
+  }
+
+  return { state, error, callId, incoming, incomingFrom, registered, startCall, hangup, startReceiving, acceptIncoming, rejectIncoming, stopReceiving };
 }

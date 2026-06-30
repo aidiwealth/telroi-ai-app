@@ -54,12 +54,18 @@ export async function asteriskVoiceToken(identity: string) {
   const { useDb, schema } = await import('~/server/db');
   const { and, eq } = await import('drizzle-orm');
   const { decrypt } = await import('~/server/utils/crypto');
-  const mm = /^tenant_([0-9a-f-]+)_/.exec(identity);
+  // identity = tenant_<tenantId>_<userId>
+  const mm = /^tenant_([0-9a-f-]+)_([0-9a-f-]+)$/.exec(identity);
   const tenantId = mm ? mm[1] : identity;
+  const userId = mm ? mm[2] : null;
   const db = useDb();
   const rows = await db.select().from(schema.sipEndpoints)
     .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
-  const ep = rows.find((r: any) => r.secretEnc && (((r.meta as any)?.webrtc) || r.label === 'browser-dialer'));
+  // Prefer this user's own endpoint (meta.userId match); fall back for old data.
+  let ep = userId
+    ? rows.find((r: any) => r.secretEnc && (r.meta as any)?.webrtc && (r.meta as any)?.userId === userId)
+    : undefined;
+  if (!ep) ep = rows.find((r: any) => r.secretEnc && (((r.meta as any)?.webrtc) || r.label === 'browser-dialer'));
   if (!ep) {
     throw Object.assign(new Error('Browser calling is not set up yet for this workspace.'), {
       statusCode: 409, data: { error: { code: 'webrtc_not_provisioned' } }

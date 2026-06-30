@@ -15,6 +15,7 @@
     <SetupTasks />
     <IdleLogout />
     <TourGuide />
+    <IncomingCall />
   </div>
 </template>
 
