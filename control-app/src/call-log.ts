@@ -43,7 +43,12 @@ export function logCall(input: CallLogInput): void {
         set: {
           status: sql`excluded.status`,
           duration: sql`excluded.duration`,
-          phone: sql`excluded.phone`
+          phone: sql`excluded.phone`,
+          // Merge raw rather than overwrite: status-update calls pass an empty
+          // raw, and the inbound insert that carries {did, callerName} can race
+          // behind them. Concatenating keeps existing keys so the DID is never
+          // lost to ordering.
+          raw: sql`${schema.callEvents.raw} || excluded.raw`
         }
       });
     } catch (err) {
