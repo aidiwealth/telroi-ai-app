@@ -5,7 +5,7 @@
         <h1 class="page-title">Calls</h1>
         <p class="page-sub">Every call across your numbers, agents and departments.</p>
       </div>
-      <ExportButton url="/api/voice/calls/export" label="Export (30d)" />
+      <ExportButton :url="exportUrl" :label="exportLabel" />
     </div>
 
     <!-- Filters -->
@@ -96,6 +96,15 @@ function onCallback(phone: string) {
   dialer.open = true;
 }
 const filters = reactive({ period: 'week', type: '', client: '' });
+
+// Server-side export honours the active filters, so the CSV matches the view.
+const periodLabels: Record<string, string> = { today: 'today', day: '24h', week: '7d', month: '30d', quarter: '90d', all: 'all' };
+const exportUrl = computed(() => {
+  const p = new URLSearchParams({ period: filters.period });
+  if (filters.type) p.set('type', filters.type);
+  return `/api/voice/calls/export?${p.toString()}`;
+});
+const exportLabel = computed(() => `Export (${periodLabels[filters.period] || filters.period})`);
 
 const filtered = computed(() =>
   calls.value.filter((c) => {
