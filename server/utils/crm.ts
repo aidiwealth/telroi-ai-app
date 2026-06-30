@@ -87,3 +87,49 @@ export async function upsertContactByPhone(tenantId: string, phone: string, extr
     .onConflictDoNothing().returning();
   return row;
 }
+
+// Sync recent inbound call numbers into the CRM as contacts. Idempotent: the
+// unique (tenant, phone) constraint means re-running only adds genuinely new
+// numbers. Respects the tenant's autoLinkCalls CRM setting. Best-effort — a
+// failure here must never block the contacts list from loading.
+export async function syncCallsToContacts(tenantId: string, opts: { days?: number; limit?: number } = {}) {
+  try {
+    const { hasFeature } = await import('./entitlements');
+    if (!(await hasFeature(tenantId, 'crm'))) return 0;
+    const { effectiveSettings } = await import('./feature-settings');
+    const eff = await effectiveSettings(tenantId, 'crm');
+    if (eff.settings.autoLinkCalls === false) return 0;
+
+    const db = useDb();
+    const since = new Date(Date.now() - (opts.days ?? 90) * 24 * 3600 * 1000);
+    const rows = await db.select({ phone: schema.callEvents.phone })
+      .from(schema.callEvents)
+      .where(and(
+        eq(schema.callEvents.tenantId, tenantId),
+        eq(schema.callEvents.direction, 'in'),
+        sql`${schema.callEvents.phone} is not null and ${schema.callEvents.phone} <> ''`,
+        sql`${schema.callEvents.startedAt} >= ${since.toISOString()}`
+      ))
+      .orderBy(desc(schema.callEvents.startedAt))
+      .limit(opts.limit ?? 500);
+
+    const phones = Array.from(new Set(rows.map((r) => (r.phone || '').trim()).filter(Boolean)));
+    if (!phones.length) return 0;
+
+    const existing = await db.select({ phone: schema.crmContacts.phone })
+      .from(schema.crmContacts)
+      .where(and(eq(schema.crmContacts.tenantId, tenantId), inArray(schema.crmContacts.phone, phones)));
+    const have = new Set(existing.map((e) => e.phone));
+    const toAdd = phones.filter((p) => !have.has(p));
+
+    const status = (eff.settings.defaultStatus as string) || 'lead';
+    let added = 0;
+    for (const phone of toAdd) {
+      const row = await upsertContactByPhone(tenantId, phone, { source: 'inbound', status });
+      if (row) added++;
+    }
+    return added;
+  } catch {
+    return 0;
+  }
+}
