@@ -21,16 +21,63 @@
       </div>
     </div>
   </transition>
+
+  <!-- Active inbound call: stays until the user hangs up. -->
+  <transition name="ring-slide">
+    <div v-if="onCall" class="incoming oncall">
+      <div class="oncall-dot" aria-hidden="true"></div>
+      <div class="incoming-text">
+        <div class="incoming-label">On call</div>
+        <div class="incoming-from">{{ activeFrom || 'Connected' }} · {{ durStr }}</div>
+      </div>
+      <div class="incoming-actions">
+        <button class="ic-btn ic-decline" title="Hang up" @click="endActive()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(135deg)"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        </button>
+      </div>
+    </div>
+  </transition>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 const voice = useVoiceCall();
+
+const onCall = computed(() => voice.state.value === 'in_call');
+const activeFrom = ref('');
+const elapsed = ref(0);
+let timer: any = null;
+
+const durStr = computed(() => {
+  const m = Math.floor(elapsed.value / 60);
+  const s = elapsed.value % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+});
+
+watch(() => voice.state.value, (st) => {
+  if (st === 'in_call') {
+    activeFrom.value = voice.incomingFrom.value || '';
+    elapsed.value = 0;
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => { elapsed.value += 1; }, 1000);
+  } else {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+});
+
+function endActive() {
+  voice.hangup();
+}
+
 onMounted(async () => {
   if (!import.meta.client) return;
   try { await voice.startReceiving({ tokenEndpoint: '/api/voice/token' }); } catch { /* optional */ }
 });
-onUnmounted(() => { try { voice.stopReceiving(); } catch { /* */ } });
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer);
+  try { voice.stopReceiving(); } catch { /* */ }
+});
 </script>
 
 <style scoped>
@@ -63,8 +110,18 @@ onUnmounted(() => { try { voice.stopReceiving(); } catch { /* */ } });
 .ic-btn svg { width: 20px; height: 20px; }
 .ic-accept { background: var(--live); }
 .ic-decline { background: var(--danger); }
+
+.oncall { border-color: var(--live); }
+.oncall-dot {
+  flex: none; width: 12px; height: 12px; margin: 0 6px 0 2px; border-radius: 50%;
+  background: var(--live); box-shadow: 0 0 0 0 rgba(0,210,138,0.5);
+  animation: liveDot 1.6s ease-out infinite;
+}
+@keyframes liveDot { 0% { box-shadow: 0 0 0 0 rgba(0,210,138,0.45); } 100% { box-shadow: 0 0 0 8px rgba(0,210,138,0); } }
+
 .ring-slide-enter-active, .ring-slide-leave-active { transition: transform 0.22s ease, opacity 0.22s ease; }
 .ring-slide-enter-from, .ring-slide-leave-to { transform: translateY(12px); opacity: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   .incoming-pulse::after { animation: none; }
   .ring-slide-enter-active, .ring-slide-leave-active { transition: opacity 0.15s ease; }
