@@ -11,7 +11,7 @@
 // point at the same Postgres tables). Only the columns the control app actually
 // reads or writes are declared here. If you add a routing column in the main
 // app that the control app needs, mirror it here.
-import { pgTable, uuid, text, timestamp, integer, boolean, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // We only need tenant id for FK targets; declared minimally.
 export const tenants = pgTable('tenants', {
@@ -86,6 +86,7 @@ export const callEvents = pgTable('call_events', {
   carrier: text('carrier'),
   startedAt: timestamp('started_at', { withTimezone: true }),
   duration: integer('duration'),
+  raw: jsonb('raw').$type<Record<string, unknown>>().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
   callIdx: index('call_events_callid_idx').on(t.callid),
