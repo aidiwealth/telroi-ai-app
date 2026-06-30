@@ -42,6 +42,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 const voice = useVoiceCall();
+const ringtone = useRingtone();
 
 const onCall = computed(() => voice.state.value === 'in_call');
 const activeFrom = ref('');
@@ -52,6 +53,11 @@ const durStr = computed(() => {
   const m = Math.floor(elapsed.value / 60);
   const s = elapsed.value % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
+});
+
+watch(() => voice.incoming.value, (isRinging) => {
+  if (isRinging) ringtone.start();
+  else ringtone.stop();
 });
 
 watch(() => voice.state.value, (st) => {
