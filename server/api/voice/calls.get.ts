@@ -47,9 +47,15 @@ export default defineEventHandler(async (event) => {
       .filter((e) => !pbxUids.has(e.callid))
       .map((e) => ({
         uid: e.callid,
-        type: e.type || 'out',
+        // The column is `direction` ('in'|'out'); there is no `type` column, so
+        // reading e.type defaulted every local call to 'out'. Use direction.
+        type: e.direction || 'out',
         status: e.status === 'failed' ? 'Failed' : (e.status === 'placed' ? 'Placed' : (e.status || 'placed')),
-        client: e.phone || '—',
+        // Show caller/dialed number; for inbound with no caller-id, fall back to
+        // the DID dialed (raw.did).
+        client: e.phone || (e.raw as any)?.did || '—',
+        destination: (e.raw as any)?.did || (e.direction === 'out' ? e.phone : undefined) || undefined,
+        diversion: (e.raw as any)?.did || undefined,
         user: e.user || undefined,
         start: (e.startedAt || e.createdAt)?.toISOString?.() || String(e.startedAt || e.createdAt),
         wait: 0, duration: e.duration || 0,
