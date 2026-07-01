@@ -126,9 +126,26 @@ async function main() {
       log(`  OK tenant=${route.tenantId} routeType=${route.routeType}`);
       switch (route.routeType) {
         case 'ai': {
-          const greeting = agentGreeting(route.routeAgentId) || 'Hello, thanks for calling. How can I help you today?';
-          log(`     AI route. greeting="${greeting}". (AI agent integration: later stage)`);
-          await playAndHangup(client, channel, 'sound:hello-world');
+          const agentId = route.routeAgentId;
+          if (!agentId) {
+            log(`     AI route but no agent configured — playing no-service`);
+            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
+            await playAndHangup(client, channel, 'sound:ss-noservice');
+            break;
+          }
+          log(`     AI route -> agent ${agentId} (turn-based conversation)`);
+          logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'answered', direction: 'in', raw: { did: dialedDid, callerName, agent: agentId } });
+          const { runAiCall } = await import('./ai-call.ts');
+          await runAiCall({
+            client, channel,
+            tenantId: route.tenantId,
+            agentId,
+            log: (m: string) => log(`  [ai ${chId}] ${m}`),
+            onEnd: (turns: number) => {
+              log(`  [ai ${chId}] conversation ended after ${turns} turn(s)`);
+              logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ended', direction: 'in' });
+            }
+          });
           break;
         }
         case 'department': {

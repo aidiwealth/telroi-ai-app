@@ -37,6 +37,7 @@ export const config = {
 
   // --- Database (the SAME Postgres the main app uses) ---
   databaseUrl: required('DATABASE_URL'),
+  webappUrl: process.env.WEBAPP_URL || 'https://app.telroi.ai',
 
   logLevel: process.env.LOG_LEVEL || 'info'
 };
