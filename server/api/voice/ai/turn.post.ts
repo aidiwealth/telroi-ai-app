@@ -53,6 +53,15 @@ export default defineEventHandler(async (event) => {
   if (/\[transfer\]/i.test(reply)) { action = 'transfer'; clean = reply.replace(/\[transfer\]/ig, '').trim(); }
   else if (/\[end\]/i.test(reply)) { action = 'hangup'; clean = reply.replace(/\[end\]/ig, '').trim(); }
 
+  // Always announce a handoff so the caller isn't transferred in silence. If the
+  // model didn't leave a clear connecting message, prepend a standard one.
+  if (action === 'transfer') {
+    const announces = /connect|transfer|hold|colleague|team|someone|agent|representative|moment/i.test(clean);
+    if (!clean || !announces) {
+      clean = (clean ? clean + ' ' : '') + 'Let me connect you with someone who can help. Please hold for a moment.';
+    }
+  }
+
   const tts = await ttsSynthesize(tenantId, agent.ttsConnId, clean, {}, agent.tier === 'managed');
 
   const sttSeconds = body.audioBase64 ? Math.round(Buffer.from(body.audioBase64, 'base64').length / 16000) : 0;
