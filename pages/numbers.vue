@@ -134,9 +134,13 @@
               </select>
               <span v-if="!agents.length" class="muted" style="font-size:12px">No AI agents yet — create one under AI Numbers.</span>
             </div>
-            <div class="field-float">
-              <input v-model="editing.escalateTo" class="input" placeholder=" " id="num-esc" />
-              <label for="num-esc">Escalate to (person/department for human handoff)</label>
+            <div class="field">
+              <label>Escalate to (human handoff)</label>
+              <select v-model="editing.escalateTo" class="select">
+                <option value="">— No human handoff —</option>
+                <option v-for="t in escalationTargets" :key="t.id" :value="t.id">{{ t.label }}</option>
+              </select>
+              <span v-if="!escalationTargets.length" class="muted" style="font-size:12px">No people to escalate to yet — add a SIP user first.</span>
             </div>
             <div class="field">
               <label>Escalate after (seconds, 0 = on intent)</label>
@@ -241,6 +245,7 @@ const editing = ref<any>(null);
 const savingRoute = ref(false);
 const agents = ref<any[]>([]);
 const departments = ref<any[]>([]);
+const escalationTargets = ref<Array<{ id: string; label: string }>>([]);
 const showBuy = ref(false);
 const buying = ref(false);
 const available = ref<any[]>([]);
@@ -317,6 +322,7 @@ onMounted(async () => {
     await loadSubs();
     try { agents.value = await api.get<any[]>('/api/agents'); } catch { /* */ }
     try { departments.value = await api.get<any[]>('/api/departments'); } catch { /* */ }
+    try { escalationTargets.value = (await api.get<{ targets: any[] }>('/api/voice/escalation-targets')).targets || []; } catch { /* */ }
     try {
       const pr = await api.get<any>('/api/pricing');
       if (pr) {
