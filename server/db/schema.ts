@@ -159,6 +159,8 @@ export const tenants = pgTable('tenants', {
   country: text('country'),   // ISO-ish country code/name collected at signup
   sector: text('sector'),     // business sector/industry collected at signup
   businessPhone: text('business_phone'), // primary contact number for the workspace (collected at onboarding)
+  // When true, inbound calls with no caller-id (anonymous/withheld) are rejected.
+  blockAnonymous: boolean('block_anonymous').notNull().default(false),
   telroiDomain: text('telroi_domain'),
   telroiApiKeyEnc: text('telroi_api_key_enc'),
   // Local-first provisioning lifecycle. Tenants start 'local' (everything in our

@@ -63,6 +63,10 @@ async function load() {
   try {
     const res = await api.get<{ items: TelroiBlacklistEntry[] }>('/api/voice/blacklist');
     entries.value = res.items || [];
+    try {
+      const a = await api.get<{ state: boolean }>('/api/voice/block-anonymous');
+      anon.value = !!a.state;
+    } catch { /* leave default */ }
   } catch (e: any) { toast.err(e.message); }
   finally { pending.value = false; anonInit = true; }
 }
@@ -83,7 +87,16 @@ async function remove(telnum: string) {
     await load();
   } catch (e: any) { toast.err(e.message); }
 }
-watch(anon, (v) => { if (anonInit) toast.ok(v ? 'Anonymous callers blocked' : 'Anonymous callers allowed'); });
+watch(anon, async (v) => {
+  if (!anonInit) return;
+  try {
+    await api.post('/api/voice/block-anonymous', { on: v });
+    toast.ok(v ? 'Anonymous callers blocked' : 'Anonymous callers allowed');
+  } catch (e: any) {
+    toast.err(e.message);
+    anon.value = !v;
+  }
+});
 
 onMounted(load);
 </script>

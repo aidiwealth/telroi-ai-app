@@ -43,6 +43,8 @@ interface CacheState {
   sipEndpoints: Map<string, string>;
   // departmentId -> [sip_username, ...]  (members who can take calls; ring-all)
   departmentEndpoints: Map<string, string[]>;
+  // tenantIds that reject anonymous (no caller-id) inbound calls
+  blockAnonymous: Set<string>;
   loadedAt: number;
   ok: boolean;
 }
@@ -53,6 +55,7 @@ let state: CacheState = {
   agentGreetings: new Map(),
   sipEndpoints: new Map(),
   departmentEndpoints: new Map(),
+  blockAnonymous: new Set(),
   loadedAt: 0,
   ok: false
 };
@@ -160,7 +163,12 @@ export async function refreshCache(): Promise<void> {
       deptEndpoints.set(m.departmentId, arr);
     }
 
-    state = { numbers, blacklist, agentGreetings, sipEndpoints, departmentEndpoints: deptEndpoints, loadedAt: Date.now(), ok: true };
+    // tenants that block anonymous (no caller-id) inbound calls.
+    const blockAnonymous = new Set<string>();
+    const tenantRows = await db.select({ id: schema.tenants.id, blockAnonymous: schema.tenants.blockAnonymous }).from(schema.tenants);
+    for (const t of tenantRows) { if (t.blockAnonymous) blockAnonymous.add(t.id); }
+
+    state = { numbers, blacklist, agentGreetings, sipEndpoints, departmentEndpoints: deptEndpoints, blockAnonymous, loadedAt: Date.now(), ok: true };
     log(`refreshed: ${numbers.size} numbers, ${blacklist.size} blacklist entries, ${agentGreetings.size} agent greetings, ${sipEndpoints.size} sip endpoints, ${deptEndpoints.size} departments`);
   } catch (err) {
     // On failure, keep the previous (stale) cache rather than wiping it — a brief
@@ -177,6 +185,12 @@ export async function refreshCache(): Promise<void> {
 
 export function lookupNumber(dialedDid: string): NumberRoute | null {
   return state.numbers.get(normNum(dialedDid)) || null;
+}
+
+export function isAnonymousBlocked(tenantId: string, callerNum: string): boolean {
+  const num = normNum(callerNum);
+  if (num) return false;
+  return state.blockAnonymous.has(tenantId);
 }
 
 export function isBlacklisted(tenantId: string, callerNum: string): boolean {

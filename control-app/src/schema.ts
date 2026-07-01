@@ -15,7 +15,8 @@ import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueI
 
 // We only need tenant id for FK targets; declared minimally.
 export const tenants = pgTable('tenants', {
-  id: uuid('id').primaryKey().defaultRandom()
+  id: uuid('id').primaryKey().defaultRandom(),
+  blockAnonymous: boolean('block_anonymous').notNull().default(false)
 });
 
 export const numberSubscriptions = pgTable('number_subscriptions', {

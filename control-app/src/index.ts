@@ -16,7 +16,7 @@
 
 import Ari from 'ari-client';
 import { config } from './config.ts';
-import { startCache, lookupNumber, isBlacklisted, agentGreeting, resolveEndpoint, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
+import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
 import { logCall } from './call-log.ts';
 import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment } from './bridge.ts';
@@ -96,7 +96,15 @@ async function main() {
         return;
       }
 
-      // 2) Blacklist check (cache)
+      // 2) Anonymous (no caller-id) block — tenant setting
+      if (isAnonymousBlocked(route.tenantId, callerNum)) {
+        log(`  BLOCKED anonymous caller for tenant ${route.tenantId} - rejecting`);
+        logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum || 'anonymous', status: 'blacklisted', direction: 'in' });
+        await playAndHangup(client, channel, 'sound:ss-noservice');
+        return;
+      }
+
+      // 3) Blacklist check (cache)
       if (isBlacklisted(route.tenantId, callerNum)) {
         log(`  BLOCKED caller ${callerNum} blacklisted for tenant ${route.tenantId} - rejecting`);
         logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'blacklisted', direction: 'in' });
