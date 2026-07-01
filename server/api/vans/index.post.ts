@@ -25,8 +25,14 @@ export default defineEventHandler(async (event) => {
     .limit(1);
   if (!sub) throw apiError('not_owned', 'Buy this number on the Numbers page before assigning it.', 400);
 
+  // vans.provider is a provider_kind enum (telroi | twilio | telnyx) — "who owns
+  // the number" at the platform level, NOT the specific carrier. number_
+  // subscriptions.provider holds the carrier (kasooko, ruach, twilio, …), so map
+  // it: twilio/telnyx pass through; every other carrier is Telroi-provisioned.
+  const providerKind = (sub.provider === 'twilio' || sub.provider === 'telnyx') ? sub.provider : 'telroi';
+
   const [row] = await db.insert(schema.vans).values({
-    tenantId: s.tenantId, ...p.data, provider: sub.provider // carried automatically from the number
+    tenantId: s.tenantId, ...p.data, provider: providerKind
   }).returning();
   const { touchActivity } = await import('~/server/utils/activity');
   await touchActivity(s.tenantId);

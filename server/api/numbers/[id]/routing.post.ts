@@ -53,12 +53,14 @@ export default defineEventHandler(async (event) => {
   if (d.routeType === 'ai') {
     const [existing] = await db.select().from(schema.vans)
       .where(and(eq(schema.vans.tenantId, s.tenantId), eq(schema.vans.telnum, sub.telnum))).limit(1);
+    // vans.provider is provider_kind (telroi|twilio|telnyx); map the carrier.
+    const providerKind = (sub.provider === 'twilio' || sub.provider === 'telnyx') ? sub.provider : 'telroi';
     const vanVals = {
-      tenantId: s.tenantId, name: `${sub.telnum} (AI)`, telnum: sub.telnum, provider: sub.provider as any,
+      tenantId: s.tenantId, name: `${sub.telnum} (AI)`, telnum: sub.telnum, provider: providerKind as any,
       agentId: d.agentId!, escalateTo: d.escalateTo || null, escalateAfter: d.escalateAfter || 0, status: 'live' as const
     };
     if (existing) {
-      await db.update(schema.vans).set({ agentId: d.agentId!, escalateTo: d.escalateTo || null, escalateAfter: d.escalateAfter || 0, status: 'live', provider: sub.provider as any })
+      await db.update(schema.vans).set({ agentId: d.agentId!, escalateTo: d.escalateTo || null, escalateAfter: d.escalateAfter || 0, status: 'live', provider: providerKind as any })
         .where(eq(schema.vans.id, existing.id));
     } else {
       await db.insert(schema.vans).values(vanVals);
