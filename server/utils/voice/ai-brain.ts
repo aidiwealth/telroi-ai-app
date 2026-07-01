@@ -92,7 +92,11 @@ async function resolveConn(tenantId: string, connId: string | null, kinds: strin
       .where(and(eq(schema.aiConnections.id, connId), eq(schema.aiConnections.tenantId, tenantId))).limit(1);
     if (conn && kinds.includes(conn.provider)) {
       try { return { provider: conn.provider, apiKey: decrypt(conn.apiKeyEnc), managed: false, meta: (conn.meta || {}) as any }; }
-      catch { /* fall through */ }
+      catch (e) { console.error(`[ai-brain] resolveConn decrypt failed for ${conn.provider}: ${(e as Error)?.message}`); }
+    } else if (!conn) {
+      console.error(`[ai-brain] resolveConn: no connection ${connId} for tenant ${tenantId}`);
+    } else {
+      console.error(`[ai-brain] resolveConn: provider ${conn.provider} not in [${kinds.join(',')}]`);
     }
   }
   return null;
@@ -166,4 +170,23 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
     }
     return null;
   } catch { return null; }
+}
+
+// ── Auto-assign default connections for an agent ────────────────────────────
+export interface DefaultConns { sttConnId: string | null; llmConnId: string | null; ttsConnId: string | null; }
+
+export async function resolveDefaultConnections(tenantId: string): Promise<DefaultConns> {
+  const rows = await useDb().select().from(schema.aiConnections)
+    .where(eq(schema.aiConnections.tenantId, tenantId));
+  const usable = rows.filter((r) => r.status === 'ok');
+  const pool = usable.length ? usable : rows;
+  const pick = (prefs: string[]): string | null => {
+    for (const p of prefs) { const c = pool.find((r) => r.provider === p); if (c) return c.id; }
+    return null;
+  };
+  return {
+    llmConnId: pick(['anthropic', 'openai']),
+    sttConnId: pick(['deepgram', 'openai']),
+    ttsConnId: pick(['elevenlabs', 'openai'])
+  };
 }
