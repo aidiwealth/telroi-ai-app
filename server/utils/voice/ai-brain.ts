@@ -130,6 +130,17 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const res = await fetch(`${base}/stt`, { method: 'POST', headers: { 'Content-Type': contentType }, body: audio });
       if (res.ok) { const d: any = await res.json(); return d?.transcript || ''; }
     }
+    const managedKey = (c.managedOpenaiKey as string) || (c.openaiApiKey as string) || '';
+    if (managedKey) {
+      const form = new FormData();
+      form.append('file', new Blob([audio], { type: contentType }), 'turn.wav');
+      form.append('model', 'whisper-1');
+      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST', headers: { Authorization: `Bearer ${managedKey}` }, body: form as any
+      });
+      if (res.ok) { const d: any = await res.json(); return d?.text || ''; }
+      console.error(`[ai-brain] managed STT (OpenAI) failed ${res.status}`);
+    }
     return '';
   } catch { return ''; }
 }
