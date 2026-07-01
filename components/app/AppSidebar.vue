@@ -108,6 +108,7 @@ const sections = [
     label: 'AI', icon: I.ai, tour: 'nav-ai', children: [
       { label: 'AI Numbers', to: '/vans' },
       { label: 'AI Connections', to: '/ai' },
+      { label: 'AI Usage', to: '/ai-usage' },
       { label: 'Optimize', to: '/optimize' }
     ]
   },

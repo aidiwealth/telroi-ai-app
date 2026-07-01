@@ -256,3 +256,22 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
     return { text: null, inputTokens: 0, outputTokens: 0 };
   }
 }
+
+// ── Tier visibility ─────────────────────────────────────────────────────────
+export interface AgentTier { llm: 'byok' | 'managed' | 'unavailable'; stt: 'byok' | 'managed' | 'unavailable'; tts: 'byok' | 'managed' | 'unavailable'; anyManaged: boolean; }
+
+export async function resolveAgentTier(tenantId: string, agent: { llmConnId: string | null; sttConnId: string | null; ttsConnId: string | null }): Promise<AgentTier> {
+  const conns = await useDb().select().from(schema.aiConnections)
+    .where(eq(schema.aiConnections.tenantId, tenantId));
+  const okConn = (id: string | null, providers: string[]) =>
+    !!id && conns.some((c) => c.id === id && providers.includes(c.provider) && c.status === 'ok');
+  const c = useRuntimeConfig() as any;
+  const hasManagedLlm = !!((c.managedAnthropicKey as string) || (c.managedOpenaiKey as string) || (c.anthropicApiKey as string) || (c.openaiApiKey as string));
+  const hasManagedSpeech = !!((c.managedOpenaiKey as string) || (c.openaiApiKey as string) || (c.telroiSpeechUrl as string));
+  const role = (byok: boolean, managedAvail: boolean): 'byok' | 'managed' | 'unavailable' =>
+    byok ? 'byok' : (managedAvail ? 'managed' : 'unavailable');
+  const llm = role(okConn(agent.llmConnId, ['anthropic', 'openai']), hasManagedLlm);
+  const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai']), hasManagedSpeech);
+  const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai']), hasManagedSpeech);
+  return { llm, stt, tts, anyManaged: [llm, stt, tts].includes('managed') };
+}
