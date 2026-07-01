@@ -79,3 +79,91 @@ async function playMedia(channel: Ari.Channel, client: Ari.Client, media: string
     setTimeout(finish, 30000);
   });
 }
+
+async function recordTurn(channel: Ari.Channel, client: Ari.Client, log: Logger): Promise<string> {
+  const name = `ai-${randomUUID()}`;
+  try {
+    await fs.mkdir(RECORD_DIR, { recursive: true }).catch(() => {});
+    const rec = client.LiveRecording();
+    (rec as any).name = name;
+    await channel.record({
+      name,
+      format: 'wav',
+      maxDurationSeconds: 30,
+      maxSilenceSeconds: 2,
+      beep: false,
+      ifExists: 'overwrite',
+      terminateOn: '#'
+    } as any, rec as any);
+
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const fin = () => { if (!done) { done = true; resolve(); } };
+      (rec as any).once?.('RecordingFinished', fin);
+      (rec as any).once?.('RecordingFailed', fin);
+      setTimeout(fin, 33000);
+    });
+
+    const path = `${RECORD_DIR}/${name}.wav`;
+    const buf = await fs.readFile(path).catch(() => null);
+    if (buf) { fs.unlink(path).catch(() => {}); return buf.toString('base64'); }
+    return '';
+  } catch (e) {
+    log(`ai: recordTurn failed: ${(e as Error)?.message}`);
+    return '';
+  }
+}
+
+export interface AiCallOptions {
+  client: Ari.Client;
+  channel: Ari.Channel;
+  tenantId: string;
+  agentId: string;
+  log: Logger;
+  onTransfer?: (transferTo: string | null) => Promise<void>;
+  onEnd?: (turns: number) => void;
+}
+
+export async function runAiCall(opts: AiCallOptions): Promise<void> {
+  const { client, channel, tenantId, agentId, log } = opts;
+  let history: ChatMessage[] = [];
+  let turns = 0;
+
+  try { await channel.answer(); } catch { /* already up */ }
+
+  const greet = await callTurn({ agentId, tenantId, first: true });
+  if (!greet) { log('ai: greeting turn failed'); opts.onEnd?.(turns); return; }
+  history = greet.history || [];
+  if (greet.audioBase64) {
+    const media = await prepPlayback(greet.audioBase64, greet.audioContentType || 'audio/wav', log);
+    if (media) await playMedia(channel, client, media);
+  }
+
+  let hungUp = false;
+  channel.once('StasisEnd', () => { hungUp = true; });
+
+  while (!hungUp && turns < MAX_TURNS) {
+    turns++;
+    const audioB64 = await recordTurn(channel, client, log);
+    if (hungUp) break;
+
+    const turn = await callTurn({ agentId, tenantId, history, audioBase64: audioB64, audioContentType: 'audio/wav' });
+    if (!turn) { log('ai: turn failed — ending'); break; }
+    history = turn.history || history;
+
+    if (turn.audioBase64) {
+      const media = await prepPlayback(turn.audioBase64, turn.audioContentType || 'audio/wav', log);
+      if (media && !hungUp) await playMedia(channel, client, media);
+    }
+
+    if (turn.action === 'transfer') {
+      log(`ai: transfer requested -> ${turn.transferTo || 'default'}`);
+      if (opts.onTransfer) { await opts.onTransfer(turn.transferTo || null); return; }
+      break;
+    }
+    if (turn.action === 'hangup') { log('ai: hangup requested'); break; }
+  }
+
+  opts.onEnd?.(turns);
+  try { if (!hungUp) await channel.hangup(); } catch { /* gone */ }
+}
