@@ -119,13 +119,25 @@ export interface AiCallOptions {
   channel: Ari.Channel;
   tenantId: string;
   agentId: string;
+  callId?: string;
   log: Logger;
   onTransfer?: (transferTo: string | null) => Promise<void>;
   onEnd?: (turns: number) => void;
 }
 
+async function finalizeCall(tenantId: string, callId: string | undefined): Promise<void> {
+  if (!callId) return;
+  try {
+    await fetch(`${WEBAPP_URL}/api/voice/ai/finalize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
+      body: JSON.stringify({ tenantId, callId })
+    });
+  } catch { /* metering must never break call teardown */ }
+}
+
 export async function runAiCall(opts: AiCallOptions): Promise<void> {
-  const { client, channel, tenantId, agentId, log } = opts;
+  const { client, channel, tenantId, agentId, callId, log } = opts;
   let history: ChatMessage[] = [];
   let turns = 0;
 
@@ -147,7 +159,7 @@ export async function runAiCall(opts: AiCallOptions): Promise<void> {
     const audioB64 = await recordTurn(channel, client, log);
     if (hungUp) break;
 
-    const turn = await callTurn({ agentId, tenantId, history, audioBase64: audioB64, audioContentType: 'audio/wav' });
+    const turn = await callTurn({ agentId, tenantId, callId, history, audioBase64: audioB64, audioContentType: 'audio/wav' });
     if (!turn) { log('ai: turn failed — ending'); break; }
     history = turn.history || history;
 
@@ -158,12 +170,14 @@ export async function runAiCall(opts: AiCallOptions): Promise<void> {
 
     if (turn.action === 'transfer') {
       log(`ai: transfer requested -> ${turn.transferTo || 'default'}`);
+      await finalizeCall(tenantId, callId);
       if (opts.onTransfer) { await opts.onTransfer(turn.transferTo || null); return; }
       break;
     }
     if (turn.action === 'hangup') { log('ai: hangup requested'); break; }
   }
 
+  await finalizeCall(tenantId, callId);
   opts.onEnd?.(turns);
   try { if (!hungUp) await channel.hangup(); } catch { /* gone */ }
 }
