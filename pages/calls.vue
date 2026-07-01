@@ -118,6 +118,7 @@ function statusChip(s: string) {
   const v = (s || '').toLowerCase();
   if (v === 'missed') return 'chip--missed';
   if (v === 'success' || v === 'answered') return 'chip--ok';
+  if (v === 'blocked') return 'chip--bad';
   if (v === 'failed') return 'chip--bad';
   return 'chip--out';
 }

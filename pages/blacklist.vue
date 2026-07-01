@@ -41,6 +41,27 @@
       </table>
       <EmptyState v-else icon="blacklist" title="Nothing blocked" description="Numbers you block will appear here." />
     </div>
+
+    <!-- Recently blocked calls -->
+    <div class="card blocked-log">
+      <div class="blocked-head">
+        <div class="blocked-title">Recently blocked</div>
+        <div class="muted blocked-sub">Calls rejected by your blacklist or the anonymous-call block.</div>
+      </div>
+      <table v-if="blocked.length" class="table">
+        <thead><tr><th>Caller</th><th>When</th></tr></thead>
+        <tbody>
+          <tr v-for="b in blocked" :key="b.callid">
+            <td class="mono">
+              <span v-if="b.anonymous" class="anon-tag">Anonymous</span>
+              <template v-else>{{ b.phone }}</template>
+            </td>
+            <td class="muted">{{ b.at ? new Date(b.at).toLocaleString() : '\u2014' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <EmptyState v-else icon="blacklist" title="No blocked calls yet" description="Rejected calls will appear here." />
+    </div>
   </div>
 </template>
 
@@ -54,6 +75,7 @@ const toast = useToast();
 
 const pending = ref(true);
 const entries = ref<TelroiBlacklistEntry[]>([]);
+const blocked = ref<Array<{ callid: string; phone: string | null; anonymous: boolean; at: string | null }>>([]);
 const anon = ref(false);
 const draft = reactive({ telnum: '', comment: '' });
 let anonInit = false;
@@ -67,6 +89,10 @@ async function load() {
       const a = await api.get<{ state: boolean }>('/api/voice/block-anonymous');
       anon.value = !!a.state;
     } catch { /* leave default */ }
+    try {
+      const bc = await api.get<{ items: typeof blocked.value }>('/api/voice/blocked-calls');
+      blocked.value = bc.items || [];
+    } catch { /* non-fatal */ }
   } catch (e: any) { toast.err(e.message); }
   finally { pending.value = false; anonInit = true; }
 }
@@ -106,6 +132,11 @@ onMounted(load);
 .anon { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .anon-title { font-weight: 500; font-size: 15px; }
 .anon-sub { font-size: 13px; }
+.blocked-log { margin-top: 18px; }
+.blocked-head { padding: 16px 18px 4px; }
+.blocked-title { font-weight: 500; font-size: 15px; }
+.blocked-sub { font-size: 13px; }
+.anon-tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--paper-2); color: var(--ink-soft); border: 1px solid var(--rule); }
 .toggle { width: 46px; height: 27px; border-radius: 999px; background: var(--rule); position: relative; transition: background 0.18s; }
 .toggle.on { background: var(--signal); }
 .knob { position: absolute; top: 3px; left: 3px; width: 21px; height: 21px; background: var(--paper); border-radius: 50%; transition: transform 0.18s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }

@@ -106,7 +106,8 @@ export class AsteriskClient {
       const v = (st || '').toLowerCase();
       if (v === 'answered' || v === 'ended' || v === 'success') return 'answered';
       if (v === 'no-answer' || v === 'noanswer' || v === 'missed' || v === 'cancelled') return 'missed';
-      if (v === 'failed' || v === 'blacklisted' || v === 'rejected' || v === 'congestion') return 'failed';
+      if (v === 'blacklisted' || v === 'blocked') return 'blocked';
+      if (v === 'failed' || v === 'rejected' || v === 'congestion') return 'failed';
       if (v === 'ringing' || v === 'in-progress') return 'ringing';
       return v || 'answered';
     };
