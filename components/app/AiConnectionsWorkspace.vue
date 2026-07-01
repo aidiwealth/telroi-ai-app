@@ -89,6 +89,44 @@
       </table>
       <EmptyState v-else icon="ai" title="No voice agents yet" description="Create an agent, then bind it to a Virtual AI Number to answer calls." />
     </div>
+
+    <!-- Usage -->
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title">Usage</h2>
+          <p class="muted" style="font-size:13px">What your voice agents have consumed. On your own keys you're billed directly by each provider; these figures are for your visibility.</p>
+        </div>
+        <select v-model.number="usageDays" class="select select-sm" @change="loadUsage">
+          <option :value="7">Last 7 days</option>
+          <option :value="30">Last 30 days</option>
+          <option :value="90">Last 90 days</option>
+        </select>
+      </div>
+      <div v-if="usagePending" class="loading-pad"><div v-for="i in 2" :key="i" class="skeleton skel-row" /></div>
+      <template v-else-if="usage && usage.byAgent.length">
+        <div class="usage-totals">
+          <div class="usage-stat"><span class="usage-num">{{ usage.total.calls }}</span><span class="usage-lbl">Calls</span></div>
+          <div class="usage-stat"><span class="usage-num">{{ usage.total.sttMinutes }}</span><span class="usage-lbl">STT minutes</span></div>
+          <div class="usage-stat"><span class="usage-num">{{ fmtTok(usage.total.llmInputTokens + usage.total.llmOutputTokens) }}</span><span class="usage-lbl">LLM tokens</span></div>
+          <div class="usage-stat"><span class="usage-num">{{ fmtTok(usage.total.ttsChars) }}</span><span class="usage-lbl">TTS characters</span></div>
+        </div>
+        <table class="table">
+          <thead><tr><th>Agent</th><th>Calls</th><th>STT min</th><th>LLM tokens</th><th>TTS chars</th><th v-if="usage.total.costUsd > 0">Cost</th></tr></thead>
+          <tbody>
+            <tr v-for="r in usage.byAgent" :key="r.agentId || 'unassigned'">
+              <td><span class="prov-name">{{ r.agentName }}</span><span v-if="r.managed" class="tag-managed">managed</span></td>
+              <td>{{ r.calls }}</td>
+              <td>{{ r.sttMinutes }}</td>
+              <td>{{ fmtTok(r.llmInputTokens + r.llmOutputTokens) }}</td>
+              <td>{{ fmtTok(r.ttsChars) }}</td>
+              <td v-if="usage.total.costUsd > 0">{{ r.costUsd > 0 ? '$' + r.costUsd.toFixed(2) : '—' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </template>
+      <EmptyState v-else icon="ai" title="No usage yet" description="Once your agents start answering calls, consumption shows up here." />
+    </div>
   </div>
 </template>
 
@@ -130,6 +168,19 @@ async function loadAgents() {
   try { agents.value = await api.get<Agent[]>(props.agentsBase); }
   catch { /* */ }
   finally { agentsPending.value = false; }
+}
+
+interface UsageRow { agentId: string | null; agentName: string; calls: number; turns: number; sttMinutes: number; llmInputTokens: number; llmOutputTokens: number; ttsChars: number; managed: boolean; costUsd: number; }
+interface UsageResp { days: number; byAgent: UsageRow[]; total: { calls: number; turns: number; sttMinutes: number; llmInputTokens: number; llmOutputTokens: number; ttsChars: number; costUsd: number }; }
+const usage = ref<UsageResp | null>(null);
+const usagePending = ref(true);
+const usageDays = ref(30);
+function fmtTok(n: number): string { return n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n); }
+async function loadUsage() {
+  usagePending.value = true;
+  try { usage.value = await api.get<UsageResp>(`/api/voice/ai/usage?days=${usageDays.value}`); }
+  catch { /* */ }
+  finally { usagePending.value = false; }
 }
 async function createAgent() {
   if (!agentDraft.name.trim()) return;
@@ -184,7 +235,7 @@ async function remove(id: string) {
   catch (e: any) { toast.err(e.message); }
 }
 
-onMounted(() => { load(); loadAgents(); });
+onMounted(() => { load(); loadAgents(); loadUsage(); });
 </script>
 
 <style scoped>
@@ -205,8 +256,14 @@ onMounted(() => { load(); loadAgents(); });
 .expand-enter-active, .expand-leave-active { transition: opacity .18s; }
 .expand-enter-from, .expand-leave-to { opacity: 0; }
 
+.usage-totals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.usage-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface-2, rgba(255,255,255,0.03)); border-radius: 10px; }
+.usage-num { font-size: 22px; font-weight: 650; line-height: 1; }
+.usage-lbl { font-size: 12px; color: var(--text-muted, #8a8f98); }
+.tag-managed { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 5px; background: rgba(120,140,255,0.15); color: #9db0ff; vertical-align: middle; }
 @media (max-width: 820px) {
   .add-grid { grid-template-columns: 1fr; }
   .prov-guide { grid-template-columns: 1fr 1fr; }
+  .usage-totals { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
