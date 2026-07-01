@@ -141,6 +141,29 @@ async function main() {
             tenantId: route.tenantId,
             agentId,
             log: (m: string) => log(`  [ai ${chId}] ${m}`),
+            onTransfer: async (transferTo: string | null) => {
+              const target = transferTo || route.routeEscalateTo;
+              const username = target ? resolveEndpoint(target) : null;
+              if (!username) {
+                log(`  [ai ${chId}] escalation requested but no reachable target — hanging up`);
+                logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ended', direction: 'in' });
+                try { await channel.hangup(); } catch { /* gone */ }
+                return;
+              }
+              log(`  [ai ${chId}] escalating to human ${target} (${username})`);
+              try {
+                await bridgeToEndpoint({
+                  client, caller: channel, endpoint: `PJSIP/${username}`,
+                  callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 30,
+                  onStatus: (status, details) => {
+                    logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in', duration: details?.duration, user: username });
+                  }
+                });
+              } catch (err) {
+                log(`  [ai ${chId}] escalation bridge failed: ${(err as Error)?.message}`);
+                try { await channel.hangup(); } catch { /* gone */ }
+              }
+            },
             onEnd: (turns: number) => {
               log(`  [ai ${chId}] conversation ended after ${turns} turn(s)`);
               logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ended', direction: 'in' });
