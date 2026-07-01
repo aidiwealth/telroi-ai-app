@@ -1,0 +1,169 @@
+// server/utils/voice/ai-brain.ts
+// The LLM half of the AI voice agent. Two responsibilities:
+//   1. Resolve which LLM credentials to use for a turn — BYOK (the tenant's own
+//      key via ai_connections) or the Telroi-managed default (platform env key +
+//      a cheap model). BYOK carries zero LLM cost for us; managed is the
+//      low-cost fallback for clients who don't bring a key.
+//   2. Run a chat completion (system prompt + conversation history -> reply).
+import { and, eq } from 'drizzle-orm';
+import { useDb, schema } from '../db';
+import { decrypt } from '../crypto';
+import { useRuntimeConfig } from '#imports';
+
+export type LlmProvider = 'anthropic' | 'openai';
+
+export interface ResolvedLlm {
+  provider: LlmProvider;
+  apiKey: string;
+  model: string;
+  managed: boolean;
+}
+
+export interface ChatMessage { role: 'user' | 'assistant'; content: string; }
+
+function managedDefaults(): { provider: LlmProvider; model: string; apiKey: string } | null {
+  const c = useRuntimeConfig() as any;
+  const provider = (c.managedLlmProvider as LlmProvider) || 'anthropic';
+  if (provider === 'openai') {
+    const apiKey = (c.managedOpenaiKey as string) || (c.openaiApiKey as string) || '';
+    if (!apiKey) return null;
+    return { provider, model: (c.managedLlmModel as string) || 'gpt-4o-mini', apiKey };
+  }
+  const apiKey = (c.managedAnthropicKey as string) || (c.anthropicApiKey as string) || '';
+  if (!apiKey) return null;
+  return { provider: 'anthropic', model: (c.managedLlmModel as string) || 'claude-haiku-4-5-20251001', apiKey };
+}
+
+export async function resolveAgentLlm(tenantId: string, llmConnId: string | null): Promise<ResolvedLlm | null> {
+  if (llmConnId) {
+    const [conn] = await useDb().select().from(schema.aiConnections)
+      .where(and(eq(schema.aiConnections.id, llmConnId), eq(schema.aiConnections.tenantId, tenantId))).limit(1);
+    if (conn && (conn.provider === 'anthropic' || conn.provider === 'openai')) {
+      try {
+        const apiKey = decrypt(conn.apiKeyEnc);
+        const meta = (conn.meta || {}) as Record<string, any>;
+        const model = (meta.model as string) || defaultModelFor(conn.provider as LlmProvider);
+        return { provider: conn.provider as LlmProvider, apiKey, model, managed: false };
+      } catch { /* fall through to managed */ }
+    }
+  }
+  const m = managedDefaults();
+  if (m) return { provider: m.provider, apiKey: m.apiKey, model: m.model, managed: true };
+  return null;
+}
+
+function defaultModelFor(p: LlmProvider): string {
+  return p === 'openai' ? 'gpt-4o-mini' : 'claude-haiku-4-5-20251001';
+}
+
+export async function llmReply(llm: ResolvedLlm, systemPrompt: string, history: ChatMessage[]): Promise<string | null> {
+  const sys = systemPrompt || 'You are a helpful phone assistant. Keep replies short, natural, and spoken-friendly.';
+  try {
+    if (llm.provider === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': llm.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: llm.model, max_tokens: 300, system: sys, messages: history.map((m) => ({ role: m.role, content: m.content })) })
+      });
+      if (!res.ok) return null;
+      const d: any = await res.json();
+      const text = Array.isArray(d.content) ? d.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(' ') : '';
+      return (text || '').trim() || null;
+    }
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${llm.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: llm.model, max_tokens: 300, messages: [{ role: 'system', content: sys }, ...history.map((m) => ({ role: m.role, content: m.content }))] })
+    });
+    if (!res.ok) return null;
+    const d: any = await res.json();
+    return (d.choices?.[0]?.message?.content || '').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// ── STT / TTS for the turn loop ─────────────────────────────────────────────
+export interface ResolvedSpeech { provider: string; apiKey: string; managed: boolean; meta: Record<string, any>; }
+
+async function resolveConn(tenantId: string, connId: string | null, kinds: string[]): Promise<ResolvedSpeech | null> {
+  if (connId) {
+    const [conn] = await useDb().select().from(schema.aiConnections)
+      .where(and(eq(schema.aiConnections.id, connId), eq(schema.aiConnections.tenantId, tenantId))).limit(1);
+    if (conn && kinds.includes(conn.provider)) {
+      try { return { provider: conn.provider, apiKey: decrypt(conn.apiKeyEnc), managed: false, meta: (conn.meta || {}) as any }; }
+      catch { /* fall through */ }
+    }
+  }
+  return null;
+}
+
+export async function sttTranscribe(tenantId: string, sttConnId: string | null, audio: Buffer, contentType = 'audio/wav'): Promise<string> {
+  const conn = await resolveConn(tenantId, sttConnId, ['deepgram', 'openai']);
+  try {
+    if (conn?.provider === 'deepgram') {
+      const res = await fetch('https://api.deepgram.com/v1/listen?punctuate=true&model=nova-2', {
+        method: 'POST', headers: { Authorization: `Token ${conn.apiKey}`, 'Content-Type': contentType }, body: audio
+      });
+      if (!res.ok) return '';
+      const d: any = await res.json();
+      return d?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+    }
+    if (conn?.provider === 'openai') {
+      const form = new FormData();
+      form.append('file', new Blob([audio], { type: contentType }), 'turn.wav');
+      form.append('model', 'whisper-1');
+      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST', headers: { Authorization: `Bearer ${conn.apiKey}` }, body: form as any
+      });
+      if (!res.ok) return '';
+      const d: any = await res.json();
+      return d?.text || '';
+    }
+    const c = useRuntimeConfig() as any;
+    const base = c.telroiSpeechUrl as string;
+    if (base) {
+      const res = await fetch(`${base}/stt`, { method: 'POST', headers: { 'Content-Type': contentType }, body: audio });
+      if (res.ok) { const d: any = await res.json(); return d?.transcript || ''; }
+    }
+    return '';
+  } catch { return ''; }
+}
+
+export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string } = {}): Promise<{ audio: Buffer; contentType: string } | null> {
+  const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai']);
+  try {
+    if (conn?.provider === 'elevenlabs') {
+      const voiceId = opts.voice || (conn.meta.defaultVoice as string) || '21m00Tcm4TlvDq8ikWAM';
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_16000`, {
+        method: 'POST', headers: { 'xi-api-key': conn.apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, model_id: (conn.meta.model as string) || 'eleven_multilingual_v2' })
+      });
+      if (!res.ok) return null;
+      return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/l16; rate=16000' };
+    }
+    if (conn?.provider === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST', headers: { Authorization: `Bearer ${conn.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: (conn.meta.model as string) || 'tts-1', voice: opts.voice || 'alloy', input: text, response_format: 'wav' })
+      });
+      if (!res.ok) return null;
+      return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/wav' };
+    }
+    const c = useRuntimeConfig() as any;
+    const base = c.telroiSpeechUrl as string;
+    if (base) {
+      const res = await fetch(`${base}/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice: opts.voice }) });
+      if (res.ok) return { audio: Buffer.from(await res.arrayBuffer()), contentType: res.headers.get('content-type') || 'audio/wav' };
+    }
+    const mk = (c.managedOpenaiKey as string) || (c.openaiApiKey as string) || '';
+    if (mk) {
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST', headers: { Authorization: `Bearer ${mk}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'tts-1', voice: opts.voice || 'alloy', input: text, response_format: 'wav' })
+      });
+      if (res.ok) return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/wav' };
+    }
+    return null;
+  } catch { return null; }
+}

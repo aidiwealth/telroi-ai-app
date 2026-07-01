@@ -32,6 +32,17 @@ export default defineNuxtConfig({
     captchaProvider: process.env.CAPTCHA_PROVIDER || '',  // turnstile | recaptcha | ''
     captchaSecret: process.env.CAPTCHA_SECRET || '',
     telroiMockUrl: process.env.TELROI_MOCK_URL || '', // when set, client targets the local mock
+    // AI voice agent. Tenants normally bring their own keys (BYOK via
+    // ai_connections). These power the optional Telroi-managed default tier for
+    // clients who don't: a cheap model + (when stood up) the self-hosted speech
+    // engine, so our marginal cost stays low. All optional.
+    telroiSpeechUrl: process.env.TELROI_SPEECH_URL || '',
+    managedLlmProvider: process.env.MANAGED_LLM_PROVIDER || 'anthropic',
+    managedLlmModel: process.env.MANAGED_LLM_MODEL || '',
+    managedAnthropicKey: process.env.MANAGED_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || '',
+    managedOpenaiKey: process.env.MANAGED_OPENAI_KEY || process.env.OPENAI_API_KEY || '',
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+    openaiApiKey: process.env.OPENAI_API_KEY || '',
     paystackSecretKey: process.env.PAYSTACK_SECRET_KEY || '',
     stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
