@@ -5,16 +5,8 @@
       <p class="page-sub">What your voice agents have consumed. On your own keys you're billed directly by each provider — these figures are for your visibility. Managed-tier calls show the cost Telroi tracks.</p>
     </div>
 
-    <div class="usage-filter">
-      <select v-model.number="usageDays" class="select select-sm" @change="loadUsage">
-        <option :value="7">Last 7 days</option>
-        <option :value="30">Last 30 days</option>
-        <option :value="90">Last 90 days</option>
-      </select>
-    </div>
-
     <div v-if="usagePending" class="metric-grid">
-      <div v-for="i in 4" :key="i" class="metric-card skeleton" style="height:88px" />
+      <div v-for="i in 4" :key="i" class="metric-card skeleton" style="height:92px" />
     </div>
     <template v-else-if="usage && usage.byAgent.length">
       <div class="metric-grid">
@@ -25,13 +17,22 @@
         <div v-if="usage.total.costUsd > 0" class="metric-card metric-cost"><span class="metric-num">${{ usage.total.costUsd.toFixed(2) }}</span><span class="metric-lbl">Managed cost</span></div>
       </div>
 
-      <div class="card usage-table-card">
-        <h2 class="card-title">By agent</h2>
+      <div class="usage-filter">
+        <span class="filter-label">Showing</span>
+        <select v-model.number="usageDays" class="select filter-select" @change="loadUsage">
+          <option :value="7">Last 7 days</option>
+          <option :value="30">Last 30 days</option>
+          <option :value="90">Last 90 days</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2 class="card-title">By agent</h2></div>
         <table class="table">
           <thead><tr><th>Agent</th><th>Calls</th><th>STT min</th><th>LLM tokens</th><th>TTS chars</th><th v-if="usage.total.costUsd > 0">Cost</th></tr></thead>
           <tbody>
             <tr v-for="r in usage.byAgent" :key="r.agentId || 'unassigned'">
-              <td><span class="prov-name">{{ r.agentName }}</span><span v-if="r.managed" class="tag-managed">managed</span></td>
+              <td><span class="agent-name">{{ r.agentName }}</span><span v-if="r.managed" class="tag-managed">managed</span></td>
               <td>{{ r.calls }}</td>
               <td>{{ r.sttMinutes }}</td>
               <td>{{ fmtTok(r.llmInputTokens + r.llmOutputTokens) }}</td>
@@ -42,7 +43,7 @@
         </table>
       </div>
     </template>
-    <div v-else class="card">
+    <div v-else class="card card-pad">
       <EmptyState icon="ai" title="No usage yet" description="Once your agents start answering calls, consumption shows up here." />
     </div>
   </div>
@@ -71,16 +72,17 @@ onMounted(loadUsage);
 
 <style scoped>
 .usage-page { display: flex; flex-direction: column; }
-.usage-intro { margin-bottom: 20px; }
-.usage-intro .page-sub { margin-top: 6px; max-width: 640px; }
-.usage-filter { margin-bottom: 24px; }
-.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 28px; }
-.metric-card { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: var(--surface-1, rgba(255,255,255,0.04)); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 14px; }
-.metric-num { font-size: 28px; font-weight: 680; line-height: 1.1; }
-.metric-lbl { font-size: 13px; color: var(--text-muted, #8a8f98); }
-.metric-cost .metric-num { color: #ffb45a; }
-.usage-table-card { margin-top: 4px; }
-.usage-table-card .card-title { margin-bottom: 14px; }
-.tag-managed { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 5px; background: rgba(255,180,90,0.16); color: #ffb45a; vertical-align: middle; }
+.usage-intro { margin-bottom: 28px; }
+.usage-intro .page-sub { margin-top: 8px; max-width: 640px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.metric-card { display: flex; flex-direction: column; gap: 6px; padding: 20px 22px; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); }
+.metric-num { font-family: var(--font-display); font-size: 30px; letter-spacing: -0.02em; line-height: 1.05; }
+.metric-lbl { font-size: 13px; color: var(--ink-soft); }
+.metric-cost .metric-num { color: #d98a2b; }
+.usage-filter { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.filter-label { font-size: 13px; color: var(--ink-soft); }
+.filter-select { width: auto; min-width: 150px; padding: 8px 12px; font-size: 13.5px; }
+.agent-name { font-weight: 550; color: var(--ink); }
+.tag-managed { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 5px; background: rgba(217,138,43,0.14); color: #d98a2b; vertical-align: middle; }
 @media (max-width: 640px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
 </style>

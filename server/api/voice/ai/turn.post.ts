@@ -24,25 +24,25 @@ export default defineEventHandler(async (event) => {
 
   if (first) {
     const greeting = agent.greeting || 'Hello, thanks for calling. How can I help you today?';
-    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, greeting);
+    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, greeting, {}, agent.tier === 'managed');
     return { reply: greeting, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [{ role: 'assistant', content: greeting }], action: 'continue' };
   }
 
   let userText = '';
   if (body.audioBase64) {
     const audio = Buffer.from(body.audioBase64, 'base64');
-    userText = (await sttTranscribe(tenantId, agent.sttConnId, audio, body.audioContentType || 'audio/wav')).trim();
+    userText = (await sttTranscribe(tenantId, agent.sttConnId, audio, body.audioContentType || 'audio/wav', agent.tier === 'managed')).trim();
   }
 
   if (!userText) {
     const nudge = 'Sorry, I did not catch that. Could you say that again?';
-    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, nudge);
+    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, nudge, {}, agent.tier === 'managed');
     return { reply: nudge, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history, action: 'continue' };
   }
 
   const nextHistory: ChatMessage[] = [...history, { role: 'user', content: userText }];
 
-  const llm = await resolveAgentLlm(tenantId, agent.llmConnId);
+  const llm = await resolveAgentLlm(tenantId, agent.llmConnId, agent.tier === 'managed');
   if (!llm) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
 
   const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, agent.systemPrompt || '', nextHistory);
@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
   if (/\[transfer\]/i.test(reply)) { action = 'transfer'; clean = reply.replace(/\[transfer\]/ig, '').trim(); }
   else if (/\[end\]/i.test(reply)) { action = 'hangup'; clean = reply.replace(/\[end\]/ig, '').trim(); }
 
-  const tts = await ttsSynthesize(tenantId, agent.ttsConnId, clean);
+  const tts = await ttsSynthesize(tenantId, agent.ttsConnId, clean, {}, agent.tier === 'managed');
 
   const sttSeconds = body.audioBase64 ? Math.round(Buffer.from(body.audioBase64, 'base64').length / 16000) : 0;
   void recordAiUsage({

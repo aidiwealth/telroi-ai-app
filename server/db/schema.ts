@@ -11,6 +11,7 @@ export const tokenPurposeEnum = pgEnum('token_purpose', ['login']);
 export const vanStatusEnum = pgEnum('van_status', ['draft', 'live', 'paused']);
 export const currencyEnum = pgEnum('currency', ['NGN', 'USD']);
 export const ledgerKindEnum = pgEnum('ledger_kind', ['credit', 'debit']);
+export const aiTierEnum = pgEnum('ai_tier', ['byok', 'managed']);
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'succeeded', 'failed']);
 export const planEnum = pgEnum('plan', ['startup', 'growth', 'custom']);
 
@@ -324,6 +325,7 @@ export const aiAgents = pgTable('ai_agents', {
   llmConnId: uuid('llm_conn_id').references(() => aiConnections.id, { onDelete: 'set null' }),
   ttsConnId: uuid('tts_conn_id').references(() => aiConnections.id, { onDelete: 'set null' }),
   fallback: jsonb('fallback').$type<Record<string, unknown>>().default({}), // e.g. transfer-to-human
+  tier: aiTierEnum('tier').notNull().default('byok'), // byok = client keys; managed = Telroi keys (billed)
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
   tenantIdx: index('ai_agents_tenant_idx').on(t.tenantId)

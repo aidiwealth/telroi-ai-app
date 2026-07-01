@@ -34,7 +34,7 @@ function managedDefaults(): { provider: LlmProvider; model: string; apiKey: stri
   return { provider: 'anthropic', model: (c.managedLlmModel as string) || 'claude-haiku-4-5-20251001', apiKey };
 }
 
-export async function resolveAgentLlm(tenantId: string, llmConnId: string | null): Promise<ResolvedLlm | null> {
+export async function resolveAgentLlm(tenantId: string, llmConnId: string | null, allowManaged = false): Promise<ResolvedLlm | null> {
   if (llmConnId) {
     const [conn] = await useDb().select().from(schema.aiConnections)
       .where(and(eq(schema.aiConnections.id, llmConnId), eq(schema.aiConnections.tenantId, tenantId))).limit(1);
@@ -47,6 +47,7 @@ export async function resolveAgentLlm(tenantId: string, llmConnId: string | null
       } catch { /* fall through to managed */ }
     }
   }
+  if (!allowManaged) return null;
   const m = managedDefaults();
   if (m) return { provider: m.provider, apiKey: m.apiKey, model: m.model, managed: true };
   return null;
@@ -102,7 +103,7 @@ async function resolveConn(tenantId: string, connId: string | null, kinds: strin
   return null;
 }
 
-export async function sttTranscribe(tenantId: string, sttConnId: string | null, audio: Buffer, contentType = 'audio/wav'): Promise<string> {
+export async function sttTranscribe(tenantId: string, sttConnId: string | null, audio: Buffer, contentType = 'audio/wav', allowManaged = false): Promise<string> {
   const conn = await resolveConn(tenantId, sttConnId, ['deepgram', 'openai']);
   try {
     if (conn?.provider === 'deepgram') {
@@ -124,6 +125,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const d: any = await res.json();
       return d?.text || '';
     }
+    if (!allowManaged) return '';
     const c = useRuntimeConfig() as any;
     const base = c.telroiSpeechUrl as string;
     if (base) {
@@ -145,7 +147,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
   } catch { return ''; }
 }
 
-export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string } = {}): Promise<{ audio: Buffer; contentType: string } | null> {
+export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
   const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai']);
   try {
     if (conn?.provider === 'elevenlabs') {
@@ -165,6 +167,7 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
       if (!res.ok) return null;
       return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/wav' };
     }
+    if (!allowManaged) return null;
     const c = useRuntimeConfig() as any;
     const base = c.telroiSpeechUrl as string;
     if (base) {
@@ -260,7 +263,7 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
 // ── Tier visibility ─────────────────────────────────────────────────────────
 export interface AgentTier { llm: 'byok' | 'managed' | 'unavailable'; stt: 'byok' | 'managed' | 'unavailable'; tts: 'byok' | 'managed' | 'unavailable'; anyManaged: boolean; }
 
-export async function resolveAgentTier(tenantId: string, agent: { llmConnId: string | null; sttConnId: string | null; ttsConnId: string | null }): Promise<AgentTier> {
+export async function resolveAgentTier(tenantId: string, agent: { llmConnId: string | null; sttConnId: string | null; ttsConnId: string | null; tier?: string }): Promise<AgentTier> {
   const conns = await useDb().select().from(schema.aiConnections)
     .where(eq(schema.aiConnections.tenantId, tenantId));
   const okConn = (id: string | null, providers: string[]) =>
@@ -268,8 +271,11 @@ export async function resolveAgentTier(tenantId: string, agent: { llmConnId: str
   const c = useRuntimeConfig() as any;
   const hasManagedLlm = !!((c.managedAnthropicKey as string) || (c.managedOpenaiKey as string) || (c.anthropicApiKey as string) || (c.openaiApiKey as string));
   const hasManagedSpeech = !!((c.managedOpenaiKey as string) || (c.openaiApiKey as string) || (c.telroiSpeechUrl as string));
-  const role = (byok: boolean, managedAvail: boolean): 'byok' | 'managed' | 'unavailable' =>
-    byok ? 'byok' : (managedAvail ? 'managed' : 'unavailable');
+  const managed = agent.tier === 'managed';
+  const role = (byok: boolean, managedAvail: boolean): 'byok' | 'managed' | 'unavailable' => {
+    if (managed) return managedAvail ? 'managed' : 'unavailable';
+    return byok ? 'byok' : 'unavailable';
+  };
   const llm = role(okConn(agent.llmConnId, ['anthropic', 'openai']), hasManagedLlm);
   const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai']), hasManagedSpeech);
   const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai']), hasManagedSpeech);

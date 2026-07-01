@@ -68,6 +68,22 @@
 
       <Transition name="expand">
         <div v-if="showAgent" class="add-form">
+          <div class="tier-choice">
+            <label class="tier-opt" :class="{ 'tier-opt-active': agentDraft.tier === 'byok' }">
+              <input type="radio" value="byok" v-model="agentDraft.tier" />
+              <div>
+                <span class="tier-opt-title">Use my own keys</span>
+                <span class="tier-opt-sub">Runs on your connected providers. No Telroi charge — you're billed by each provider directly. Requires a connection set up above.</span>
+              </div>
+            </label>
+            <label class="tier-opt" :class="{ 'tier-opt-active': agentDraft.tier === 'managed' }">
+              <input type="radio" value="managed" v-model="agentDraft.tier" />
+              <div>
+                <span class="tier-opt-title">Managed by Telroi</span>
+                <span class="tier-opt-sub">Runs on Telroi's AI — no keys needed. Usage is billed to your wallet per use. Requires a funded wallet.</span>
+              </div>
+            </label>
+          </div>
           <div class="add-grid">
             <input v-model="agentDraft.name" class="input" placeholder="Agent name (e.g. Support agent)" @keyup.enter="createAgent" />
             <input v-model="agentDraft.greeting" class="input" placeholder="Greeting (optional)" @keyup.enter="createAgent" />
@@ -140,7 +156,7 @@ const agents = ref<Agent[]>([]);
 const agentsPending = ref(true);
 const showAgent = ref(false);
 const savingAgent = ref(false);
-const agentDraft = reactive({ name: '', greeting: '' });
+const agentDraft = reactive({ name: '', greeting: '', tier: 'byok' as 'byok' | 'managed' });
 
 async function loadAgents() {
   agentsPending.value = true;
@@ -153,8 +169,8 @@ async function createAgent() {
   if (!agentDraft.name.trim()) return;
   savingAgent.value = true;
   try {
-    await api.post(props.agentsBase, { name: agentDraft.name.trim(), greeting: agentDraft.greeting.trim() || undefined });
-    agentDraft.name = ''; agentDraft.greeting = ''; showAgent.value = false;
+    await api.post(props.agentsBase, { name: agentDraft.name.trim(), greeting: agentDraft.greeting.trim() || undefined, tier: agentDraft.tier });
+    agentDraft.name = ''; agentDraft.greeting = ''; agentDraft.tier = 'byok'; showAgent.value = false;
     toast.ok('Agent created');
     await loadAgents();
   } catch (e: any) { toast.err(e.message); }
@@ -228,6 +244,12 @@ onMounted(() => { load(); loadAgents(); });
   .prov-guide { grid-template-columns: 1fr 1fr; }
 }
 .tier-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.tier-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.tier-opt { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border, rgba(255,255,255,0.1)); border-radius: 12px; cursor: pointer; transition: border-color .15s, background .15s; }
+.tier-opt-active { border-color: #7d8cff; background: rgba(125,140,255,0.06); }
+.tier-opt input { margin-top: 3px; }
+.tier-opt-title { display: block; font-weight: 600; font-size: 14px; }
+.tier-opt-sub { display: block; font-size: 12px; color: var(--text-muted, #8a8f98); margin-top: 3px; line-height: 1.4; }
 .tier { font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 550; white-space: nowrap; }
 .tier-byok { background: rgba(80,200,140,0.14); color: #62d29a; }
 .tier-managed { background: rgba(255,180,90,0.16); color: #ffb45a; }
