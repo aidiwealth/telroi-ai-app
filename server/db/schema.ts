@@ -1084,3 +1084,22 @@ export const carriers = pgTable('carriers', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
+
+// Per-turn AI usage detail for voice agents. One row per completed turn.
+export const aiUsage = pgTable('ai_usage', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').references(() => aiAgents.id, { onDelete: 'set null' }),
+  callId: text('call_id'),
+  managed: boolean('managed').notNull().default(false),
+  sttSeconds: integer('stt_seconds').notNull().default(0),
+  llmInputTokens: integer('llm_input_tokens').notNull().default(0),
+  llmOutputTokens: integer('llm_output_tokens').notNull().default(0),
+  ttsChars: integer('tts_chars').notNull().default(0),
+  costMinorUsd: integer('cost_minor_usd').notNull().default(0),
+  meta: jsonb('meta').$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  tenantIdx: index('ai_usage_tenant_idx').on(t.tenantId),
+  callIdx: index('ai_usage_call_idx').on(t.callId)
+}));

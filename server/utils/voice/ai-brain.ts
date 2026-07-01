@@ -190,3 +190,58 @@ export async function resolveDefaultConnections(tenantId: string): Promise<Defau
     ttsConnId: pick(['elevenlabs', 'openai'])
   };
 }
+
+// ── Managed-tier cost model + usage recording ───────────────────────────────
+export interface TurnUsage { sttSeconds: number; llmInputTokens: number; llmOutputTokens: number; ttsChars: number; }
+
+export function managedCostMinorUsd(u: TurnUsage): number {
+  const c = useRuntimeConfig() as any;
+  const num = (v: any, def: number): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : def; };
+  const sttPerSec = num(c.costSttPerSec, 0.0001);
+  const llmInPerTok = num(c.costLlmInPerTok, 0.0000008);
+  const llmOutPerTok = num(c.costLlmOutPerTok, 0.000004);
+  const ttsPerChar = num(c.costTtsPerChar, 0.000015);
+  const usd = u.sttSeconds * sttPerSec + u.llmInputTokens * llmInPerTok + u.llmOutputTokens * llmOutPerTok + u.ttsChars * ttsPerChar;
+  return Math.max(0, Math.round(usd * 100));
+}
+
+export async function recordAiUsage(args: {
+  tenantId: string; agentId: string | null; callId: string | null; managed: boolean; usage: TurnUsage;
+}): Promise<void> {
+  try {
+    const cost = args.managed ? managedCostMinorUsd(args.usage) : 0;
+    await useDb().insert(schema.aiUsage).values({
+      tenantId: args.tenantId, agentId: args.agentId || undefined, callId: args.callId || undefined,
+      managed: args.managed, sttSeconds: Math.round(args.usage.sttSeconds),
+      llmInputTokens: args.usage.llmInputTokens, llmOutputTokens: args.usage.llmOutputTokens,
+      ttsChars: args.usage.ttsChars, costMinorUsd: cost
+    });
+  } catch { /* usage tracking must never break a call */ }
+}
+
+export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, history: ChatMessage[]): Promise<{ text: string | null; inputTokens: number; outputTokens: number }> {
+  const sys = systemPrompt || 'You are a helpful phone assistant. Keep replies short, natural, and spoken-friendly.';
+  try {
+    if (llm.provider === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': llm.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: llm.model, max_tokens: 300, system: sys, messages: history.map((m) => ({ role: m.role, content: m.content })) })
+      });
+      if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
+      const d: any = await res.json();
+      const text = Array.isArray(d.content) ? d.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(' ') : '';
+      return { text: (text || '').trim() || null, inputTokens: d.usage?.input_tokens || 0, outputTokens: d.usage?.output_tokens || 0 };
+    }
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${llm.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: llm.model, max_tokens: 300, messages: [{ role: 'system', content: sys }, ...history.map((m) => ({ role: m.role, content: m.content }))] })
+    });
+    if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
+    const d: any = await res.json();
+    return { text: (d.choices?.[0]?.message?.content || '').trim() || null, inputTokens: d.usage?.prompt_tokens || 0, outputTokens: d.usage?.completion_tokens || 0 };
+  } catch {
+    return { text: null, inputTokens: 0, outputTokens: 0 };
+  }
+}

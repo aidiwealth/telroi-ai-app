@@ -4,7 +4,7 @@
 // Auth: shared secret header (x-telroi-internal).
 import { eq, and } from 'drizzle-orm';
 import { useDb, schema } from '~/server/db';
-import { resolveAgentLlm, llmReply, sttTranscribe, ttsSynthesize, type ChatMessage } from '~/server/utils/voice/ai-brain';
+import { resolveAgentLlm, llmReplyWithUsage, sttTranscribe, ttsSynthesize, recordAiUsage, type ChatMessage } from '~/server/utils/voice/ai-brain';
 
 export default defineEventHandler(async (event) => {
   const cfg = useRuntimeConfig() as any;
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
   const llm = await resolveAgentLlm(tenantId, agent.llmConnId);
   if (!llm) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
 
-  const reply = await llmReply(llm, agent.systemPrompt || '', nextHistory);
+  const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, agent.systemPrompt || '', nextHistory);
   if (!reply) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
 
   let action: 'continue' | 'hangup' | 'transfer' = 'continue';
@@ -54,5 +54,12 @@ export default defineEventHandler(async (event) => {
   else if (/\[end\]/i.test(reply)) { action = 'hangup'; clean = reply.replace(/\[end\]/ig, '').trim(); }
 
   const tts = await ttsSynthesize(tenantId, agent.ttsConnId, clean);
+
+  const sttSeconds = body.audioBase64 ? Math.round(Buffer.from(body.audioBase64, 'base64').length / 16000) : 0;
+  void recordAiUsage({
+    tenantId, agentId, callId: body.callId || null,
+    managed: llm.managed || !agent.ttsConnId || !agent.sttConnId,
+    usage: { sttSeconds, llmInputTokens: inputTokens, llmOutputTokens: outputTokens, ttsChars: clean.length }
+  });
   return { reply: clean, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [...nextHistory, { role: 'assistant', content: clean }], action, transferTo: action === 'transfer' ? ((agent.fallback as any)?.transferTo || null) : undefined };
 });
