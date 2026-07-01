@@ -6,7 +6,7 @@
 //      low-cost fallback for clients who don't bring a key.
 //   2. Run a chat completion (system prompt + conversation history -> reply).
 import { and, eq } from 'drizzle-orm';
-import { useDb, schema } from '../db';
+import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 import { useRuntimeConfig } from '#imports';
 
