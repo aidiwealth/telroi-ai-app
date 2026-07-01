@@ -1,0 +1,58 @@
+// server/api/voice/ai/turn.post.ts
+// Internal endpoint called by the PBX control-app once per conversational turn.
+// Stateless: the control-app holds the running history and passes it each turn.
+// Auth: shared secret header (x-telroi-internal).
+import { eq, and } from 'drizzle-orm';
+import { useDb, schema } from '~/server/db';
+import { resolveAgentLlm, llmReply, sttTranscribe, ttsSynthesize, type ChatMessage } from '~/server/utils/voice/ai-brain';
+
+export default defineEventHandler(async (event) => {
+  const cfg = useRuntimeConfig() as any;
+  const secret = (cfg.internalSecret as string) || (cfg.provisionAgentSecret as string) || '';
+  const given = getHeader(event, 'x-telroi-internal') || '';
+  if (!secret || given !== secret) throw createError({ statusCode: 401, statusMessage: 'unauthorized' });
+
+  const body = await readBody(event).catch(() => ({} as any));
+  const { agentId, tenantId, first } = body || {};
+  if (!agentId || !tenantId) throw createError({ statusCode: 400, statusMessage: 'agentId and tenantId required' });
+
+  const [agent] = await useDb().select().from(schema.aiAgents)
+    .where(and(eq(schema.aiAgents.id, agentId), eq(schema.aiAgents.tenantId, tenantId))).limit(1);
+  if (!agent) throw createError({ statusCode: 404, statusMessage: 'agent not found' });
+
+  const history: ChatMessage[] = Array.isArray(body.history) ? body.history : [];
+
+  if (first) {
+    const greeting = agent.greeting || 'Hello, thanks for calling. How can I help you today?';
+    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, greeting);
+    return { reply: greeting, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [{ role: 'assistant', content: greeting }], action: 'continue' };
+  }
+
+  let userText = '';
+  if (body.audioBase64) {
+    const audio = Buffer.from(body.audioBase64, 'base64');
+    userText = (await sttTranscribe(tenantId, agent.sttConnId, audio, body.audioContentType || 'audio/wav')).trim();
+  }
+
+  if (!userText) {
+    const nudge = 'Sorry, I did not catch that. Could you say that again?';
+    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, nudge);
+    return { reply: nudge, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history, action: 'continue' };
+  }
+
+  const nextHistory: ChatMessage[] = [...history, { role: 'user', content: userText }];
+
+  const llm = await resolveAgentLlm(tenantId, agent.llmConnId);
+  if (!llm) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
+
+  const reply = await llmReply(llm, agent.systemPrompt || '', nextHistory);
+  if (!reply) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
+
+  let action: 'continue' | 'hangup' | 'transfer' = 'continue';
+  let clean = reply;
+  if (/\[transfer\]/i.test(reply)) { action = 'transfer'; clean = reply.replace(/\[transfer\]/ig, '').trim(); }
+  else if (/\[end\]/i.test(reply)) { action = 'hangup'; clean = reply.replace(/\[end\]/ig, '').trim(); }
+
+  const tts = await ttsSynthesize(tenantId, agent.ttsConnId, clean);
+  return { reply: clean, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [...nextHistory, { role: 'assistant', content: clean }], action, transferTo: action === 'transfer' ? ((agent.fallback as any)?.transferTo || null) : undefined };
+});

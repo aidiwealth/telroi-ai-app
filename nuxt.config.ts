@@ -20,6 +20,7 @@ export default defineNuxtConfig({
     encryptionKey: process.env.ENCRYPTION_KEY || '', // 32-byte base64
     provisionAgentUrl: process.env.PROVISION_AGENT_URL || '',
     provisionAgentSecret: process.env.PROVISION_AGENT_SECRET || '',
+    internalSecret: process.env.TELROI_INTERNAL_SECRET || process.env.PROVISION_AGENT_SECRET || '',
     emailProvider: process.env.EMAIL_PROVIDER || 'resend', // resend (default) | console | termii
     resendApiKey: process.env.RESEND_API_KEY || '',
     emailFrom: process.env.EMAIL_FROM || 'Telroi <hello@telroi.ai>',
