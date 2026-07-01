@@ -141,6 +141,7 @@ async function main() {
             tenantId: route.tenantId,
             agentId,
             callId: chId,
+            escalateAfterSec: route.routeEscalateAfter || 0,
             log: (m: string) => log(`  [ai ${chId}] ${m}`),
             onTransfer: async (transferTo: string | null) => {
               const target = transferTo || route.routeEscalateTo;

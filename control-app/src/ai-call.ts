@@ -120,6 +120,7 @@ export interface AiCallOptions {
   tenantId: string;
   agentId: string;
   callId?: string;
+  escalateAfterSec?: number; // >0 = auto-escalate to a human after this many seconds
   log: Logger;
   onTransfer?: (transferTo: string | null) => Promise<void>;
   onEnd?: (turns: number) => void;
@@ -138,8 +139,19 @@ async function finalizeCall(tenantId: string, callId: string | undefined): Promi
 
 export async function runAiCall(opts: AiCallOptions): Promise<void> {
   const { client, channel, tenantId, agentId, callId, log } = opts;
+  const escalateAfterSec = opts.escalateAfterSec && opts.escalateAfterSec > 0 ? opts.escalateAfterSec : 0;
+  const startedAt = Date.now();
   let history: ChatMessage[] = [];
   let turns = 0;
+
+  const timedEscalate = async (): Promise<boolean> => {
+    if (!escalateAfterSec) return false;
+    if ((Date.now() - startedAt) / 1000 < escalateAfterSec) return false;
+    log(`ai: auto-escalating after ${escalateAfterSec}s`);
+    await finalizeCall(tenantId, callId);
+    if (opts.onTransfer) { await opts.onTransfer(null); return true; }
+    return true;
+  };
 
   try { await channel.answer(); } catch { /* already up */ }
 
@@ -155,6 +167,7 @@ export async function runAiCall(opts: AiCallOptions): Promise<void> {
   channel.once('StasisEnd', () => { hungUp = true; });
 
   while (!hungUp && turns < MAX_TURNS) {
+    if (await timedEscalate()) return;
     turns++;
     const audioB64 = await recordTurn(channel, client, log);
     if (hungUp) break;
