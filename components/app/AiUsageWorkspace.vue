@@ -1,26 +1,32 @@
 <template>
-  <div class="stack">
-    <div class="page-head">
-      <div>
-        <h1 class="page-title">AI Usage</h1>
-        <p class="page-sub">What your voice agents have consumed. On your own keys you're billed directly by each provider — these figures are for your visibility. Managed-tier calls show the cost Telroi tracks.</p>
-      </div>
+  <div class="stack usage-page">
+    <div class="usage-intro">
+      <h1 class="page-title">AI Usage</h1>
+      <p class="page-sub">What your voice agents have consumed. On your own keys you're billed directly by each provider — these figures are for your visibility. Managed-tier calls show the cost Telroi tracks.</p>
+    </div>
+
+    <div class="usage-filter">
       <select v-model.number="usageDays" class="select select-sm" @change="loadUsage">
         <option :value="7">Last 7 days</option>
         <option :value="30">Last 30 days</option>
         <option :value="90">Last 90 days</option>
       </select>
     </div>
-    <div class="card">
-      <div v-if="usagePending" class="loading-pad"><div v-for="i in 3" :key="i" class="skeleton skel-row" /></div>
-      <template v-else-if="usage && usage.byAgent.length">
-        <div class="usage-totals">
-          <div class="usage-stat"><span class="usage-num">{{ usage.total.calls }}</span><span class="usage-lbl">Calls</span></div>
-          <div class="usage-stat"><span class="usage-num">{{ usage.total.sttMinutes }}</span><span class="usage-lbl">STT minutes</span></div>
-          <div class="usage-stat"><span class="usage-num">{{ fmtTok(usage.total.llmInputTokens + usage.total.llmOutputTokens) }}</span><span class="usage-lbl">LLM tokens</span></div>
-          <div class="usage-stat"><span class="usage-num">{{ fmtTok(usage.total.ttsChars) }}</span><span class="usage-lbl">TTS characters</span></div>
-          <div v-if="usage.total.costUsd > 0" class="usage-stat"><span class="usage-num">${{ usage.total.costUsd.toFixed(2) }}</span><span class="usage-lbl">Managed cost</span></div>
-        </div>
+
+    <div v-if="usagePending" class="metric-grid">
+      <div v-for="i in 4" :key="i" class="metric-card skeleton" style="height:88px" />
+    </div>
+    <template v-else-if="usage && usage.byAgent.length">
+      <div class="metric-grid">
+        <div class="metric-card"><span class="metric-num">{{ usage.total.calls }}</span><span class="metric-lbl">Calls</span></div>
+        <div class="metric-card"><span class="metric-num">{{ usage.total.sttMinutes }}</span><span class="metric-lbl">STT minutes</span></div>
+        <div class="metric-card"><span class="metric-num">{{ fmtTok(usage.total.llmInputTokens + usage.total.llmOutputTokens) }}</span><span class="metric-lbl">LLM tokens</span></div>
+        <div class="metric-card"><span class="metric-num">{{ fmtTok(usage.total.ttsChars) }}</span><span class="metric-lbl">TTS characters</span></div>
+        <div v-if="usage.total.costUsd > 0" class="metric-card metric-cost"><span class="metric-num">${{ usage.total.costUsd.toFixed(2) }}</span><span class="metric-lbl">Managed cost</span></div>
+      </div>
+
+      <div class="card usage-table-card">
+        <h2 class="card-title">By agent</h2>
         <table class="table">
           <thead><tr><th>Agent</th><th>Calls</th><th>STT min</th><th>LLM tokens</th><th>TTS chars</th><th v-if="usage.total.costUsd > 0">Cost</th></tr></thead>
           <tbody>
@@ -34,8 +40,10 @@
             </tr>
           </tbody>
         </table>
-      </template>
-      <EmptyState v-else icon="ai" title="No usage yet" description="Once your agents start answering calls, consumption shows up here." />
+      </div>
+    </template>
+    <div v-else class="card">
+      <EmptyState icon="ai" title="No usage yet" description="Once your agents start answering calls, consumption shows up here." />
     </div>
   </div>
 </template>
@@ -62,9 +70,17 @@ onMounted(loadUsage);
 </script>
 
 <style scoped>
-.usage-totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.usage-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface-2, rgba(255,255,255,0.03)); border-radius: 10px; }
-.usage-num { font-size: 22px; font-weight: 650; line-height: 1; }
-.usage-lbl { font-size: 12px; color: var(--text-muted, #8a8f98); }
-.tag-managed { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 5px; background: rgba(120,140,255,0.15); color: #9db0ff; vertical-align: middle; }
+.usage-page { display: flex; flex-direction: column; }
+.usage-intro { margin-bottom: 20px; }
+.usage-intro .page-sub { margin-top: 6px; max-width: 640px; }
+.usage-filter { margin-bottom: 24px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.metric-card { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; background: var(--surface-1, rgba(255,255,255,0.04)); border: 1px solid var(--border, rgba(255,255,255,0.08)); border-radius: 14px; }
+.metric-num { font-size: 28px; font-weight: 680; line-height: 1.1; }
+.metric-lbl { font-size: 13px; color: var(--text-muted, #8a8f98); }
+.metric-cost .metric-num { color: #ffb45a; }
+.usage-table-card { margin-top: 4px; }
+.usage-table-card .card-title { margin-bottom: 14px; }
+.tag-managed { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 6px; border-radius: 5px; background: rgba(255,180,90,0.16); color: #ffb45a; vertical-align: middle; }
+@media (max-width: 640px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } }
 </style>
