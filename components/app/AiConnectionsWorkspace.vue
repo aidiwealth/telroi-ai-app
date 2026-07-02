@@ -91,19 +91,19 @@
             <p class="wiz-lead">We've picked a sensible default for each from your connected accounts. Change any of them below — for example, use one provider for all three.</p>
             <div class="wiz-parts">
               <div class="wiz-part wiz-part-ears">
-                <svg class="wiz-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5a6 6 0 0 1 12 0c0 3-2.5 4-3.5 5.5-.7 1-.5 2.5-1.5 3.2a2.4 2.4 0 0 1-3.7-1.2"/><path d="M9 9a3 3 0 0 1 5.5-1.6"/></svg>
+                <svg class="wiz-ico" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5a6 6 0 0 1 12 0c0 3-2.5 4-3.5 5.5-.7 1-.5 2.5-1.5 3.2a2.4 2.4 0 0 1-3.7-1.2"/><path d="M9 9a3 3 0 0 1 5.5-1.6"/></svg>
                 <div class="wiz-part-role">Ears <span>(STT)</span></div>
                 <div class="wiz-part-what">Understands the caller</div>
                 <select v-model="roleChoice.stt" class="select wiz-part-sel"><option v-for="o in roleOptions('stt')" :key="o.id" :value="o.id">{{ o.label }}</option><option v-if="!roleOptions('stt').length" disabled value="">Not connected</option></select>
               </div>
               <div class="wiz-part wiz-part-brain">
-                <svg class="wiz-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5A2.5 2.5 0 0 0 7 6a2.5 2.5 0 0 0-1.5 4.5A2.5 2.5 0 0 0 7 15a2.5 2.5 0 0 0 2.5 2.5c.8 0 1.5-.4 2-.9V4.4c-.5-.6-1.2-.9-2-.9z"/><path d="M14.5 3.5A2.5 2.5 0 0 1 17 6a2.5 2.5 0 0 1 1.5 4.5A2.5 2.5 0 0 1 17 15a2.5 2.5 0 0 1-2.5 2.5c-.8 0-1.5-.4-2-.9V4.4c.5-.6 1.2-.9 2-.9z"/></svg>
+                <svg class="wiz-ico" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5A2.5 2.5 0 0 0 7 6a2.5 2.5 0 0 0-1.5 4.5A2.5 2.5 0 0 0 7 15a2.5 2.5 0 0 0 2.5 2.5c.8 0 1.5-.4 2-.9V4.4c-.5-.6-1.2-.9-2-.9z"/><path d="M14.5 3.5A2.5 2.5 0 0 1 17 6a2.5 2.5 0 0 1 1.5 4.5A2.5 2.5 0 0 1 17 15a2.5 2.5 0 0 1-2.5 2.5c-.8 0-1.5-.4-2-.9V4.4c.5-.6 1.2-.9 2-.9z"/></svg>
                 <div class="wiz-part-role">Brain <span>(LLM)</span></div>
                 <div class="wiz-part-what">Decides what to say</div>
                 <select v-model="roleChoice.llm" class="select wiz-part-sel"><option v-for="o in roleOptions('llm')" :key="o.id" :value="o.id">{{ o.label }}</option><option v-if="!roleOptions('llm').length" disabled value="">Not connected</option></select>
               </div>
               <div class="wiz-part wiz-part-voice">
-                <svg class="wiz-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="17.5" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>
+                <svg class="wiz-ico" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="17.5" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>
                 <div class="wiz-part-role">Voice <span>(TTS)</span></div>
                 <div class="wiz-part-what">Speaks the reply</div>
                 <select v-model="roleChoice.tts" class="select wiz-part-sel"><option v-for="o in roleOptions('tts')" :key="o.id" :value="o.id">{{ o.label }}</option><option v-if="!roleOptions('tts').length" disabled value="">Not connected</option></select>
