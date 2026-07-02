@@ -5,7 +5,7 @@ import { ensureSupportWorkspace } from '~/server/utils/support';
 import { useDb, schema } from '~/server/db';
 import { encrypt, last4 } from '~/server/utils/crypto';
 const Body = z.object({
-  provider: z.enum(['openai', 'anthropic', 'deepgram', 'elevenlabs', 'vapi', 'google']),
+  provider: z.enum(['openai', 'anthropic', 'deepgram', 'elevenlabs', 'google', 'grok']),
   apiKey: z.string().min(8), meta: z.record(z.any()).optional()
 });
 export default defineEventHandler(async (event) => {

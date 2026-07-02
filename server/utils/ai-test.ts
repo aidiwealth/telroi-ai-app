@@ -2,13 +2,17 @@
 // Minimal authenticated pings to validate a customer's own AI provider key.
 // These do the cheapest possible call that proves the key works.
 
-type Provider = 'openai' | 'anthropic' | 'deepgram' | 'elevenlabs' | 'vapi' | 'google';
+type Provider = 'openai' | 'anthropic' | 'deepgram' | 'elevenlabs' | 'google' | 'grok';
 
 export async function testAiKey(provider: Provider, apiKey: string, meta: Record<string, any> = {}): Promise<{ ok: boolean; detail?: string }> {
   try {
     switch (provider) {
       case 'openai': {
         const r = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${apiKey}` } });
+        return { ok: r.ok, detail: r.ok ? undefined : `HTTP ${r.status}` };
+      }
+      case 'grok': {
+        const r = await fetch('https://api.x.ai/v1/models', { headers: { Authorization: `Bearer ${apiKey}` } });
         return { ok: r.ok, detail: r.ok ? undefined : `HTTP ${r.status}` };
       }
       case 'anthropic': {
@@ -26,13 +30,9 @@ export async function testAiKey(provider: Provider, apiKey: string, meta: Record
         const r = await fetch('https://api.elevenlabs.io/v1/user', { headers: { 'xi-api-key': apiKey } });
         return { ok: r.ok, detail: r.ok ? undefined : `HTTP ${r.status}` };
       }
-      case 'vapi': {
-        const r = await fetch('https://api.vapi.ai/assistant', { headers: { Authorization: `Bearer ${apiKey}` } });
-        return { ok: r.ok, detail: r.ok ? undefined : `HTTP ${r.status}` };
-      }
       case 'google': {
         // Google Cloud key validation varies by service; do a lightweight check.
-        const r = await fetch(`https://speech.googleapis.com/v1/operations?key=${encodeURIComponent(apiKey)}`);
+        const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
         return { ok: r.ok, detail: r.ok ? undefined : `HTTP ${r.status}` };
       }
       default:

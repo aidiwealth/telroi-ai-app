@@ -136,12 +136,12 @@ function tierTitle(role: string, t?: string): string {
 }
 
 const providers = [
-  { id: 'openai', label: 'OpenAI', role: 'LLM · realtime · TTS' },
+  { id: 'openai', label: 'OpenAI', role: 'LLM · STT · TTS' },
   { id: 'anthropic', label: 'Anthropic (Claude)', role: 'LLM reasoning' },
+  { id: 'google', label: 'Google (Gemini)', role: 'LLM reasoning' },
+  { id: 'grok', label: 'Grok (xAI)', role: 'LLM reasoning' },
   { id: 'deepgram', label: 'Deepgram', role: 'Speech-to-text' },
-  { id: 'elevenlabs', label: 'ElevenLabs', role: 'Text-to-speech' },
-  { id: 'vapi', label: 'VAPI', role: 'Agent orchestration' },
-  { id: 'google', label: 'Google', role: 'STT · TTS' }
+  { id: 'elevenlabs', label: 'ElevenLabs', role: 'Text-to-speech' }
 ];
 
 const pending = ref(true);

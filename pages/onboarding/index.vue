@@ -326,7 +326,7 @@ const sectors = ['Financial services', 'E-commerce & retail', 'Healthcare', 'Tec
 const aiProviders = [
   { id: 'openai', label: 'OpenAI' }, { id: 'anthropic', label: 'Anthropic (Claude)' },
   { id: 'deepgram', label: 'Deepgram' }, { id: 'elevenlabs', label: 'ElevenLabs' },
-  { id: 'vapi', label: 'VAPI' }, { id: 'google', label: 'Google' }
+  { id: 'google', label: 'Google (Gemini)' }, { id: 'grok', label: 'Grok (xAI)' }
 ];
 const aiKeys = ref<Record<string, string>>({});
 

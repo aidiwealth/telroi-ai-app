@@ -10,7 +10,7 @@ import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 import { useRuntimeConfig } from '#imports';
 
-export type LlmProvider = 'anthropic' | 'openai';
+export type LlmProvider = 'anthropic' | 'openai' | 'google' | 'grok';
 
 export interface ResolvedLlm {
   provider: LlmProvider;
@@ -38,7 +38,7 @@ export async function resolveAgentLlm(tenantId: string, llmConnId: string | null
   if (llmConnId) {
     const [conn] = await useDb().select().from(schema.aiConnections)
       .where(and(eq(schema.aiConnections.id, llmConnId), eq(schema.aiConnections.tenantId, tenantId))).limit(1);
-    if (conn && (conn.provider === 'anthropic' || conn.provider === 'openai')) {
+    if (conn && (conn.provider === 'anthropic' || conn.provider === 'openai' || conn.provider === 'google' || conn.provider === 'grok')) {
       try {
         const apiKey = decrypt(conn.apiKeyEnc);
         const meta = (conn.meta || {}) as Record<string, any>;
@@ -54,34 +54,18 @@ export async function resolveAgentLlm(tenantId: string, llmConnId: string | null
 }
 
 function defaultModelFor(p: LlmProvider): string {
-  return p === 'openai' ? 'gpt-4o-mini' : 'claude-haiku-4-5-20251001';
+  switch (p) {
+    case 'openai': return 'gpt-4o-mini';
+    case 'google': return 'gemini-2.0-flash';
+    case 'grok': return 'grok-2-latest';
+    default: return 'claude-haiku-4-5-20251001';
+  }
 }
 
 export async function llmReply(llm: ResolvedLlm, systemPrompt: string, history: ChatMessage[]): Promise<string | null> {
-  const sys = systemPrompt || 'You are a helpful phone assistant. Keep replies short, natural, and spoken-friendly.';
-  try {
-    if (llm.provider === 'anthropic') {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': llm.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: llm.model, max_tokens: 300, system: sys, messages: history.map((m) => ({ role: m.role, content: m.content })) })
-      });
-      if (!res.ok) return null;
-      const d: any = await res.json();
-      const text = Array.isArray(d.content) ? d.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(' ') : '';
-      return (text || '').trim() || null;
-    }
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${llm.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: llm.model, max_tokens: 300, messages: [{ role: 'system', content: sys }, ...history.map((m) => ({ role: m.role, content: m.content }))] })
-    });
-    if (!res.ok) return null;
-    const d: any = await res.json();
-    return (d.choices?.[0]?.message?.content || '').trim() || null;
-  } catch {
-    return null;
-  }
+  // Thin wrapper so there is ONE LLM code path covering anthropic/openai/google/grok.
+  const r = await llmReplyWithUsage(llm, systemPrompt, history);
+  return r.text;
 }
 
 // ── STT / TTS for the turn loop ─────────────────────────────────────────────
@@ -199,7 +183,7 @@ export async function resolveDefaultConnections(tenantId: string): Promise<Defau
     return null;
   };
   return {
-    llmConnId: pick(['anthropic', 'openai']),
+    llmConnId: pick(['anthropic', 'openai', 'google', 'grok']),
     sttConnId: pick(['deepgram', 'openai']),
     ttsConnId: pick(['elevenlabs', 'openai'])
   };
@@ -247,7 +231,23 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
       const text = Array.isArray(d.content) ? d.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(' ') : '';
       return { text: (text || '').trim() || null, inputTokens: d.usage?.input_tokens || 0, outputTokens: d.usage?.output_tokens || 0 };
     }
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    if (llm.provider === 'google') {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${llm.model}:generateContent?key=${llm.apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: sys }] },
+          contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+          generationConfig: { maxOutputTokens: 300 }
+        })
+      });
+      if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
+      const d: any = await res.json();
+      const text = d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join(' ') || '';
+      return { text: (text || '').trim() || null, inputTokens: d.usageMetadata?.promptTokenCount || 0, outputTokens: d.usageMetadata?.candidatesTokenCount || 0 };
+    }
+    const chatBase = llm.provider === 'grok' ? 'https://api.x.ai/v1' : 'https://api.openai.com/v1';
+    const res = await fetch(`${chatBase}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${llm.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: llm.model, max_tokens: 300, messages: [{ role: 'system', content: sys }, ...history.map((m) => ({ role: m.role, content: m.content }))] })
@@ -276,7 +276,7 @@ export async function resolveAgentTier(tenantId: string, agent: { llmConnId: str
     if (managed) return managedAvail ? 'managed' : 'unavailable';
     return byok ? 'byok' : 'unavailable';
   };
-  const llm = role(okConn(agent.llmConnId, ['anthropic', 'openai']), hasManagedLlm);
+  const llm = role(okConn(agent.llmConnId, ['anthropic', 'openai', 'google', 'grok']), hasManagedLlm);
   const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai']), hasManagedSpeech);
   const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai']), hasManagedSpeech);
   return { llm, stt, tts, anyManaged: [llm, stt, tts].includes('managed') };
