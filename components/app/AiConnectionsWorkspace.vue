@@ -88,25 +88,25 @@
           <div v-else-if="wizardStep === 2" class="wiz-step">
             <div class="wiz-head"><span class="wiz-badge">Step 2 of 2</span><span class="wiz-sub">What powers your agent</span></div>
             <p class="wiz-title">Every AI agent has three parts</p>
-            <p class="wiz-lead">We've picked the best one for each from your connected accounts. You don't need to change anything.</p>
+            <p class="wiz-lead">We've picked a sensible default for each from your connected accounts. Change any of them below \u2014 for example, use one provider for all three.</p>
             <div class="wiz-parts">
               <div class="wiz-part wiz-part-ears">
                 <svg class="wiz-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5a6 6 0 0 1 12 0c0 3-2.5 4-3.5 5.5-.7 1-.5 2.5-1.5 3.2a2.4 2.4 0 0 1-3.7-1.2"/><path d="M9 9a3 3 0 0 1 5.5-1.6"/></svg>
                 <div class="wiz-part-role">Ears <span>(STT)</span></div>
                 <div class="wiz-part-what">Understands the caller</div>
-                <div class="wiz-part-prov" :class="{ 'wiz-part-missing': !roleProvider('stt') }">{{ roleProvider('stt')?.label || 'Not connected' }}</div>
+                <select v-model="roleChoice.stt" class="select wiz-part-sel"><option v-for="o in roleOptions('stt')" :key="o.id" :value="o.id">{{ o.label }}</option><option v-if="!roleOptions('stt').length" disabled value="">Not connected</option></select>
               </div>
               <div class="wiz-part wiz-part-brain">
                 <svg class="wiz-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3.5A2.5 2.5 0 0 0 7 6a2.5 2.5 0 0 0-1.5 4.5A2.5 2.5 0 0 0 7 15a2.5 2.5 0 0 0 2.5 2.5c.8 0 1.5-.4 2-.9V4.4c-.5-.6-1.2-.9-2-.9z"/><path d="M14.5 3.5A2.5 2.5 0 0 1 17 6a2.5 2.5 0 0 1 1.5 4.5A2.5 2.5 0 0 1 17 15a2.5 2.5 0 0 1-2.5 2.5c-.8 0-1.5-.4-2-.9V4.4c.5-.6 1.2-.9 2-.9z"/></svg>
                 <div class="wiz-part-role">Brain <span>(LLM)</span></div>
                 <div class="wiz-part-what">Decides what to say</div>
-                <div class="wiz-part-prov" :class="{ 'wiz-part-missing': !roleProvider('llm') }">{{ roleProvider('llm')?.label || 'Not connected' }}</div>
+                <select v-model="roleChoice.llm" class="select wiz-part-sel"><option v-for="o in roleOptions('llm')" :key="o.id" :value="o.id">{{ o.label }}</option><option v-if="!roleOptions('llm').length" disabled value="">Not connected</option></select>
               </div>
               <div class="wiz-part wiz-part-voice">
                 <svg class="wiz-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><line x1="12" y1="17.5" x2="12" y2="21"/><line x1="8.5" y1="21" x2="15.5" y2="21"/></svg>
                 <div class="wiz-part-role">Voice <span>(TTS)</span></div>
                 <div class="wiz-part-what">Speaks the reply</div>
-                <div class="wiz-part-prov" :class="{ 'wiz-part-missing': !roleProvider('tts') }">{{ roleProvider('tts')?.label || 'Not connected' }}</div>
+                <select v-model="roleChoice.tts" class="select wiz-part-sel"><option v-for="o in roleOptions('tts')" :key="o.id" :value="o.id">{{ o.label }}</option><option v-if="!roleOptions('tts').length" disabled value="">Not connected</option></select>
               </div>
             </div>
             <button class="wiz-adv-toggle" @click="showAdvanced = !showAdvanced">{{ showAdvanced ? '\u25be' : '\u25b8' }} Want a specific model?</button>
@@ -213,6 +213,15 @@ const agentDraft = reactive({ name: '', greeting: '', tier: 'byok' as 'byok' | '
 // Guided setup wizard. Step 1 = tier choice, step 2 = the three parts (BYOK only), then name.
 const wizardStep = ref(1);
 const showAdvanced = ref(false);
+// BYOK: which provider the client chose for each role. '' = use our auto-pick.
+const roleChoice = reactive({ stt: '', llm: '', tts: '' });
+// Map a role's chosen (or auto) provider to a concrete connection id to send.
+function roleConnId(role: 'stt' | 'llm' | 'tts'): string | undefined {
+  const provider = roleChoice[role] || roleProvider(role)?.id;
+  if (!provider) return undefined;
+  const conn = connections.value.find((x) => x.provider === provider && x.status === 'ok');
+  return conn?.id;
+}
 const ROLE_PREF = { stt: ['deepgram', 'openai', 'google'], llm: ['anthropic', 'openai', 'google', 'grok'], tts: ['elevenlabs', 'openai', 'google'] };
 function connectedOk(provider: string): boolean { return connections.value.some((c) => c.provider === provider && c.status === 'ok'); }
 function roleProvider(role: 'stt' | 'llm' | 'tts'): { id: string; label: string } | null {
@@ -222,9 +231,15 @@ function roleProvider(role: 'stt' | 'llm' | 'tts'): { id: string; label: string 
 function resetWizard() {
   wizardStep.value = 1; showAdvanced.value = false;
   agentDraft.name = ''; agentDraft.greeting = ''; agentDraft.tier = 'byok';
+  roleChoice.stt = ''; roleChoice.llm = ''; roleChoice.tts = '';
 }
 function chooseTier(t: 'byok' | 'managed') {
   agentDraft.tier = t;
+  if (t === 'byok') {
+    roleChoice.stt = roleProvider('stt')?.id || '';
+    roleChoice.llm = roleProvider('llm')?.id || '';
+    roleChoice.tts = roleProvider('tts')?.id || '';
+  }
   wizardStep.value = t === 'managed' ? 3 : 2;
 }
 
@@ -239,7 +254,14 @@ async function createAgent() {
   if (!agentDraft.name.trim()) return;
   savingAgent.value = true;
   try {
-    await api.post(props.agentsBase, { name: agentDraft.name.trim(), greeting: agentDraft.greeting.trim() || undefined, tier: agentDraft.tier });
+    const abody: any = { name: agentDraft.name.trim(), greeting: agentDraft.greeting.trim() || undefined, tier: agentDraft.tier };
+    if (agentDraft.tier === 'byok') {
+      const stt = roleConnId('stt'); const llm = roleConnId('llm'); const tts = roleConnId('tts');
+      if (stt) abody.sttConnId = stt;
+      if (llm) abody.llmConnId = llm;
+      if (tts) abody.ttsConnId = tts;
+    }
+    await api.post(props.agentsBase, abody);
     showAgent.value = false; resetWizard();
     toast.ok('Agent created');
     await loadAgents();
@@ -315,7 +337,7 @@ onMounted(() => { load(); loadAgents(); });
 .wiz-tier-desc { display: block; font-size: 13px; color: var(--text-muted, #8a8f98); line-height: 1.5; }
 .wiz-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .wiz-part { border-radius: 12px; padding: 14px; text-align: center; border: 1px solid var(--border, rgba(255,255,255,0.08)); }
-.wiz-ico { width: 26px; height: 26px; margin-bottom: 6px; }
+.wiz-ico { width: 40px; height: 40px; margin: 0 auto 8px; display: block; }
 .wiz-part-ears .wiz-ico { color: #1d9e75; }
 .wiz-part-brain .wiz-ico { color: #7d8cff; }
 .wiz-part-voice .wiz-ico { color: #e0a458; }
@@ -326,6 +348,7 @@ onMounted(() => { load(); loadAgents(); });
 .wiz-part-role span { font-weight: 400; font-size: 12px; color: var(--text-muted, #8a8f98); }
 .wiz-part-what { font-size: 12px; color: var(--text-muted, #8a8f98); margin: 3px 0 8px; }
 .wiz-part-prov { font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 20px; background: var(--paper-2, rgba(255,255,255,0.04)); display: inline-block; }
+.wiz-part-sel { width: 100%; font-size: 13px; text-align: center; text-align-last: center; }
 .wiz-part-missing { color: #e0a458; }
 .wiz-adv-toggle { background: none; border: none; color: #7d8cff; font-size: 13px; cursor: pointer; padding: 6px 0; }
 .wiz-adv { padding: 10px 0 4px; }
