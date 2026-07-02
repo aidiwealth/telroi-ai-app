@@ -41,7 +41,8 @@
       <table v-else-if="connections.length" class="table">
         <thead><tr><th>Provider</th><th>Key</th><th>Status</th><th>Last tested</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="c in connections" :key="c.id">
+          <template v-for="c in connections" :key="c.id">
+          <tr>
             <td><span class="prov-name">{{ label(c.provider) }}</span></td>
             <td class="mono">{{ c.keyMasked }}</td>
             <td>
@@ -56,7 +57,7 @@
               <button class="btn btn-danger btn-sm" @click="remove(c.id)">Remove</button>
             </td>
           </tr>
-          <tr v-if="editingConn === c.id" :key="c.id + '-edit'" class="edit-row">
+          <tr v-if="editingConn === c.id" class="edit-row">
             <td colspan="5">
               <div class="edit-form">
                 <label class="edit-fld"><span>Model (optional)</span><input v-model="connEdit.model" class="input mono" :placeholder="modelPlaceholder(c.provider)" /></label>
@@ -68,6 +69,7 @@
               </div>
             </td>
           </tr>
+          </template>
         </tbody>
       </table>
       <EmptyState v-else icon="ai" title="No AI connected" description="Add a provider key to power transcription, voice agents and call intelligence." />
@@ -151,7 +153,8 @@
       <table v-else-if="agents.length" class="table">
         <thead><tr><th>Agent</th><th>Running on</th><th>Greeting</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="a in agents" :key="a.id">
+          <template v-for="a in agents" :key="a.id">
+          <tr>
             <td><span class="prov-name">{{ a.name }}</span></td>
             <td>
               <div class="tier-badges">
@@ -164,7 +167,7 @@
             <td class="muted">{{ a.greeting || '—' }}</td>
             <td class="row-actions"><button class="btn btn-ghost btn-sm" @click="startEditAgent(a)">Edit</button><button class="btn btn-danger btn-sm" @click="removeAgent(a.id)">Remove</button></td>
           </tr>
-          <tr v-if="editingAgent === a.id" :key="a.id + '-edit'" class="edit-row">
+          <tr v-if="editingAgent === a.id" class="edit-row">
             <td colspan="4">
               <div class="edit-form">
                 <label class="edit-fld"><span>Agent name</span><input v-model="agentEdit.name" class="input" placeholder="Agent name" /></label>
@@ -176,6 +179,7 @@
               </div>
             </td>
           </tr>
+          </template>
         </tbody>
       </table>
       <EmptyState v-else icon="ai" title="No voice agents yet" description="Create an agent, then bind it to a Virtual AI Number to answer calls." />
