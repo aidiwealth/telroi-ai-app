@@ -5,7 +5,6 @@
         <h1 class="page-title">SIP Status</h1>
         <p class="page-sub">Live registration state of every client SIP endpoint across the platform. Use this to diagnose "my phone won't connect" reports — an offline endpoint means no device is currently registered.</p>
       </div>
-      <button class="btn btn-ghost btn-sm" :disabled="pending" @click="load">{{ pending ? 'Checking…' : 'Refresh' }}</button>
     </div>
     <div class="metric-grid" v-if="data">
       <div class="metric-card"><span class="metric-num">{{ data.summary.total }}</span><span class="metric-lbl">Registrable endpoints</span></div>
@@ -13,7 +12,10 @@
       <div class="metric-card"><span class="metric-num" style="color:#d9534f">{{ data.summary.offline }}</span><span class="metric-lbl">Offline</span></div>
     </div>
     <div class="card">
-      <div class="card-head"><span class="card-title">All endpoints</span></div>
+      <div class="card-head">
+        <span class="card-title">All endpoints</span>
+        <button class="btn btn-ghost btn-sm" :disabled="pending" @click="load">{{ pending ? 'Checking…' : 'Refresh' }}</button>
+      </div>
       <div v-if="pending" class="loading-pad"><div v-for="i in 4" :key="i" class="skeleton skel-row" /></div>
       <table v-else-if="data && data.endpoints.length" class="table">
         <thead><tr><th>Status</th><th>Client</th><th>Endpoint</th><th>Username</th><th>Type</th><th>Via</th></tr></thead>
