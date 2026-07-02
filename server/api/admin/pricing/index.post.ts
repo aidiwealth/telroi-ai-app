@@ -9,7 +9,12 @@ const Body = z.object({
   didMonthlyUsdMinor: z.number().int().positive().optional(),
   planStartupUsdMinor: z.number().int().positive().optional(),
   planGrowthUsdMinor: z.number().int().positive().optional(),
-  ngnPerUsd: z.number().int().positive().optional()
+  ngnPerUsd: z.number().int().positive().optional(),
+  aiSttPerSecNano: z.number().int().nonnegative().optional(),
+  aiLlmInPerTokNano: z.number().int().nonnegative().optional(),
+  aiLlmOutPerTokNano: z.number().int().nonnegative().optional(),
+  aiTtsPerCharNano: z.number().int().nonnegative().optional(),
+  aiMarkupPct: z.number().int().min(0).max(1000).optional()
 });
 export default defineEventHandler(async (event) => {
   const admin = await requireSuperAdmin(event);

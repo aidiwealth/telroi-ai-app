@@ -88,7 +88,7 @@ async function resolveConn(tenantId: string, connId: string | null, kinds: strin
 }
 
 export async function sttTranscribe(tenantId: string, sttConnId: string | null, audio: Buffer, contentType = 'audio/wav', allowManaged = false): Promise<string> {
-  const conn = await resolveConn(tenantId, sttConnId, ['deepgram', 'openai']);
+  const conn = await resolveConn(tenantId, sttConnId, ['deepgram', 'openai', 'google']);
   try {
     if (conn?.provider === 'deepgram') {
       const res = await fetch('https://api.deepgram.com/v1/listen?punctuate=true&model=nova-2', {
@@ -108,6 +108,19 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       if (!res.ok) return '';
       const d: any = await res.json();
       return d?.text || '';
+    }
+    if (conn?.provider === 'google') {
+      const rate = /rate=(\d+)/.exec(contentType)?.[1] || (/l16|pcm/i.test(contentType) ? '16000' : '8000');
+      const res = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${conn.apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config: { encoding: 'LINEAR16', sampleRateHertz: Number(rate), languageCode: (conn.meta.language as string) || 'en-US' },
+          audio: { content: audio.toString('base64') }
+        })
+      });
+      if (!res.ok) return '';
+      const d: any = await res.json();
+      return d?.results?.map((r: any) => r.alternatives?.[0]?.transcript || '').join(' ').trim() || '';
     }
     if (!allowManaged) return '';
     const c = useRuntimeConfig() as any;
@@ -132,7 +145,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
 }
 
 export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
-  const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai']);
+  const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai', 'google']);
   try {
     if (conn?.provider === 'elevenlabs') {
       const voiceId = opts.voice || (conn.meta.defaultVoice as string) || '21m00Tcm4TlvDq8ikWAM';
@@ -150,6 +163,18 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
       });
       if (!res.ok) return null;
       return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/wav' };
+    }
+    if (conn?.provider === 'google') {
+      const voice = opts.voice || (conn.meta.defaultVoice as string) || 'en-US-Neural2-C';
+      const lang = (conn.meta.language as string) || voice.split('-').slice(0, 2).join('-') || 'en-US';
+      const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${conn.apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: { text }, voice: { languageCode: lang, name: voice }, audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 16000 } })
+      });
+      if (!res.ok) { console.error(`[ai-brain] Google TTS failed ${res.status}`); return null; }
+      const d: any = await res.json();
+      if (!d?.audioContent) return null;
+      return { audio: Buffer.from(d.audioContent, 'base64'), contentType: 'audio/wav' };
     }
     if (!allowManaged) return null;
     const c = useRuntimeConfig() as any;
@@ -184,22 +209,34 @@ export async function resolveDefaultConnections(tenantId: string): Promise<Defau
   };
   return {
     llmConnId: pick(['anthropic', 'openai', 'google', 'grok']),
-    sttConnId: pick(['deepgram', 'openai']),
-    ttsConnId: pick(['elevenlabs', 'openai'])
+    sttConnId: pick(['deepgram', 'openai', 'google']),
+    ttsConnId: pick(['elevenlabs', 'openai', 'google'])
   };
 }
 
 // ── Managed-tier cost model + usage recording ───────────────────────────────
 export interface TurnUsage { sttSeconds: number; llmInputTokens: number; llmOutputTokens: number; ttsChars: number; }
 
-export function managedCostMinorUsd(u: TurnUsage): number {
+export async function managedCostMinorUsd(u: TurnUsage): Promise<number> {
   const c = useRuntimeConfig() as any;
   const num = (v: any, def: number): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : def; };
-  const sttPerSec = num(c.costSttPerSec, 0.0001);
-  const llmInPerTok = num(c.costLlmInPerTok, 0.0000008);
-  const llmOutPerTok = num(c.costLlmOutPerTok, 0.000004);
-  const ttsPerChar = num(c.costTtsPerChar, 0.000015);
-  const usd = u.sttSeconds * sttPerSec + u.llmInputTokens * llmInPerTok + u.llmOutputTokens * llmOutPerTok + u.ttsChars * ttsPerChar;
+  let sttPerSec = num(c.costSttPerSec, 0.0001);
+  let llmInPerTok = num(c.costLlmInPerTok, 0.0000008);
+  let llmOutPerTok = num(c.costLlmOutPerTok, 0.000004);
+  let ttsPerChar = num(c.costTtsPerChar, 0.000015);
+  let markupPct = 0;
+  try {
+    const [p] = await useDb().select().from(schema.pricing).where(eq(schema.pricing.id, 'singleton')).limit(1);
+    if (p) {
+      if (p.aiSttPerSecNano != null) sttPerSec = p.aiSttPerSecNano / 1e9;
+      if (p.aiLlmInPerTokNano != null) llmInPerTok = p.aiLlmInPerTokNano / 1e9;
+      if (p.aiLlmOutPerTokNano != null) llmOutPerTok = p.aiLlmOutPerTokNano / 1e9;
+      if (p.aiTtsPerCharNano != null) ttsPerChar = p.aiTtsPerCharNano / 1e9;
+      if (p.aiMarkupPct != null) markupPct = p.aiMarkupPct;
+    }
+  } catch { /* no pricing row -> env/defaults */ }
+  let usd = u.sttSeconds * sttPerSec + u.llmInputTokens * llmInPerTok + u.llmOutputTokens * llmOutPerTok + u.ttsChars * ttsPerChar;
+  if (markupPct > 0) usd = usd * (1 + markupPct / 100);
   return Math.max(0, Math.round(usd * 100));
 }
 
@@ -207,7 +244,7 @@ export async function recordAiUsage(args: {
   tenantId: string; agentId: string | null; callId: string | null; managed: boolean; usage: TurnUsage;
 }): Promise<void> {
   try {
-    const cost = args.managed ? managedCostMinorUsd(args.usage) : 0;
+    const cost = args.managed ? await managedCostMinorUsd(args.usage) : 0;
     await useDb().insert(schema.aiUsage).values({
       tenantId: args.tenantId, agentId: args.agentId || undefined, callId: args.callId || undefined,
       managed: args.managed, sttSeconds: Math.round(args.usage.sttSeconds),
@@ -277,7 +314,7 @@ export async function resolveAgentTier(tenantId: string, agent: { llmConnId: str
     return byok ? 'byok' : 'unavailable';
   };
   const llm = role(okConn(agent.llmConnId, ['anthropic', 'openai', 'google', 'grok']), hasManagedLlm);
-  const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai']), hasManagedSpeech);
-  const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai']), hasManagedSpeech);
+  const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai', 'google']), hasManagedSpeech);
+  const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai', 'google']), hasManagedSpeech);
   return { llm, stt, tts, anyManaged: [llm, stt, tts].includes('managed') };
 }

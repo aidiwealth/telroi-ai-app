@@ -31,6 +31,31 @@
       <span v-if="saved" class="ad-saved">✓ Saved</span>
     </div>
 
+    <h2 class="ad-title bops-title">Managed AI pricing</h2>
+    <p class="ad-sub">What managed-tier AI costs clients (BYOK agents run on the client's own keys and aren't billed here). LLM rates are per 1M tokens, TTS per 1M characters. A markup can be added on top of raw provider cost.</p>
+    <div v-if="!pending" class="ad-panel">
+      <div class="ad-rate-grid">
+        <div class="ad-field"><label>Speech-to-text ($/min)</label>
+          <input v-model.number="aiSttPerMin" type="number" step="0.0001" min="0" class="ad-input mono" />
+        </div>
+        <div class="ad-field"><label>LLM input ($/1M tokens)</label>
+          <input v-model.number="aiLlmInPerM" type="number" step="0.01" min="0" class="ad-input mono" />
+        </div>
+        <div class="ad-field"><label>LLM output ($/1M tokens)</label>
+          <input v-model.number="aiLlmOutPerM" type="number" step="0.01" min="0" class="ad-input mono" />
+        </div>
+        <div class="ad-field"><label>Text-to-speech ($/1M chars)</label>
+          <input v-model.number="aiTtsPerM" type="number" step="0.01" min="0" class="ad-input mono" />
+        </div>
+        <div class="ad-field"><label>Platform markup (%)</label>
+          <input v-model.number="aiMarkup" type="number" step="1" min="0" max="1000" class="ad-input mono" />
+          <span class="ad-hint">Added on top of the raw AI cost. 0 = pass-through.</span>
+        </div>
+      </div>
+      <button class="btn btn-signal" :disabled="savingAi" @click="saveAi">{{ savingAi ? 'Saving…' : 'Save AI pricing' }}</button>
+      <span v-if="savedAi" class="ad-saved">✓ Saved</span>
+    </div>
+
     <!-- Billing operations: live state of recurring billing + channels. -->
     <h2 class="ad-title bops-title">Billing operations</h2>
     <p class="ad-sub">Recurring monthly billing for numbers, channels and plans. This shows the live state and lets you run billing on demand — prices are set above.</p>
@@ -115,6 +140,11 @@ async function load() {
       startup.value = pricing.planStartupUsdMinor / 100;
       growth.value = pricing.planGrowthUsdMinor / 100;
       ngn.value = pricing.ngnPerUsd;
+      if (pricing.aiSttPerSecNano != null) aiSttPerMin.value = Math.round((pricing.aiSttPerSecNano / 1e9) * 60 * 1e6) / 1e6;
+      if (pricing.aiLlmInPerTokNano != null) aiLlmInPerM.value = Math.round((pricing.aiLlmInPerTokNano / 1000) * 100) / 100;
+      if (pricing.aiLlmOutPerTokNano != null) aiLlmOutPerM.value = Math.round((pricing.aiLlmOutPerTokNano / 1000) * 100) / 100;
+      if (pricing.aiTtsPerCharNano != null) aiTtsPerM.value = Math.round((pricing.aiTtsPerCharNano / 1000) * 100) / 100;
+      if (pricing.aiMarkupPct != null) aiMarkup.value = pricing.aiMarkupPct;
     }
   } catch { await navigateTo('/admin/login'); }
   finally { pending.value = false; }
@@ -133,6 +163,21 @@ async function save() {
     saved.value = true;
   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
   finally { saving.value = false; }
+}
+
+async function saveAi() {
+  savingAi.value = true; savedAi.value = false;
+  try {
+    await $fetch('/api/admin/pricing', { method: 'POST', body: {
+      aiSttPerSecNano: Math.round((aiSttPerMin.value / 60) * 1e9),
+      aiLlmInPerTokNano: Math.round(aiLlmInPerM.value * 1000),
+      aiLlmOutPerTokNano: Math.round(aiLlmOutPerM.value * 1000),
+      aiTtsPerCharNano: Math.round(aiTtsPerM.value * 1000),
+      aiMarkupPct: Math.round(aiMarkup.value)
+    } });
+    savedAi.value = true;
+  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  finally { savingAi.value = false; }
 }
 onMounted(load);
 </script>

@@ -6,7 +6,7 @@ import {
 
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'member']);export const platformRoleEnum = pgEnum('platform_role', ['superadmin', 'staff']);
 export const providerKindEnum = pgEnum('provider_kind', ['telroi', 'twilio', 'telnyx']);
-export const aiProviderEnum = pgEnum('ai_provider', ['openai', 'anthropic', 'deepgram', 'elevenlabs', 'vapi', 'google', 'grok']);
+export const aiProviderEnum = pgEnum('ai_provider', ['openai', 'anthropic', 'deepgram', 'elevenlabs', 'google', 'grok']);
 export const tokenPurposeEnum = pgEnum('token_purpose', ['login']);
 export const vanStatusEnum = pgEnum('van_status', ['draft', 'live', 'paused']);
 export const currencyEnum = pgEnum('currency', ['NGN', 'USD']);
@@ -825,6 +825,12 @@ export const pricing = pgTable('pricing', {
   planStartupUsdMinor: integer('plan_startup_usd_minor').notNull().default(1000),       // $10
   planGrowthUsdMinor: integer('plan_growth_usd_minor').notNull().default(1500),         // $15
   ngnPerUsd: integer('ngn_per_usd').notNull().default(1600),
+  // Managed-tier AI rates, stored as nano-USD (billionths of a dollar).
+  aiSttPerSecNano: integer('ai_stt_per_sec_nano').notNull().default(100000),
+  aiLlmInPerTokNano: integer('ai_llm_in_per_tok_nano').notNull().default(800),
+  aiLlmOutPerTokNano: integer('ai_llm_out_per_tok_nano').notNull().default(4000),
+  aiTtsPerCharNano: integer('ai_tts_per_char_nano').notNull().default(15000),
+  aiMarkupPct: integer('ai_markup_pct').notNull().default(0),
   meta: jsonb('meta').$type<Record<string, unknown>>().default({}),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
