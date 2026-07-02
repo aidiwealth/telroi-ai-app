@@ -252,3 +252,124 @@ export async function aiAgentPerformance(db: any, schema: any, tenantId: string,
   out.sort((a, b) => b.escalationPct - a.escalationPct); // worst first
   return out;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Optimize v2 — universal intelligence from call_events (all traffic: SIP, API,
+// direct, carrier, AI) plus ai_usage. call_events is populated on every real
+// call regardless of account Live state, so this works where the Telroi history
+// API is empty. Carrier audio metrics still layer in via twilio/telnyx above.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface RouteScore {
+  route: string; label: string; carrier: string; direction: string;
+  calls: number; answerRate: number; avgWaitSec: number | null; avgDurationSec: number | null;
+  avgRating: number | null; score: number; grade: 'A'|'B'|'C'|'D'|'F'; signals: string[];
+}
+export interface FraudAlert {
+  severity: 'high'|'medium'|'low'; kind: string; detail: string; route?: string; calls: number;
+}
+export interface OptimizeReport {
+  overview: {
+    totalCalls: number; answeredCalls: number; answerRate: number;
+    avgScore: number | null; routesAtRisk: number; totalRoutes: number;
+    aiCalls: number; aiResolvedPct: number; fraudAlerts: number; hasCarrierGrade: boolean;
+  };
+  routes: RouteScore[];
+  ai: { agents: any[]; consumption: any[]; totals: { calls: number; sttMinutes: number; llmTokens: number; ttsChars: number; costUsd: number }; };
+  fraud: FraudAlert[];
+  carrierNotes: string[];
+}
+
+const IRSF_PREFIXES = ['+2392','+88213','+88216','+88234','+88235','+247','+682','+675','+676','+677','+678','+679','+680','+685','+686','+687','+688','+689','+690','+691','+692','+371','+881','+882','+883'];
+
+export async function buildOptimizeReport(db: any, schema: any, tenantId: string, sinceDays: number): Promise<OptimizeReport> {
+  const { and, eq, gte, sql } = await import('drizzle-orm');
+  const since = new Date(Date.now() - sinceDays * 86400000);
+
+  const events = await db.select().from(schema.callEvents)
+    .where(and(eq(schema.callEvents.tenantId, tenantId), gte(schema.callEvents.startedAt, since)));
+
+  const groups = new Map<string, any[]>();
+  for (const e of events) {
+    const phone = e.phone || 'unknown';
+    const carrier = e.carrier || 'telroi';
+    const dir = e.direction || 'in';
+    const key = `${carrier}|${dir}|${phone}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(e);
+  }
+  const isAnswered = (e: any) => (e.duration || 0) > 0 && e.status !== 'failed' && e.status !== 'busy' && e.status !== 'no-answer';
+  const routes: RouteScore[] = [];
+  for (const [key, items] of groups) {
+    const [carrier, direction, phone] = key.split('|');
+    const answered = items.filter(isAnswered);
+    const rated = items.filter((e) => e.rating);
+    const answerRate = items.length ? Math.round((answered.length / items.length) * 100) : 0;
+    const avgWaitSec = answered.length ? Math.round(answered.reduce((s: number, e: any) => s + (e.wait || 0), 0) / answered.length) : null;
+    const avgDurationSec = answered.length ? Math.round(answered.reduce((s: number, e: any) => s + (e.duration || 0), 0) / answered.length) : null;
+    const avgRating = rated.length ? +(rated.reduce((s: number, e: any) => s + e.rating, 0) / rated.length).toFixed(1) : null;
+    const score = compositeScore({ answerRate, avgWaitSec, avgRating, packetLossPct: null, mos: null } as any);
+    const signals: string[] = [];
+    if (answerRate < 70) signals.push('Low answer rate');
+    if (avgWaitSec != null && avgWaitSec > 20) signals.push('High wait time');
+    if (avgRating != null && avgRating < 3) signals.push('Low rating');
+    routes.push({ route: key, label: phone, carrier, direction, calls: items.length, answerRate, avgWaitSec, avgDurationSec, avgRating, score, grade: grade(score), signals });
+  }
+  routes.sort((a, b) => a.score - b.score);
+
+  const fraud: FraudAlert[] = [];
+  const irsf = events.filter((e: any) => e.direction === 'out' && IRSF_PREFIXES.some((p) => (e.phone || '').startsWith(p)));
+  if (irsf.length) {
+    const byPhone = new Map<string, number>();
+    for (const e of irsf) byPhone.set(e.phone, (byPhone.get(e.phone) || 0) + 1);
+    for (const [phone, n] of byPhone) fraud.push({ severity: 'high', kind: 'IRSF risk', detail: `Outbound calls to high-risk premium destination ${phone}`, route: phone, calls: n });
+  }
+  const outByPhone = new Map<string, number>();
+  for (const e of events) if (e.direction === 'out' && e.phone) outByPhone.set(e.phone, (outByPhone.get(e.phone) || 0) + 1);
+  for (const [phone, n] of outByPhone) if (n >= 50) fraud.push({ severity: 'medium', kind: 'Traffic pumping', detail: `Unusually high outbound volume to ${phone} (${n} calls)`, route: phone, calls: n });
+  const shortOut = events.filter((e: any) => e.direction === 'out' && (e.duration || 0) > 0 && (e.duration || 0) < 6);
+  if (shortOut.length >= 30) fraud.push({ severity: 'medium', kind: 'Call velocity', detail: `${shortOut.length} very short outbound calls — possible automated dialing`, calls: shortOut.length });
+
+  const agents = await aiAgentPerformance(db, schema, tenantId, sinceDays);
+  const usageRows = await db.select({
+    agentId: schema.aiUsage.agentId,
+    calls: sql`count(distinct ${schema.aiUsage.callId})`,
+    sttSeconds: sql`coalesce(sum(${schema.aiUsage.sttSeconds}),0)`,
+    llmInputTokens: sql`coalesce(sum(${schema.aiUsage.llmInputTokens}),0)`,
+    llmOutputTokens: sql`coalesce(sum(${schema.aiUsage.llmOutputTokens}),0)`,
+    ttsChars: sql`coalesce(sum(${schema.aiUsage.ttsChars}),0)`,
+    costMinorUsd: sql`coalesce(sum(${schema.aiUsage.costMinorUsd}),0)`,
+    managed: sql`bool_or(${schema.aiUsage.managed})`
+  }).from(schema.aiUsage)
+    .where(and(eq(schema.aiUsage.tenantId, tenantId), gte(schema.aiUsage.createdAt, since)))
+    .groupBy(schema.aiUsage.agentId);
+  const agentRows = await db.select({ id: schema.aiAgents.id, name: schema.aiAgents.name }).from(schema.aiAgents).where(eq(schema.aiAgents.tenantId, tenantId));
+  const nameOf = new Map(agentRows.map((a: any) => [a.id, a.name]));
+  const consumption = usageRows.map((r: any) => ({
+    agentId: r.agentId,
+    agentName: r.agentId ? (nameOf.get(r.agentId) || 'Removed agent') : 'Unassigned',
+    calls: Number(r.calls),
+    sttMinutes: Math.round(Number(r.sttSeconds) / 6) / 10,
+    llmTokens: Number(r.llmInputTokens) + Number(r.llmOutputTokens),
+    ttsChars: Number(r.ttsChars), managed: !!r.managed, costUsd: Number(r.costMinorUsd) / 100
+  }));
+  const totals = consumption.reduce((a: any, r: any) => ({
+    calls: a.calls + r.calls, sttMinutes: Math.round((a.sttMinutes + r.sttMinutes) * 10) / 10,
+    llmTokens: a.llmTokens + r.llmTokens, ttsChars: a.ttsChars + r.ttsChars, costUsd: Math.round((a.costUsd + r.costUsd) * 100) / 100
+  }), { calls: 0, sttMinutes: 0, llmTokens: 0, ttsChars: 0, costUsd: 0 });
+
+  const answeredCalls = events.filter(isAnswered).length;
+  const avgScore = routes.length ? Math.round(routes.reduce((s, r) => s + r.score, 0) / routes.length) : null;
+  const aiCalls = agents.reduce((s: number, a: any) => s + a.calls, 0);
+  const aiResolved = agents.reduce((s: number, a: any) => s + (a.calls - a.escalated), 0);
+
+  return {
+    overview: {
+      totalCalls: events.length, answeredCalls,
+      answerRate: events.length ? Math.round((answeredCalls / events.length) * 100) : 0,
+      avgScore, routesAtRisk: routes.filter((r) => r.grade === 'D' || r.grade === 'F').length, totalRoutes: routes.length,
+      aiCalls, aiResolvedPct: aiCalls ? Math.round((aiResolved / aiCalls) * 100) : 0, fraudAlerts: fraud.length, hasCarrierGrade: false
+    },
+    routes, ai: { agents, consumption, totals }, fraud, carrierNotes: []
+  };
+}

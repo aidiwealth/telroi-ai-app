@@ -1,50 +1,45 @@
-// GET /api/optimize -> aggregated call-quality intelligence across every
-// provider this tenant uses (Telroi PBX + any connected carriers).
+// GET /api/optimize -> unified optimize report: route intelligence (from
+// call_events, all traffic), fraud/anomaly detection, and AI performance +
+// consumption (AI Usage merged here). Carrier audio metrics layer in when
+// Twilio/Telnyx are connected.
 import { eq } from 'drizzle-orm';
 import { requireTenant } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
-import { loadTenant } from '~/server/utils/tenant';
-import { TelroiClient } from '~/server/utils/telroi/client';
 import { decrypt } from '~/server/utils/crypto';
-import { telroiQuality, twilioQuality, telnyxQuality, aiAgentPerformance, type QualityResult } from '~/server/utils/optimize';
+import { buildOptimizeReport, twilioQuality, telnyxQuality } from '~/server/utils/optimize';
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   const period = (getQuery(event).period as string) || 'month';
-  const results: QualityResult[] = [];
-
-  // 1. Telroi PBX operational metrics from call history (simulated in sandbox).
-  try {
-    const { telroiFor } = await import('~/server/utils/tenant');
-    const client = await telroiFor(s.tenantId);
-    const calls = await client.historyJson({ period, limit: 500, processMissed: true });
-    results.push(telroiQuality(calls as any[]));
-  } catch (e: any) {
-    results.push({ provider: 'telroi', hasCarrierGrade: false, metrics: [], note: `Telroi history unavailable: ${e?.message || e}` });
-  }
-
-  // 2. Connected carriers — real carrier-grade metrics where available.
+  const sinceDays = period === 'week' ? 7 : period === 'quarter' ? 90 : 30;
   const db = useDb();
+
+  const report = await buildOptimizeReport(db, schema, s.tenantId, sinceDays);
+
   const providers = await db.select().from(schema.voiceProviders).where(eq(schema.voiceProviders.tenantId, s.tenantId));
+  const notes: string[] = [];
   for (const p of providers) {
     if (!p.credentialsEnc) continue;
-    const creds = JSON.parse(decrypt(p.credentialsEnc));
-    if (p.kind === 'twilio') results.push(await twilioQuality(creds));
-    else if (p.kind === 'telnyx') results.push(await telnyxQuality(creds));
+    try {
+      const creds = JSON.parse(decrypt(p.credentialsEnc));
+      const q = p.kind === 'twilio' ? await twilioQuality(creds) : p.kind === 'telnyx' ? await telnyxQuality(creds) : null;
+      if (q) {
+        report.overview.hasCarrierGrade = report.overview.hasCarrierGrade || q.hasCarrierGrade;
+        if (q.note) notes.push(`${p.kind}: ${q.note}`);
+        for (const m of q.metrics) {
+          report.routes.push({
+            route: `carrier:${p.kind}:${m.scope}`, label: m.label, carrier: p.kind, direction: 'in',
+            calls: m.calls, answerRate: m.answerRate ?? 0, avgWaitSec: m.avgWaitSec, avgDurationSec: m.avgDurationSec,
+            avgRating: m.avgRating, score: m.score, grade: m.grade, signals: m.signals
+          });
+        }
+      }
+    } catch (e: any) { notes.push(`${p.kind}: metrics unavailable`); }
   }
+  report.carrierNotes = notes;
+  report.routes.sort((a, b) => a.score - b.score);
+  report.overview.totalRoutes = report.routes.length;
+  report.overview.routesAtRisk = report.routes.filter((r) => r.grade === 'D' || r.grade === 'F').length;
 
-  // Estate-level summary.
-  const allMetrics = results.flatMap((r) => r.metrics);
-  const avgScore = allMetrics.length ? Math.round(allMetrics.reduce((s, m) => s + m.score, 0) / allMetrics.length) : null;
-  const atRisk = allMetrics.filter((m) => m.grade === 'D' || m.grade === 'F').length;
-
-  // AI agent performance (cheap DB aggregation; no external calls).
-  const sinceDays = period === 'week' ? 7 : 30;
-  const aiAgents = await aiAgentPerformance(db, schema, s.tenantId, sinceDays);
-
-  return {
-    summary: { avgScore, totalRoutes: allMetrics.length, atRisk, hasCarrierGrade: results.some((r) => r.hasCarrierGrade) },
-    results,
-    aiAgents
-  };
+  return { period, ...report };
 });
