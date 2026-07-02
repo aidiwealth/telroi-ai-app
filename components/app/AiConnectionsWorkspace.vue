@@ -88,7 +88,7 @@
           <div v-else-if="wizardStep === 2" class="wiz-step">
             <div class="wiz-head"><span class="wiz-badge">Step 2 of 2</span><span class="wiz-sub">What powers your agent</span></div>
             <p class="wiz-title">Every AI agent has three parts</p>
-            <p class="wiz-lead">We've picked a sensible default for each from your connected accounts. Change any of them below \u2014 for example, use one provider for all three.</p>
+            <p class="wiz-lead">We've picked a sensible default for each from your connected accounts. Change any of them below — for example, use one provider for all three.</p>
             <div class="wiz-parts">
               <div class="wiz-part wiz-part-ears">
                 <svg class="wiz-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8.5a6 6 0 0 1 12 0c0 3-2.5 4-3.5 5.5-.7 1-.5 2.5-1.5 3.2a2.4 2.4 0 0 1-3.7-1.2"/><path d="M9 9a3 3 0 0 1 5.5-1.6"/></svg>
@@ -109,8 +109,8 @@
                 <select v-model="roleChoice.tts" class="select wiz-part-sel"><option v-for="o in roleOptions('tts')" :key="o.id" :value="o.id">{{ o.label }}</option><option v-if="!roleOptions('tts').length" disabled value="">Not connected</option></select>
               </div>
             </div>
-            <button class="wiz-adv-toggle" @click="showAdvanced = !showAdvanced">{{ showAdvanced ? '\u25be' : '\u25b8' }} Want a specific model?</button>
-            <div v-if="showAdvanced" class="wiz-adv"><p class="wiz-adv-hint">Each part uses your provider's recommended model by default. To pin a specific model, set it on the provider under Connections above \u2014 every agent using that provider will use it. Pinning a model also protects your agent if a provider retires its default.</p></div>
+            <button class="wiz-adv-toggle" @click="showAdvanced = !showAdvanced">{{ showAdvanced ? '▾' : '▸' }} Want a specific model?</button>
+            <div v-if="showAdvanced" class="wiz-adv"><p class="wiz-adv-hint">Each part uses your provider's recommended model by default. To pin a specific model, set it on the provider under Connections above — every agent using that provider will use it. Pinning a model also protects your agent if a provider retires its default.</p></div>
             <div class="wiz-nav">
               <button class="btn btn-ghost btn-sm" @click="wizardStep = 1">Back</button>
               <button class="btn btn-signal btn-sm" @click="wizardStep = 3">Continue</button>
@@ -120,14 +120,14 @@
           <div v-else class="wiz-step">
             <div class="wiz-head"><span class="wiz-badge">{{ agentDraft.tier === 'managed' ? 'Step 2 of 2' : 'Last step' }}</span><span class="wiz-sub">Name your agent</span></div>
             <p class="wiz-title">Give your agent a name</p>
-            <p class="wiz-lead"><template v-if="agentDraft.tier === 'managed'">Runs on Telroi's AI \u2014 billed per use from your wallet. No setup needed.</template><template v-else>Runs on your connected accounts \u2014 billed by each provider directly.</template></p>
+            <p class="wiz-lead"><template v-if="agentDraft.tier === 'managed'">Runs on Telroi's AI — billed per use from your wallet. No setup needed.</template><template v-else>Runs on your connected accounts — billed by each provider directly.</template></p>
             <div class="add-grid">
               <input v-model="agentDraft.name" class="input" placeholder="Agent name (e.g. Support agent)" @keyup.enter="createAgent" />
               <input v-model="agentDraft.greeting" class="input" placeholder="Greeting (optional)" @keyup.enter="createAgent" />
             </div>
             <div class="wiz-nav">
               <button class="btn btn-ghost btn-sm" @click="wizardStep = agentDraft.tier === 'managed' ? 1 : 2">Back</button>
-              <button class="btn btn-dark btn-sm" :disabled="savingAgent || !agentDraft.name.trim()" @click="createAgent">{{ savingAgent ? 'Creating\u2026' : 'Create agent' }}</button>
+              <button class="btn btn-dark btn-sm" :disabled="savingAgent || !agentDraft.name.trim()" @click="createAgent">{{ savingAgent ? 'Creating…' : 'Create agent' }}</button>
             </div>
           </div>
         </div>
