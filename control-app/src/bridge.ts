@@ -13,9 +13,61 @@
 // registered endpoint; for now we bridge to a known endpoint (test1) to prove it.
 
 import type Ari from 'ari-client';
+import { promises as fs } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { randomUUID } from 'node:crypto';
+
+const pexec = promisify(execFile);
+const WHISPER_TMP = '/var/lib/asterisk/sounds/telroi-whisper';
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
+const INTERNAL_SECRET = process.env.INTERNAL_SECRET || process.env.PROVISION_AGENT_SECRET || '';
 
 function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[bridge]', ...args);
+}
+
+async function prepWhisper(text: string, tenantId?: string, agentId?: string): Promise<string | null> {
+  if (!text || !tenantId || !INTERNAL_SECRET) return null;
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/voice/ai/whisper-tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
+      body: JSON.stringify({ tenantId, agentId, text }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!res.ok) return null;
+    const j: any = await res.json();
+    if (!j?.audioBase64) return null;
+    await fs.mkdir(WHISPER_TMP, { recursive: true });
+    const id = randomUUID();
+    const raw = `${WHISPER_TMP}/${id}-raw`;
+    const out = `${WHISPER_TMP}/${id}`;
+    const buf = Buffer.from(j.audioBase64, 'base64');
+    const ct = String(j.audioContentType || '');
+    if (/l16|pcm/i.test(ct)) {
+      const rate = /rate=(\d+)/.exec(ct)?.[1] || '16000';
+      await fs.writeFile(`${raw}.raw`, buf);
+      await pexec('sox', ['-t', 'raw', '-r', rate, '-e', 'signed', '-b', '16', '-c', '1', `${raw}.raw`, '-r', '8000', '-c', '1', `${out}.wav`]);
+    } else {
+      await fs.writeFile(`${raw}.in`, buf);
+      await pexec('sox', [`${raw}.in`, '-r', '8000', '-c', '1', `${out}.wav`]);
+    }
+    return `sound:${out}`;
+  } catch { return null; }
+}
+
+async function playToChannel(client: Ari.Client, channel: Ari.Channel, media: string): Promise<void> {
+  try {
+    const playback = client.Playback();
+    await channel.play({ media }, playback);
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      playback.once('PlaybackFinished', finish);
+      setTimeout(finish, 12000);
+    });
+  } catch { /* best-effort */ }
 }
 
 export interface BridgeOptions {
@@ -24,6 +76,9 @@ export interface BridgeOptions {
   endpoint: string;         // e.g. "PJSIP/test1"
   callerIdNum?: string;     // caller id to present to the callee
   ringTimeoutSec?: number;  // how long to ring the target before giving up
+  whisperText?: string;       // spoken to the callee (human) before joining
+  whisperTenantId?: string;
+  whisperAgentId?: string;
   // Reports real call lifecycle so the caller can log it: 'answered' when the
   // callee picks up, then a terminal status ('ended' | 'no-answer' | 'failed').
   onStatus?: (status: 'answered' | 'ended' | 'no-answer' | 'failed', details?: { duration?: number }) => void;
@@ -86,6 +141,11 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
     log(`callee ${ch.id} answered -> adding to bridge ${bridge.id}`);
     try {
       await ch.answer();
+      if (opts.whisperText) {
+        const media = await prepWhisper(opts.whisperText, opts.whisperTenantId, opts.whisperAgentId);
+        if (media && !cleanedUp) { log(`whispering to callee ${ch.id}`); await playToChannel(client, ch, media); }
+      }
+      if (cleanedUp) return;
       await bridge.addChannel({ channel: ch.id });
       wasAnswered = true;
       answeredAt = Date.now();

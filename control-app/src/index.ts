@@ -153,10 +153,12 @@ async function main() {
                 return;
               }
               log(`  [ai ${chId}] escalating to human ${target} (${username})`);
+              const whisperText = `A I transfer. Caller ${callerNum ? 'from ' + callerNum.split('').join(' ') : 'unknown number'}. Connecting you now.`;
               try {
                 await bridgeToEndpoint({
                   client, caller: channel, endpoint: `PJSIP/${username}`,
                   callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 30,
+                  whisperText, whisperTenantId: route.tenantId, whisperAgentId: route.routeAgentId || undefined,
                   onStatus: (status, details) => {
                     logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in', duration: details?.duration, user: username });
                   }
