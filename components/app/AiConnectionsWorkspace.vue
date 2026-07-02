@@ -52,7 +52,20 @@
             <td class="muted">{{ c.lastTestedAt ? fmtTime(c.lastTestedAt) : '—' }}</td>
             <td class="row-actions">
               <button class="btn btn-ghost btn-sm" :disabled="testing === c.id" @click="test(c.id)">{{ testing === c.id ? 'Testing…' : 'Test' }}</button>
+              <button class="btn btn-ghost btn-sm" @click="startEditConn(c)">Edit</button>
               <button class="btn btn-danger btn-sm" @click="remove(c.id)">Remove</button>
+            </td>
+          </tr>
+          <tr v-if="editingConn === c.id" :key="c.id + '-edit'" class="edit-row">
+            <td colspan="5">
+              <div class="edit-form">
+                <label class="edit-fld"><span>Model (optional)</span><input v-model="connEdit.model" class="input mono" :placeholder="modelPlaceholder(c.provider)" /></label>
+                <label class="edit-fld"><span>Replace key (optional)</span><input v-model="connEdit.apiKey" class="input mono" type="password" placeholder="Leave blank to keep current key" /></label>
+                <div class="edit-actions">
+                  <button class="btn btn-ghost btn-sm" @click="editingConn = null">Cancel</button>
+                  <button class="btn btn-dark btn-sm" :disabled="savingConnEdit" @click="saveConnEdit(c.id)">{{ savingConnEdit ? 'Saving…' : 'Save changes' }}</button>
+                </div>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -149,7 +162,19 @@
               <span v-if="a.tier?.anyManaged" class="tier-note">Managed = billed via Telroi. Add your own key under Connections to switch to your account.</span>
             </td>
             <td class="muted">{{ a.greeting || '—' }}</td>
-            <td class="row-actions"><button class="btn btn-danger btn-sm" @click="removeAgent(a.id)">Remove</button></td>
+            <td class="row-actions"><button class="btn btn-ghost btn-sm" @click="startEditAgent(a)">Edit</button><button class="btn btn-danger btn-sm" @click="removeAgent(a.id)">Remove</button></td>
+          </tr>
+          <tr v-if="editingAgent === a.id" :key="a.id + '-edit'" class="edit-row">
+            <td colspan="4">
+              <div class="edit-form">
+                <label class="edit-fld"><span>Agent name</span><input v-model="agentEdit.name" class="input" placeholder="Agent name" /></label>
+                <label class="edit-fld"><span>Greeting</span><input v-model="agentEdit.greeting" class="input" placeholder="Greeting (optional)" /></label>
+                <div class="edit-actions">
+                  <button class="btn btn-ghost btn-sm" @click="editingAgent = null">Cancel</button>
+                  <button class="btn btn-dark btn-sm" :disabled="savingAgentEdit || !agentEdit.name.trim()" @click="saveAgentEdit(a.id)">{{ savingAgentEdit ? 'Saving…' : 'Save changes' }}</button>
+                </div>
+              </div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -301,6 +326,35 @@ async function add() {
   finally { adding.value = false; }
 }
 
+const editingConn = ref<string | null>(null);
+const connEdit = reactive({ model: '', apiKey: '' });
+const savingConnEdit = ref(false);
+function startEditConn(c: Conn) { editingConn.value = c.id; connEdit.model = (c.meta as any)?.model || ''; connEdit.apiKey = ''; }
+async function saveConnEdit(id: string) {
+  savingConnEdit.value = true;
+  try {
+    const body: any = { model: connEdit.model.trim() };
+    if (connEdit.apiKey.trim()) body.apiKey = connEdit.apiKey.trim();
+    await api.put(`${props.apiBase}/${id}`, body);
+    editingConn.value = null; toast.ok('Connection updated'); await load();
+  } catch (e: any) { toast.err(e.message); }
+  finally { savingConnEdit.value = false; }
+}
+
+const editingAgent = ref<string | null>(null);
+const agentEdit = reactive({ name: '', greeting: '' });
+const savingAgentEdit = ref(false);
+function startEditAgent(a: Agent) { editingAgent.value = a.id; agentEdit.name = a.name; agentEdit.greeting = a.greeting || ''; }
+async function saveAgentEdit(id: string) {
+  if (!agentEdit.name.trim()) return;
+  savingAgentEdit.value = true;
+  try {
+    await api.put(`${props.agentsBase}/${id}`, { name: agentEdit.name.trim(), greeting: agentEdit.greeting.trim() || null });
+    editingAgent.value = null; toast.ok('Agent updated'); await loadAgents();
+  } catch (e: any) { toast.err(e.message); }
+  finally { savingAgentEdit.value = false; }
+}
+
 async function test(id: string) {
   testing.value = id;
   try {
@@ -360,6 +414,11 @@ onMounted(() => { load(); loadAgents(); });
 .wiz-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; }
 .prov-name { font-weight: 500; }
 .row-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.edit-row td { background: var(--paper-2, rgba(255,255,255,0.03)); padding: 14px 16px; }
+.edit-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.edit-fld { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 200px; }
+.edit-fld span { font-size: 12px; color: var(--text-muted, #8a8f98); }
+.edit-actions { display: flex; gap: 8px; }
 .loading-pad { padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; }
 .skel-row { height: 20px; }
 
