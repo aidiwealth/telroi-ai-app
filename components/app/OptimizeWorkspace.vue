@@ -73,6 +73,34 @@
         description="Once calls start flowing through Telroi, route scoring will appear here." /></div>
     </div>
 
+      <!-- AI agent performance — how well each AI agent handles calls (resolved vs escalated). -->
+      <div v-if="aiAgents.length" class="card op-provider">
+        <div class="card-head">
+          <span class="card-title">AI agent performance</span>
+          <span class="chip">{{ aiAgents.length }} agent{{ aiAgents.length === 1 ? '' : 's' }}</span>
+        </div>
+        <div class="op-note">How well each AI agent is handling calls in this period. Escalation = calls the AI handed to a human. See the AI Usage page for full token and cost detail.</div>
+        <table class="table op-table">
+          <thead>
+            <tr><th>Agent</th><th>Tier</th><th>Calls</th><th>Resolved by AI</th><th>Escalated</th><th>Avg cost/call</th><th>Signals</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="a in aiAgents" :key="a.agentId">
+              <td class="op-route">{{ a.name }}</td>
+              <td><span class="chip" :class="a.tier === 'managed' ? '' : 'chip--ok'">{{ a.tier === 'managed' ? 'Managed' : 'Own keys' }}</span></td>
+              <td class="mono">{{ a.calls }}</td>
+              <td class="mono">{{ a.resolvedPct }}%</td>
+              <td class="mono">{{ a.escalationPct }}% <span class="muted">({{ a.escalated }})</span></td>
+              <td class="mono">{{ a.tier === 'managed' ? usd(a.avgCostMinorUsd) : '—' }}</td>
+              <td class="op-signals">
+                <span v-if="a.flag" class="chip chip--missed op-sig">{{ a.flag }}</span>
+                <span v-else class="muted">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
     <p class="op-foot muted">Metrics shown <em>na</em> are not reported by that provider — Telroi's API doesn't expose audio-level data (MOS, jitter, packet loss). Carrier-grade scoring depends on the carrier the number runs on.</p>
   </div>
 </template>
@@ -87,11 +115,13 @@ const toast = useToast();
 const pending = ref(true);
 const summary = ref<any>(null);
 const results = ref<any[]>([]);
+const aiAgents = ref<any[]>([]);
 const period = ref('month');
 const naSpan = 'na';
 
 function providerLabel(p: string) { return ({ telroi: 'Telroi', twilio: 'Carrier-grade route', telnyx: 'Carrier-grade route' } as any)[p] || 'Carrier route'; }
 function fmt(v: number | null, unit: string) { return v == null ? 'na' : `${v}${unit}`; }
+function usd(cents: number) { return cents ? `$${(cents / 100).toFixed(2)}` : '$0.00'; }
 function mosClass(v: number | null) { return v == null ? 'op-na' : v < 3.5 ? 'op-bad' : 'op-good'; }
 function scoreColor(s: number | null) {
   if (s == null) return '';
@@ -104,6 +134,7 @@ async function load() {
     const data = await api.get<any>(props.apiBase, { period: period.value });
     summary.value = data.summary;
     results.value = data.results || [];
+    aiAgents.value = data.aiAgents || [];
   } catch (e: any) { toast.err(e.message); }
   finally { pending.value = false; }
 }

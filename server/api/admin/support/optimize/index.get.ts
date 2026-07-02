@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { requirePlatformAdmin } from '~/server/utils/platform';
 import { ensureSupportWorkspace } from '~/server/utils/support';
 import { useDb, schema } from '~/server/db';
-import { telroiQuality, twilioQuality, telnyxQuality, type QualityResult } from '~/server/utils/optimize';
+import { telroiQuality, twilioQuality, telnyxQuality, aiAgentPerformance, type QualityResult } from '~/server/utils/optimize';
 import { decrypt } from '~/server/utils/crypto';
 export default defineEventHandler(async (event) => {
   await requirePlatformAdmin(event);
@@ -27,5 +27,7 @@ export default defineEventHandler(async (event) => {
       else if (p.kind === 'telnyx') results.push(await telnyxQuality(creds, period));
     } catch { /* */ }
   }
-  return { period, results };
+  const sinceDays = period === 'week' ? 7 : 30;
+  const aiAgents = await aiAgentPerformance(db, schema, ws.tenantId, sinceDays);
+  return { period, results, aiAgents };
 });

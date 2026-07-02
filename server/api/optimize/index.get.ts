@@ -6,7 +6,7 @@ import { useDb, schema } from '~/server/db';
 import { loadTenant } from '~/server/utils/tenant';
 import { TelroiClient } from '~/server/utils/telroi/client';
 import { decrypt } from '~/server/utils/crypto';
-import { telroiQuality, twilioQuality, telnyxQuality, type QualityResult } from '~/server/utils/optimize';
+import { telroiQuality, twilioQuality, telnyxQuality, aiAgentPerformance, type QualityResult } from '~/server/utils/optimize';
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
@@ -38,8 +38,13 @@ export default defineEventHandler(async (event) => {
   const avgScore = allMetrics.length ? Math.round(allMetrics.reduce((s, m) => s + m.score, 0) / allMetrics.length) : null;
   const atRisk = allMetrics.filter((m) => m.grade === 'D' || m.grade === 'F').length;
 
+  // AI agent performance (cheap DB aggregation; no external calls).
+  const sinceDays = period === 'week' ? 7 : 30;
+  const aiAgents = await aiAgentPerformance(db, schema, s.tenantId, sinceDays);
+
   return {
     summary: { avgScore, totalRoutes: allMetrics.length, atRisk, hasCarrierGrade: results.some((r) => r.hasCarrierGrade) },
-    results
+    results,
+    aiAgents
   };
 });

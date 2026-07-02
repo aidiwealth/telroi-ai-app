@@ -81,31 +81,39 @@ function finalize(partial: Partial<QualityMetric> & { scope: string; label: stri
 
 /* ---------------- Telroi PBX: operational metrics from call history ---------------- */
 export function telroiQuality(calls: any[]): QualityResult {
-  // Group by destination number (diversion) as the "route".
+  // Route = department/queue when the call reports one, else the dialed number.
   const groups = new Map<string, any[]>();
   for (const c of calls) {
-    const key = c.diversion || c.telnum_name || 'unknown';
+    const key = c.group_name || c.diversion || c.telnum_name || 'unknown';
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(c);
   }
+  // Answered = real talk time AND not flagged missed/failed by Asterisk.
+  const isAnswered = (c: any) => (c.duration || 0) > 0 && c.status !== 'failed' && c.status !== 'busy' && !c.missedStatus;
   const metrics: QualityMetric[] = [];
   for (const [scope, items] of groups) {
-    const answered = items.filter((c) => (c.duration || 0) > 0);
+    const answered = items.filter(isAnswered);
     const rated = items.filter((c) => c.rating);
-    metrics.push(finalize({
+    const failed = items.filter((c) => c.status === 'failed' || c.missedStatus === 2);
+    const busy = items.filter((c) => c.status === 'busy');
+    const m = finalize({
       scope, label: scope, calls: items.length,
       answerRate: items.length ? Math.round((answered.length / items.length) * 100) : null,
       avgWaitSec: answered.length ? Math.round(answered.reduce((s, c) => s + (c.wait || 0), 0) / answered.length) : null,
       avgDurationSec: answered.length ? Math.round(answered.reduce((s, c) => s + (c.duration || 0), 0) / answered.length) : null,
       avgRating: rated.length ? +(rated.reduce((s, c) => s + c.rating, 0) / rated.length).toFixed(1) : null
-    }));
+    });
+    // Extra outcome signals straight from the Asterisk status detail.
+    if (items.length >= 5 && failed.length / items.length > 0.15) m.signals.push('High failure rate');
+    if (items.length >= 5 && busy.length / items.length > 0.15) m.signals.push('Frequently busy');
+    metrics.push(m);
   }
   metrics.sort((a, b) => a.score - b.score); // worst first — that's what needs attention
   return {
     provider: 'telroi',
     hasCarrierGrade: false,
     metrics,
-    note: 'Telroi reports operational metrics (answer rate, wait, ratings). Carrier-grade audio metrics (MOS, jitter, packet loss) are available on routes that report them.'
+    note: 'Telroi reports operational metrics (answer rate, wait, ratings, call outcomes) from your Asterisk call history. Carrier-grade audio metrics (MOS, jitter, packet loss) appear on routes that report them.'
   };
 }
 
@@ -189,4 +197,58 @@ export async function telnyxQuality(creds: { apiKey: string }): Promise<QualityR
   } catch (e: any) {
     return { provider: 'telnyx', hasCarrierGrade: false, metrics: [], note: `Carrier-grade metrics are temporarily unavailable.` };
   }
+}
+
+
+// ── AI agent performance ─────────────────────────────────────────────────────
+// Cheap DB-only aggregation (no external calls, no per-call analysis) that shows
+// how well each AI agent is handling calls: volume, how many it resolved itself
+// vs. escalated to a human, and average managed cost per call. Usage detail
+// (tokens/seconds) lives on the AI Usage page — not duplicated here.
+export interface AiAgentPerf {
+  agentId: string; name: string; tier: string;
+  calls: number; escalated: number; escalationРct?: never; // (avoid typo field)
+  escalationPct: number; resolvedPct: number;
+  avgCostMinorUsd: number; flag: string | null;
+}
+
+export async function aiAgentPerformance(db: any, schema: any, tenantId: string, sinceDays: number): Promise<AiAgentPerf[]> {
+  const { and, eq, gte } = await import('drizzle-orm');
+  const since = new Date(Date.now() - sinceDays * 86400000);
+  // Every AI-handled call (one row per turn; group to calls per agent).
+  const usage = await db.select().from(schema.aiUsage)
+    .where(and(eq(schema.aiUsage.tenantId, tenantId), gte(schema.aiUsage.createdAt, since)));
+  if (!usage.length) return [];
+  // Escalated calls = call_events for this tenant that were taken over by a human.
+  const events = await db.select().from(schema.callEvents)
+    .where(and(eq(schema.callEvents.tenantId, tenantId), gte(schema.callEvents.startedAt, since)));
+  const escalatedCallIds = new Set(
+    events.filter((e: any) => e.takenOverAt || e.handledBy === 'human').map((e: any) => e.callid)
+  );
+  const agents = await db.select().from(schema.aiAgents).where(eq(schema.aiAgents.tenantId, tenantId));
+  const nameOf = (id: string) => agents.find((a: any) => a.id === id)?.name || 'Unknown agent';
+  const tierOf = (id: string) => agents.find((a: any) => a.id === id)?.tier || 'byok';
+
+  // Group usage rows into calls per agent.
+  const byAgent = new Map<string, { calls: Set<string>; cost: number; escalated: Set<string> }>();
+  for (const u of usage) {
+    if (!u.agentId) continue;
+    const g = byAgent.get(u.agentId) || { calls: new Set(), cost: 0, escalated: new Set() };
+    if (u.callId) { g.calls.add(u.callId); if (escalatedCallIds.has(u.callId)) g.escalated.add(u.callId); }
+    g.cost += u.costMinorUsd || 0;
+    byAgent.set(u.agentId, g);
+  }
+  const out: AiAgentPerf[] = [];
+  for (const [agentId, g] of byAgent) {
+    const calls = g.calls.size || 0;
+    const escalated = g.escalated.size || 0;
+    const escalationPct = calls ? Math.round((escalated / calls) * 100) : 0;
+    const resolvedPct = calls ? 100 - escalationPct : 0;
+    const avgCostMinorUsd = calls ? Math.round(g.cost / calls) : 0;
+    // Flag only the obvious problem: escalating most calls means the AI isn't coping.
+    const flag = escalationPct >= 50 && calls >= 3 ? 'High escalation' : null;
+    out.push({ agentId, name: nameOf(agentId), tier: tierOf(agentId), calls, escalated, escalationPct, resolvedPct, avgCostMinorUsd, flag } as AiAgentPerf);
+  }
+  out.sort((a, b) => b.escalationPct - a.escalationPct); // worst first
+  return out;
 }
