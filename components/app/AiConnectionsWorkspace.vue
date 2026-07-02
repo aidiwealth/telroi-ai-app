@@ -5,6 +5,14 @@
       <p class="page-sub">Connect your own AI provider keys. You're billed directly by each provider — Telroi never marks up or charges for model usage.</p>
     </div>
 
+    <!-- Provider guide — onboarding help, shown only until the first key is added -->
+    <div v-if="!pending && !connections.length" class="prov-guide">
+      <div v-for="p in providers" :key="p.id" class="guide-tile">
+        <div class="guide-name">{{ p.label }}</div>
+        <div class="guide-role">{{ p.role }}</div>
+      </div>
+    </div>
+
     <!-- Connections -->
     <div class="card ai-card">
       <div class="card-head">
@@ -52,13 +60,6 @@
       <EmptyState v-else icon="ai" title="No AI connected" description="Add a provider key to power transcription, voice agents and call intelligence." />
     </div>
 
-    <!-- Provider guide -->
-    <div class="prov-guide">
-      <div v-for="p in providers" :key="p.id" class="guide-tile">
-        <div class="guide-name">{{ p.label }}</div>
-        <div class="guide-role">{{ p.role }}</div>
-      </div>
-    </div>
 
     <!-- Voice agents — real data -->
     <div class="card agent-card">
@@ -227,6 +228,9 @@ function connectedOk(provider: string): boolean { return connections.value.some(
 function roleProvider(role: 'stt' | 'llm' | 'tts'): { id: string; label: string } | null {
   for (const p of ROLE_PREF[role]) { if (connectedOk(p)) return { id: p, label: label(p) }; }
   return null;
+}
+function roleOptions(role: 'stt' | 'llm' | 'tts'): { id: string; label: string }[] {
+  return ROLE_PREF[role].filter(connectedOk).map((p) => ({ id: p, label: label(p) }));
 }
 function resetWizard() {
   wizardStep.value = 1; showAdvanced.value = false;
