@@ -15,6 +15,7 @@ import { provisionEndpoint, deprovisionEndpoint } from './provision-core.ts';
 import { upsertCarrier, removeCarrier, type CarrierInput } from './carrier-core.ts';
 import { originateCall } from './originate.ts';
 import { logOutbound } from './call-log.ts';
+import { endpointStatus } from './endpoint-status.ts';
 
 const SECRET = process.env.PROVISION_AGENT_SECRET || '';
 const PORT = parseInt(process.env.PROVISION_AGENT_PORT || '8090', 10);
@@ -182,6 +183,17 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
       // GET /health -> liveness (still requires auth)
       if (req.method === 'GET' && req.url === '/health') {
         return send(res, 200, { ok: true, ari: !!ari });
+      }
+
+      if (req.method === 'POST' && req.url === '/status') {
+        const body = await readJson(req);
+        const usernames = Array.isArray(body.usernames) ? body.usernames.map((u) => String(u)).slice(0, 200) : undefined;
+        try {
+          const statuses = endpointStatus(usernames);
+          return send(res, 200, { ok: true, statuses });
+        } catch (e) {
+          return send(res, 500, { ok: false, error: (e).message });
+        }
       }
 
       return send(res, 404, { ok: false, error: 'not found' });

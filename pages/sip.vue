@@ -25,11 +25,19 @@
 
         <!-- Endpoints (generic, no vendor identity) -->
         <div class="card sip-card">
-          <div class="card-head"><span class="card-title">Your SIP endpoints</span></div>
+          <div class="card-head">
+            <span class="card-title">Your SIP endpoints</span>
+            <button class="btn btn-ghost btn-sm" :disabled="statusLoading" @click="loadStatus">{{ statusLoading ? 'Checking…' : 'Refresh status' }}</button>
+          </div>
           <table v-if="data.endpoints.length" class="table">
-            <thead><tr><th>SIP server</th><th>Username</th><th>Password</th><th></th></tr></thead>
+            <thead><tr><th>Status</th><th>SIP server</th><th>Username</th><th>Password</th><th></th></tr></thead>
             <tbody>
               <tr v-for="e in data.endpoints" :key="e.id">
+                <td>
+                  <span class="reg-dot" :class="regClass(e)" :title="regTitle(e)"></span>
+                  <span class="reg-label">{{ regLabel(e) }}</span>
+                  <span v-if="statusOf(e)?.rttMs != null" class="reg-rtt">{{ statusOf(e).rttMs }}ms</span>
+                </td>
                 <td class="mono">{{ e.sipServer || '—' }}<button v-if="e.sipServer" class="sip-copy" @click="copy(e.sipServer)">Copy</button></td>
                 <td class="mono">{{ e.sipUsername || '—' }}<button v-if="e.sipUsername" class="sip-copy" @click="copy(e.sipUsername)">Copy</button></td>
                 <td class="mono"><template v-if="e.password"><span v-if="shown[e.id]">{{ e.password }}</span><span v-else>••••••••</span><button class="sip-copy" @click="copy(e.password)">Copy</button><button class="sip-copy" @click="shown[e.id] = !shown[e.id]">{{ shown[e.id] ? 'Hide' : 'Show' }}</button></template><span v-else-if="e.hasPassword" class="sip-secret-tag">set at creation</span><span v-else class="muted">—</span></td>
@@ -95,11 +103,45 @@ const attaching = ref(false);
 const shown = ref<Record<string, boolean>>({});
 const myNumbers = ref<any[]>([]);
 
+const statusById = ref<Record<string, any>>({});
+const statusLoading = ref(false);
+function statusOf(e: any) { return statusById.value[e.id]; }
+function regClass(e: any) {
+  const st = statusOf(e);
+  if (st && !st.registrable) return 'reg-na';
+  if (!st) return 'reg-unknown';
+  return st.registered ? 'reg-on' : 'reg-off';
+}
+function regLabel(e: any) {
+  const st = statusOf(e);
+  if (st && !st.registrable) return 'Trunk';
+  if (!st) return 'Unknown';
+  return st.registered ? 'Registered' : 'Offline';
+}
+function regTitle(e: any) {
+  const st = statusOf(e);
+  if (st && !st.registrable) return 'Carrier trunk — does not register to Telroi directly.';
+  if (!st) return 'Status not loaded yet.';
+  if (st.registered) return `Connected${st.via ? ' from ' + st.via : ''}${st.rttMs != null ? ' · ' + st.rttMs + 'ms' : ''}.`;
+  return 'No device is currently registered. Open your softphone or browser dialer to connect.';
+}
+async function loadStatus() {
+  statusLoading.value = true;
+  try {
+    const res = await api.get('/api/voice/sip/status');
+    const map = {};
+    for (const st of res.endpoints || []) map[st.id] = st;
+    statusById.value = map;
+  } catch { /* unknown */ }
+  finally { statusLoading.value = false; }
+}
+
 async function load() {
   pending.value = true;
   try { data.value = await api.get('/api/voice/sip'); }
   catch (e: any) { toast.err(e.message); }
   finally { pending.value = false; }
+  if (data.value?.endpoints?.length) loadStatus();
 }
 
 async function provision() {
@@ -160,4 +202,11 @@ onMounted(load);
 .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(10,10,11,0.32); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .modal { width: 100%; max-width: 440px; background: var(--paper); }
 .modal-x { color: var(--ink-mute); }
+.reg-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: middle; background: var(--ink-mute); }
+.reg-on { background: #35c07f; box-shadow: 0 0 0 3px rgba(53,192,127,0.15); }
+.reg-off { background: #d9534f; box-shadow: 0 0 0 3px rgba(217,83,79,0.12); }
+.reg-na { background: #6b7280; }
+.reg-unknown { background: #c9a94a; }
+.reg-label { font-size: 13px; vertical-align: middle; }
+.reg-rtt { font-size: 11px; color: var(--ink-soft); margin-left: 6px; vertical-align: middle; }
 </style>

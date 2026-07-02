@@ -142,3 +142,17 @@ export async function agentCarrierRemove(name: string): Promise<{ removed: boole
   const j = await agentCall('/carrier/remove', { name });
   return { removed: j.removed };
 }
+
+// ─── Live registration status ────────────────────────────────────────────────
+export interface EndpointStatus {
+  username: string; registered: boolean; contacts: number; rttMs: number | null; via: string | null;
+}
+export async function agentEndpointStatus(usernames: string[]): Promise<EndpointStatus[]> {
+  if (!provisionAgentConfigured()) return usernames.map((u) => ({ username: u, registered: false, contacts: 0, rttMs: null, via: null }));
+  try {
+    const j = await agentCall('/status', { usernames });
+    return Array.isArray(j.statuses) ? j.statuses : [];
+  } catch {
+    return usernames.map((u) => ({ username: u, registered: false, contacts: 0, rttMs: null, via: null }));
+  }
+}
