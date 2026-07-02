@@ -8,40 +8,34 @@
       <button class="btn btn-signal btn-sm" @click="openCreate()">+ New VAN</button>
     </div>
 
-    <div v-if="pending" class="van-grid">
-      <div v-for="i in 2" :key="i" class="card card-pad"><div class="skeleton skel-row" /></div>
+    <div v-if="pending" class="card loading-pad">
+      <div v-for="i in 3" :key="i" class="skeleton skel-row" />
     </div>
 
-    <div v-else-if="vans.length" class="van-grid">
-      <div v-for="v in vans" :key="v.id" class="van-card card">
-        <div class="van-card-body">
-          <div class="van-top">
-            <div>
-              <div class="van-name">{{ v.name }}</div>
-              <div class="van-num mono">{{ v.telnum }}</div>
-            </div>
-            <span class="chip" :class="statusChip(v.status)">
-              <span v-if="v.status === 'live'" class="pulse-dot" /> {{ v.status }}
-            </span>
-          </div>
-          <div class="van-meta">
-            <span class="van-meta-item">{{ agentName(v.agentId) }}</span>
-            <span class="dot">·</span>
-            <span class="van-meta-item">{{ (v.languages || ['en']).length }} lang</span>
-          </div>
-          <div class="van-escalate muted">
-            Escalates to {{ v.escalateTo || 'a human' }}{{ v.escalateAfter ? ` after ${v.escalateAfter}s` : ' on intent' }}
-          </div>
-        </div>
-        <div class="van-actions">
-          <button v-if="v.status !== 'live'" class="btn btn-signal btn-sm" :disabled="busy === v.id" @click="setStatus(v, 'live')">
-            {{ busy === v.id ? 'Activating…' : 'Go live' }}
-          </button>
-          <button v-else class="btn btn-ghost btn-sm" :disabled="busy === v.id" @click="setStatus(v, 'paused')">Pause</button>
-          <button class="btn btn-ghost btn-sm" @click="openEdit(v)">Edit</button>
-          <button class="btn btn-danger btn-sm" @click="remove(v)">Delete</button>
-        </div>
-      </div>
+    <div v-else-if="vans.length" class="card">
+      <table class="table">
+        <thead><tr><th>Name</th><th>Number</th><th>Agent</th><th>Languages</th><th>Escalation</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          <tr v-for="v in vans" :key="v.id">
+            <td><span class="prov-name">{{ v.name }}</span></td>
+            <td class="mono">{{ v.telnum }}</td>
+            <td>{{ agentName(v.agentId) }}</td>
+            <td class="muted">{{ (v.languages || ['en']).length }} lang</td>
+            <td class="muted">{{ v.escalateTo || 'a human' }}{{ v.escalateAfter ? ` · ${v.escalateAfter}s` : ' · on intent' }}</td>
+            <td>
+              <span class="chip" :class="statusChip(v.status)">
+                <span v-if="v.status === 'live'" class="pulse-dot" /> {{ v.status }}
+              </span>
+            </td>
+            <td class="row-actions">
+              <button v-if="v.status !== 'live'" class="btn btn-signal btn-sm" :disabled="busy === v.id" @click="setStatus(v, 'live')">{{ busy === v.id ? 'Activating…' : 'Go live' }}</button>
+              <button v-else class="btn btn-ghost btn-sm" :disabled="busy === v.id" @click="setStatus(v, 'paused')">Pause</button>
+              <button class="btn btn-ghost btn-sm" @click="openEdit(v)">Edit</button>
+              <button class="btn btn-danger btn-sm" @click="remove(v)">Delete</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <div v-else class="card van-empty-card">

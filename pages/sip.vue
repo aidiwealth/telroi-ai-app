@@ -2,7 +2,6 @@
   <div>
     <div class="page-head">
       <h1 class="page-title">SIP connectivity</h1>
-      <p class="page-sub">Connect your own SIP devices, softphones or PBX to Telroi. Calls over SIP run on the same infrastructure, so they flow through your AI Numbers, agents, departments and routing automatically.</p>
     </div>
 
     <div v-if="pending" class="loading-pad"><div v-for="i in 2" :key="i" class="skeleton skel-row" /></div>
