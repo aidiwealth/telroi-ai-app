@@ -283,11 +283,22 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
       const text = d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join(' ') || '';
       return { text: (text || '').trim() || null, inputTokens: d.usageMetadata?.promptTokenCount || 0, outputTokens: d.usageMetadata?.candidatesTokenCount || 0 };
     }
-    const chatBase = llm.provider === 'grok' ? 'https://api.x.ai/v1' : 'https://api.openai.com/v1';
+    const isGrok = llm.provider === 'grok';
+    const chatBase = isGrok ? 'https://api.x.ai/v1' : 'https://api.openai.com/v1';
+    // Grok 4.x is reasoning-first: it spends output tokens on hidden reasoning
+    // before the visible reply, so a low max_tokens can leave nothing to say.
+    // Give it headroom and request no reasoning effort (best-effort — ignored by
+    // models that force reasoning, but the higher budget still covers us).
+    const chatBody: any = {
+      model: llm.model,
+      max_tokens: isGrok ? 1500 : 300,
+      messages: [{ role: 'system', content: sys }, ...history.map((m) => ({ role: m.role, content: m.content }))]
+    };
+    if (isGrok) chatBody.reasoning_effort = 'none';
     const res = await fetch(`${chatBase}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${llm.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: llm.model, max_tokens: 300, messages: [{ role: 'system', content: sys }, ...history.map((m) => ({ role: m.role, content: m.content }))] })
+      body: JSON.stringify(chatBody)
     });
     if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
     const d: any = await res.json();
