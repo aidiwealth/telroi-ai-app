@@ -56,7 +56,7 @@ export async function resolveAgentLlm(tenantId: string, llmConnId: string | null
 function defaultModelFor(p: LlmProvider): string {
   switch (p) {
     case 'openai': return 'gpt-4o-mini';
-    case 'google': return 'gemini-2.0-flash';
+    case 'google': return 'gemini-2.5-flash';
     case 'grok': return 'grok-2-latest';
     default: return 'claude-haiku-4-5-20251001';
   }
