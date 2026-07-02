@@ -127,7 +127,8 @@
               <button class="btn btn-dark btn-sm" :disabled="savingAgent || !agentDraft.name.trim()" @click="createAgent">{{ savingAgent ? 'Creating\u2026' : 'Create agent' }}</button>
             </div>
           </div>
-        </Transition>
+        </div>
+      </Transition>
 
       <div v-if="agentsPending" class="loading-pad"><div v-for="i in 2" :key="i" class="skeleton skel-row" /></div>
       <table v-else-if="agents.length" class="table">
