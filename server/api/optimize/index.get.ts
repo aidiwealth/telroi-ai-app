@@ -27,16 +27,16 @@ export default defineEventHandler(async (event) => {
       const q = p.kind === 'twilio' ? await twilioQuality(creds) : p.kind === 'telnyx' ? await telnyxQuality(creds) : null;
       if (q) {
         report.overview.hasCarrierGrade = report.overview.hasCarrierGrade || q.hasCarrierGrade;
-        if (q.note) notes.push(`${p.kind}: ${q.note}`);
+        if (q.note) notes.push(q.note);
         for (const m of q.metrics) {
           report.routes.push({
-            route: `carrier:${p.kind}:${m.scope}`, label: m.label, carrier: p.kind, direction: 'in',
+            route: `q:${m.scope}`, label: m.label || 'Carrier quality', carrier: 'Telroi', direction: 'in',
             calls: m.calls, answerRate: m.answerRate ?? 0, avgWaitSec: m.avgWaitSec, avgDurationSec: m.avgDurationSec,
             avgRating: m.avgRating, score: m.score, grade: m.grade, signals: m.signals
           });
         }
       }
-    } catch (e: any) { notes.push(`${p.kind}: metrics unavailable`); }
+    } catch (e: any) { notes.push('Some carrier metrics unavailable'); }
   }
   report.carrierNotes = notes;
   report.routes.sort((a, b) => a.score - b.score);
