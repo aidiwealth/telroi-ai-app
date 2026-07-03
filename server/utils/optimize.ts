@@ -289,31 +289,44 @@ export async function buildOptimizeReport(db: any, schema: any, tenantId: string
   const events = await db.select().from(schema.callEvents)
     .where(and(eq(schema.callEvents.tenantId, tenantId), gte(schema.callEvents.startedAt, since)));
 
+  // A route is a real traffic lane: carrier + direction. The far-end number and
+  // SIP endpoint are calls *within* a lane, not routes themselves.
+  const FAILED = new Set(['failed', 'busy', 'no-answer', 'rejected', 'unauthorized', 'blacklisted', 'missed', 'cancelled', 'canceled']);
+  // Answered = the call connected. Trust status first; duration is often null even
+  // for connected calls, so it must NOT gate the answered check.
+  const isAnswered = (e: any) => {
+    const st = (e.status || '').toLowerCase();
+    if (FAILED.has(st)) return false;
+    return st === 'answered' || st === 'ended' || st === 'completed' || (e.duration || 0) > 0;
+  };
+  const routeLabel = (carrier: string, dir: string) => {
+    const d = dir === 'out' ? 'Outbound' : 'Inbound';
+    return carrier ? `${d} · ${carrier}` : `${d} · Telroi`;
+  };
   const groups = new Map<string, any[]>();
   for (const e of events) {
-    const phone = e.phone || 'unknown';
-    const carrier = e.carrier || 'telroi';
-    const dir = e.direction || 'in';
-    const key = `${carrier}|${dir}|${phone}`;
+    const carrier = e.carrier || '';
+    const dir = (e.direction || 'in') === 'out' ? 'out' : 'in';
+    const key = `${dir}|${carrier}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(e);
   }
-  const isAnswered = (e: any) => (e.duration || 0) > 0 && e.status !== 'failed' && e.status !== 'busy' && e.status !== 'no-answer';
   const routes: RouteScore[] = [];
   for (const [key, items] of groups) {
-    const [carrier, direction, phone] = key.split('|');
+    const [direction, carrier] = key.split('|');
     const answered = items.filter(isAnswered);
+    const withDur = answered.filter((e: any) => (e.duration || 0) > 0);
     const rated = items.filter((e) => e.rating);
     const answerRate = items.length ? Math.round((answered.length / items.length) * 100) : 0;
     const avgWaitSec = answered.length ? Math.round(answered.reduce((s: number, e: any) => s + (e.wait || 0), 0) / answered.length) : null;
-    const avgDurationSec = answered.length ? Math.round(answered.reduce((s: number, e: any) => s + (e.duration || 0), 0) / answered.length) : null;
+    const avgDurationSec = withDur.length ? Math.round(withDur.reduce((s: number, e: any) => s + (e.duration || 0), 0) / withDur.length) : null;
     const avgRating = rated.length ? +(rated.reduce((s: number, e: any) => s + e.rating, 0) / rated.length).toFixed(1) : null;
     const score = compositeScore({ answerRate, avgWaitSec, avgRating, packetLossPct: null, mos: null } as any);
     const signals: string[] = [];
     if (answerRate < 70) signals.push('Low answer rate');
     if (avgWaitSec != null && avgWaitSec > 20) signals.push('High wait time');
     if (avgRating != null && avgRating < 3) signals.push('Low rating');
-    routes.push({ route: key, label: phone, carrier, direction, calls: items.length, answerRate, avgWaitSec, avgDurationSec, avgRating, score, grade: grade(score), signals });
+    routes.push({ route: key, label: routeLabel(carrier, direction), carrier: carrier || 'telroi', direction, calls: items.length, answerRate, avgWaitSec, avgDurationSec, avgRating, score, grade: grade(score), signals });
   }
   routes.sort((a, b) => a.score - b.score);
 
