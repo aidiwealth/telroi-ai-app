@@ -181,12 +181,9 @@ async function main() {
                 } catch (err) {
                   log(`  [ai ${chId}] ring_all bridge failed: ${(err as Error)?.message}`);
                 }
-                if (!raAnswered) {
-                  log(`  [ai ${chId}] ring_all not answered — playing unavailable message`);
-                  const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
-                  try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); }
-                  catch { try { await channel.hangup(); } catch { /* gone */ } }
-                }
+                // NOTE: no-answer message disabled (see endpoint case) — re-enable once
+                // bridgeToDepartment awaits a terminal state.
+                void raAnswered;
                 return;
               }
 
@@ -224,12 +221,10 @@ async function main() {
               }
               // If nobody answered (ring timed out / busy / rejected), don't leave the
               // caller in silence — tell them the team is unavailable, then hang up.
-              if (!escAnswered) {
-                log(`  [ai ${chId}] escalation not answered — playing unavailable message`);
-                const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
-                try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); }
-                catch { try { await channel.hangup(); } catch { /* gone */ } }
-              }
+              // NOTE: no-answer message disabled — bridgeToEndpoint resolves before the
+              // call is actually answered, so escAnswered is unreliable. Re-enable once
+              // the bridge awaits a terminal state. Bridge tears down on its own.
+              void escAnswered;
             },
             onEnd: (turns: number) => {
               log(`  [ai ${chId}] conversation ended after ${turns} turn(s)`);
