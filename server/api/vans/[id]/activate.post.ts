@@ -40,6 +40,26 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Sync the number's inbound route to match the VAN. The control-app routes
+  // inbound calls off number_subscriptions, so this MUST reflect the VAN's agent.
+  // Going live -> route to the VAN's AI agent; pausing/draft -> leave routable but
+  // the VAN status gates answering. We set it directly from the VAN's own fields
+  // (agentId/escalateTo/escalateAfter) rather than an indirect AVM payload.
+  if (van.agentId) {
+    await db.update(schema.numberSubscriptions)
+      .set({
+        routeType: 'ai',
+        routeAgentId: van.agentId,
+        routeTarget: null,
+        routeEscalateTo: van.escalateTo || null,
+        routeEscalateAfter: van.escalateAfter ?? 0
+      })
+      .where(and(
+        eq(schema.numberSubscriptions.telnum, van.telnum),
+        eq(schema.numberSubscriptions.tenantId, s.tenantId)
+      ));
+  }
+
   const [row] = await db.update(schema.vans).set({ status: p.data.status })
     .where(eq(schema.vans.id, id)).returning();
   return row;
