@@ -46,19 +46,24 @@ export default defineEventHandler(async (event) => {
   // the VAN status gates answering. We set it directly from the VAN's own fields
   // (agentId/escalateTo/escalateAfter) rather than an indirect AVM payload.
   if (van.agentId) {
-    await db.update(schema.numberSubscriptions)
-      .set({
-        routeType: 'ai',
-        routeAgentId: van.agentId,
-        routeTarget: null,
-        routeEscalateMode: van.escalateMode || 'none',
-        routeEscalateTo: van.escalateTo || null,
-        routeEscalateAfter: van.escalateAfter ?? 0
-      })
-      .where(and(
-        eq(schema.numberSubscriptions.telnum, van.telnum),
-        eq(schema.numberSubscriptions.tenantId, s.tenantId)
-      ));
+    const norm = (x: string) => { let d = String(x||'').replace(/[^0-9]/g,''); if (d.startsWith('234')) d=d.slice(3); if (d.startsWith('0')) d=d.slice(1); return d; };
+    const target = norm(van.telnum);
+    const subs = await db.select({ id: schema.numberSubscriptions.id, telnum: schema.numberSubscriptions.telnum })
+      .from(schema.numberSubscriptions)
+      .where(eq(schema.numberSubscriptions.tenantId, s.tenantId));
+    const match = subs.find((x: any) => norm(x.telnum) === target);
+    if (match) {
+      await db.update(schema.numberSubscriptions)
+        .set({
+          routeType: 'ai',
+          routeAgentId: van.agentId,
+          routeTarget: null,
+          routeEscalateMode: van.escalateMode || 'none',
+          routeEscalateTo: van.escalateTo || null,
+          routeEscalateAfter: van.escalateAfter ?? 0
+        })
+        .where(eq(schema.numberSubscriptions.id, match.id));
+    }
   }
 
   const [row] = await db.update(schema.vans).set({ status: p.data.status })

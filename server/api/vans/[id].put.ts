@@ -32,19 +32,27 @@ export default defineEventHandler(async (event) => {
   // Keep the number's inbound route in sync with the VAN so the control-app
   // (which routes off number_subscriptions) reflects the current agent/escalation.
   if (row.agentId) {
-    await db.update(schema.numberSubscriptions)
-      .set({
-        routeType: 'ai',
-        routeAgentId: row.agentId,
-        routeTarget: null,
-        routeEscalateMode: row.escalateMode || 'none',
-        routeEscalateTo: row.escalateTo || null,
-        routeEscalateAfter: row.escalateAfter ?? 0
-      })
-      .where(and(
-        eq(schema.numberSubscriptions.telnum, row.telnum),
-        eq(schema.numberSubscriptions.tenantId, s.tenantId)
-      ));
+    // The VAN and its subscription can store the number in different formats
+    // (e.g. "2085910061" vs "+23402085910061"), so match on a normalized key
+    // rather than exact string, then update by the subscription's own id.
+    const norm = (x: string) => { let d = String(x||'').replace(/[^0-9]/g,''); if (d.startsWith('234')) d=d.slice(3); if (d.startsWith('0')) d=d.slice(1); return d; };
+    const target = norm(row.telnum);
+    const subs = await db.select({ id: schema.numberSubscriptions.id, telnum: schema.numberSubscriptions.telnum })
+      .from(schema.numberSubscriptions)
+      .where(eq(schema.numberSubscriptions.tenantId, s.tenantId));
+    const match = subs.find((x: any) => norm(x.telnum) === target);
+    if (match) {
+      await db.update(schema.numberSubscriptions)
+        .set({
+          routeType: 'ai',
+          routeAgentId: row.agentId,
+          routeTarget: null,
+          routeEscalateMode: row.escalateMode || 'none',
+          routeEscalateTo: row.escalateTo || null,
+          routeEscalateAfter: row.escalateAfter ?? 0
+        })
+        .where(eq(schema.numberSubscriptions.id, match.id));
+    }
   }
   return row;
 });

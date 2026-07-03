@@ -77,7 +77,7 @@
             </select>
             <span v-if="!agents.length" class="hint">No agents yet — <NuxtLink to="/ai" class="inline-link">create one on the AI page</NuxtLink>.</span>
           </div>
-          <div class="field-float">
+          <div class="field">
             <label>When AI escalates to a human</label>
             <select v-model="form.escalateMode" class="select" @change="onEscalateModeChange">
               <option value="none">Don't transfer — AI handles the call</option>
