@@ -172,18 +172,21 @@ async function main() {
                   try { await playAndHangup(client, channel, 'sound:ss-noservice'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
                   return;
                 }
-                let raAnswered = false;
+                let raResult: { answered: boolean } = { answered: false };
                 try {
-                  await bridgeToDepartment({
+                  raResult = await bridgeToDepartment({
                     client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
-                    onStatus: (status, details) => { if (status === 'answered') raAnswered = true; logStatus(details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined)(status, details); }
+                    onStatus: (status, details) => logStatus(details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined)(status, details)
                   });
                 } catch (err) {
                   log(`  [ai ${chId}] ring_all bridge failed: ${(err as Error)?.message}`);
                 }
-                // NOTE: no-answer message disabled (see endpoint case) — re-enable once
-                // bridgeToDepartment awaits a terminal state.
-                void raAnswered;
+                if (!raResult.answered) {
+                  log(`  [ai ${chId}] ring_all not answered — playing unavailable message`);
+                  const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
+                  try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); }
+                  catch { try { await channel.hangup(); } catch { /* gone */ } }
+                }
                 return;
               }
 
@@ -208,23 +211,26 @@ async function main() {
                 return;
               }
               log(`  [ai ${chId}] escalating to human ${target} (${dialEndpoint})`);
-              let escAnswered = false;
+              let escResult: { answered: boolean } = { answered: false };
               try {
-                await bridgeToEndpoint({
+                escResult = await bridgeToEndpoint({
                   client, caller: channel, endpoint: dialEndpoint,
                   callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
                   whisperText, whisperTenantId: route.tenantId, whisperAgentId: route.routeAgentId || undefined,
-                  onStatus: (status, details) => { if (status === 'answered') escAnswered = true; logStatus(user)(status, details); }
+                  onStatus: (status, details) => logStatus(user)(status, details)
                 });
               } catch (err) {
                 log(`  [ai ${chId}] escalation bridge failed: ${(err as Error)?.message}`);
               }
-              // If nobody answered (ring timed out / busy / rejected), don't leave the
-              // caller in silence — tell them the team is unavailable, then hang up.
-              // NOTE: no-answer message disabled — bridgeToEndpoint resolves before the
-              // call is actually answered, so escAnswered is unreliable. Re-enable once
-              // the bridge awaits a terminal state. Bridge tears down on its own.
-              void escAnswered;
+              // The bridge now resolves only when the call reaches a terminal state,
+              // so this reliably reflects whether a human actually answered. If not,
+              // tell the caller the team is unavailable rather than dropping to silence.
+              if (!escResult.answered) {
+                log(`  [ai ${chId}] escalation not answered — playing unavailable message`);
+                const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
+                try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); }
+                catch { try { await channel.hangup(); } catch { /* gone */ } }
+              }
             },
             onEnd: (turns: number) => {
               log(`  [ai ${chId}] conversation ended after ${turns} turn(s)`);

@@ -90,7 +90,7 @@ export interface BridgeOptions {
 
 // Bridge the caller to the endpoint. Resolves when the bridge is set up (or the
 // call ends); rejects only on unexpected setup errors.
-export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
+export async function bridgeToEndpoint(opts: BridgeOptions): Promise<{ answered: boolean }> {
   const { client, caller, endpoint } = opts;
   const ringTimeout = opts.ringTimeoutSec ?? 30;
 
@@ -104,6 +104,10 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
   let cleanedUp = false;
   let wasAnswered = false;
   let answeredAt = 0;
+  // Resolve only when the call reaches a terminal state (answered-then-ended,
+  // no-answer, or failed), so callers can await the real outcome.
+  let resolveDone: () => void;
+  const done = new Promise<void>((res) => { resolveDone = res; });
 
   const cleanup = async (reason: string) => {
     if (cleanedUp) return;
@@ -120,6 +124,8 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
     }
     try { if (callee) await callee.hangup(); } catch { /* gone */ }
     try { await bridge.destroy(); } catch { /* gone */ }
+    try { client.removeListener('StasisStart', onCalleeStasisStart as never); } catch { /* ignore */ }
+    resolveDone();
   };
 
   // 2) Put the caller into the bridge right away (they'll hear ringing/silence
@@ -196,8 +202,18 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
     log(`originating to ${endpoint} (ring timeout ${ringTimeout}s)`);
   } catch (err) {
     await cleanup('originate failed');
-    throw err;
+    return { answered: false };
   }
+
+  // Safety net: if the callee never answers AND never triggers a terminal event
+  // (e.g. originate timeout doesn't fire a ChannelDestroyed in time), force
+  // cleanup shortly after the ring window so we don't hang forever.
+  const guard = setTimeout(() => { if (!wasAnswered && !cleanedUp) void cleanup('ring timeout'); }, (ringTimeout + 5) * 1000);
+
+  // Block until the call reaches a terminal state, then report the outcome.
+  await done;
+  clearTimeout(guard);
+  return { answered: wasAnswered };
 }
 
 // ── Department routing: ring multiple members, first to answer wins ──────────
@@ -210,7 +226,7 @@ export interface DepartmentBridgeOptions {
   onStatus?: (status: 'answered' | 'ended' | 'no-answer' | 'failed', details?: { duration?: number; endpoint?: string }) => void;
 }
 
-export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise<void> {
+export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise<{ answered: boolean }> {
   const { client, caller } = opts;
   const endpoints = (opts.endpoints || []).filter(Boolean);
   const ringTimeout = opts.ringTimeoutSec ?? 25;
@@ -232,6 +248,8 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
   let cleanedUp = false;
   let wasAnswered = false;
 
+  let resolveDeptDone: () => void;
+  const deptDone = new Promise<void>((res) => { resolveDeptDone = res; });
   const cleanup = async (reason: string) => {
     if (cleanedUp) return;
     cleanedUp = true;
@@ -247,6 +265,8 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
     }
     for (const ch of callees) { try { await ch.hangup(); } catch { /* gone */ } }
     try { await bridge.destroy(); } catch { /* gone */ }
+    try { client.removeListener('StasisStart', onMemberStasisStart as never); } catch { /* ignore */ }
+    resolveDeptDone();
   };
 
   try {
@@ -304,12 +324,18 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
     }
   }));
 
-  if (originateFailures === endpoints.length) { await cleanup('all failed'); return; }
+  if (originateFailures === endpoints.length) { await cleanup('all failed'); return { answered: false }; }
 
-  setTimeout(() => {
+  const guard = setTimeout(() => {
     if (!answeredId && !cleanedUp) {
       log(`dept ring timeout (${ringTimeout}s) — no answer`);
       void cleanup('ring timeout');
     }
   }, (ringTimeout + 2) * 1000);
+
+  // Block until a member answers-then-ends, everyone declines, or the ring
+  // times out — then report whether anyone actually picked up.
+  await deptDone;
+  clearTimeout(guard);
+  return { answered: wasAnswered };
 }
