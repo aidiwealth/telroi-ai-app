@@ -280,9 +280,14 @@ export interface OptimizeReport {
   carrierNotes: string[];
 }
 
+const COUNTRY_DIAL: Record<string, string> = {
+  NG: '234', GH: '233', KE: '254', ZA: '27', EG: '20', TZ: '255', UG: '256', RW: '250',
+  US: '1', CA: '1', GB: '44', UK: '44', IE: '353', FR: '33', DE: '49', ES: '34', IT: '39',
+  NL: '31', PT: '351', AE: '971', SA: '966', IN: '91', PK: '92', CN: '86', BR: '55', AU: '61'
+};
 const IRSF_PREFIXES = ['+2392','+88213','+88216','+88234','+88235','+247','+682','+675','+676','+677','+678','+679','+680','+685','+686','+687','+688','+689','+690','+691','+692','+371','+881','+882','+883'];
 
-export async function buildOptimizeReport(db: any, schema: any, tenantId: string, sinceDays: number): Promise<OptimizeReport> {
+export async function buildOptimizeReport(db: any, schema: any, tenantId: string, sinceDays: number, countryCode?: string | null): Promise<OptimizeReport> {
   const { and, eq, gte, sql } = await import('drizzle-orm');
   const since = new Date(Date.now() - sinceDays * 86400000);
 
@@ -299,21 +304,27 @@ export async function buildOptimizeReport(db: any, schema: any, tenantId: string
     if (FAILED.has(st)) return false;
     return st === 'answered' || st === 'ended' || st === 'completed' || (e.duration || 0) > 0;
   };
-  const routeLabel = (carrier: string, dir: string) => {
-    const d = dir === 'out' ? 'Outbound' : 'Inbound';
-    return carrier ? `${d} · ${carrier}` : `${d} · Telroi`;
+  // Client routes are Domestic vs International x direction, relative to the
+  // client's own country. Wholesale carriers are NEVER exposed — all "Telroi".
+  const dial = COUNTRY_DIAL[(countryCode || '').trim().toUpperCase()] || COUNTRY_DIAL['NG'];
+  const localScope = (e: any): 'Domestic' | 'International' => {
+    const p = String(e.phone || '').replace(/[^0-9+]/g, '');
+    if (!p || p === 'anonymous') return 'Domestic';       // no far-end number -> local
+    if (p.startsWith('+' + dial) || p.startsWith(dial)) return 'Domestic';
+    if (p.startsWith('0')) return 'Domestic';             // local national format
+    if (p.startsWith('+') || p.length > 11) return 'International';
+    return 'Domestic';
   };
   const groups = new Map<string, any[]>();
   for (const e of events) {
-    const carrier = e.carrier || '';
-    const dir = (e.direction || 'in') === 'out' ? 'out' : 'in';
-    const key = `${dir}|${carrier}`;
+    const dir = (e.direction || 'in') === 'out' ? 'Outbound' : 'Inbound';
+    const key = `${localScope(e)}|${dir}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(e);
   }
   const routes: RouteScore[] = [];
   for (const [key, items] of groups) {
-    const [direction, carrier] = key.split('|');
+    const [scopeLabel, direction] = key.split('|');
     const answered = items.filter(isAnswered);
     const withDur = answered.filter((e: any) => (e.duration || 0) > 0);
     const rated = items.filter((e) => e.rating);
@@ -326,7 +337,7 @@ export async function buildOptimizeReport(db: any, schema: any, tenantId: string
     if (answerRate < 70) signals.push('Low answer rate');
     if (avgWaitSec != null && avgWaitSec > 20) signals.push('High wait time');
     if (avgRating != null && avgRating < 3) signals.push('Low rating');
-    routes.push({ route: key, label: routeLabel(carrier, direction), carrier: carrier || 'telroi', direction, calls: items.length, answerRate, avgWaitSec, avgDurationSec, avgRating, score, grade: grade(score), signals });
+    routes.push({ route: key, label: `${scopeLabel} · ${direction}`, carrier: 'Telroi', direction, calls: items.length, answerRate, avgWaitSec, avgDurationSec, avgRating, score, grade: grade(score), signals });
   }
   routes.sort((a, b) => a.score - b.score);
 

@@ -13,7 +13,9 @@ export default defineEventHandler(async (event) => {
   const sinceDays = period === 'week' ? 7 : period === 'quarter' ? 90 : 30;
   const db = useDb();
 
-  const report = await buildOptimizeReport(db, schema, ws.tenantId, sinceDays);
+  const { loadTenant } = await import('~/server/utils/tenant');
+  const tenant = await loadTenant(ws.tenantId).catch(() => null);
+  const report = await buildOptimizeReport(db, schema, ws.tenantId, sinceDays, tenant?.country);
 
   const providers = await db.select().from(schema.voiceProviders).where(eq(schema.voiceProviders.tenantId, ws.tenantId));
   const notes: string[] = [];
