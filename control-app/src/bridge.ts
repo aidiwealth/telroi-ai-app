@@ -27,6 +27,10 @@ function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[bridge]', ...args);
 }
 
+export async function synthesizeMessage(text: string, tenantId?: string, agentId?: string): Promise<string | null> {
+  return prepWhisper(text, tenantId, agentId);
+}
+
 async function prepWhisper(text: string, tenantId?: string, agentId?: string): Promise<string | null> {
   if (!text || !tenantId || !INTERNAL_SECRET) return null;
   try {

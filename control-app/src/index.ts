@@ -19,7 +19,7 @@ import { config } from './config.ts';
 import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveTenantEndpoints, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
 import { logCall } from './call-log.ts';
 import { closeDb } from './db.ts';
-import { bridgeToEndpoint, bridgeToDepartment } from './bridge.ts';
+import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridge.ts';
 import { startProvisionAgent } from './provision-agent.ts';
 
 // Endpoint to bridge "person" routes to. For now this is a fixed stand-in
@@ -172,14 +172,20 @@ async function main() {
                   try { await playAndHangup(client, channel, 'sound:ss-noservice'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
                   return;
                 }
+                let raAnswered = false;
                 try {
                   await bridgeToDepartment({
-                    client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 30,
-                    onStatus: (status, details) => logStatus(details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined)(status, details)
+                    client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
+                    onStatus: (status, details) => { if (status === 'answered') raAnswered = true; logStatus(details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined)(status, details); }
                   });
                 } catch (err) {
                   log(`  [ai ${chId}] ring_all bridge failed: ${(err as Error)?.message}`);
-                  try { await channel.hangup(); } catch { /* gone */ }
+                }
+                if (!raAnswered) {
+                  log(`  [ai ${chId}] ring_all not answered — playing unavailable message`);
+                  const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
+                  try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); }
+                  catch { try { await channel.hangup(); } catch { /* gone */ } }
                 }
                 return;
               }
@@ -205,16 +211,24 @@ async function main() {
                 return;
               }
               log(`  [ai ${chId}] escalating to human ${target} (${dialEndpoint})`);
+              let escAnswered = false;
               try {
                 await bridgeToEndpoint({
                   client, caller: channel, endpoint: dialEndpoint,
-                  callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 30,
+                  callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
                   whisperText, whisperTenantId: route.tenantId, whisperAgentId: route.routeAgentId || undefined,
-                  onStatus: (status, details) => logStatus(user)(status, details)
+                  onStatus: (status, details) => { if (status === 'answered') escAnswered = true; logStatus(user)(status, details); }
                 });
               } catch (err) {
                 log(`  [ai ${chId}] escalation bridge failed: ${(err as Error)?.message}`);
-                try { await channel.hangup(); } catch { /* gone */ }
+              }
+              // If nobody answered (ring timed out / busy / rejected), don't leave the
+              // caller in silence — tell them the team is unavailable, then hang up.
+              if (!escAnswered) {
+                log(`  [ai ${chId}] escalation not answered — playing unavailable message`);
+                const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
+                try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); }
+                catch { try { await channel.hangup(); } catch { /* gone */ } }
               }
             },
             onEnd: (turns: number) => {
