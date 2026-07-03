@@ -8,6 +8,7 @@ const Body = z.object({
   telnum: z.string().min(3),
   agentId: z.string().uuid().optional(),
   languages: z.array(z.string()).optional(),
+  escalateMode: z.enum(['none','endpoint','phone','ring_all']).optional(),
   escalateTo: z.string().optional(),
   escalateAfter: z.number().int().min(0).optional(),
   crmWriteback: z.boolean().optional()

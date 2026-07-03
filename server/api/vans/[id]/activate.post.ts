@@ -51,6 +51,7 @@ export default defineEventHandler(async (event) => {
         routeType: 'ai',
         routeAgentId: van.agentId,
         routeTarget: null,
+        routeEscalateMode: van.escalateMode || 'none',
         routeEscalateTo: van.escalateTo || null,
         routeEscalateAfter: van.escalateAfter ?? 0
       })

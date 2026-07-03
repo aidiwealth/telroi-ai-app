@@ -78,8 +78,26 @@
             <span v-if="!agents.length" class="hint">No agents yet — <NuxtLink to="/ai" class="inline-link">create one on the AI page</NuxtLink>.</span>
           </div>
           <div class="field-float">
-            <input v-model="form.escalateTo" class="input" placeholder=" " id="van-esc" />
-            <label for="van-esc">Escalate to (human handoff)</label>
+            <label>When AI escalates to a human</label>
+            <select v-model="form.escalateMode" class="select" @change="onEscalateModeChange">
+              <option value="none">Don't transfer — AI handles the call</option>
+              <option value="ring_all">Ring my connected team (all logged-in agents)</option>
+              <option value="endpoint">Ring a specific team member</option>
+              <option value="phone">Ring an external phone number</option>
+            </select>
+            <span class="hint" v-if="form.escalateMode === 'ring_all' && !escalationTargets.length">No team members are connected yet. They appear here once logged into the dashboard or a softphone.</span>
+          </div>
+          <div class="field" v-if="form.escalateMode === 'endpoint'">
+            <label>Team member to ring</label>
+            <select v-model="form.escalateTo" class="select">
+              <option value="">— Select a connected member —</option>
+              <option v-for="t in escalationTargets" :key="t.id" :value="t.id">{{ t.label }}</option>
+            </select>
+            <span class="hint" v-if="!escalationTargets.length">No connected members yet. They appear once logged into the dashboard or a softphone.</span>
+          </div>
+          <div class="field" v-if="form.escalateMode === 'phone'">
+            <input v-model="form.escalateTo" class="input" placeholder=" " id="van-esc-phone" />
+            <label for="van-esc-phone">Phone number to ring (with country code)</label>
           </div>
           <div class="field">
             <label>Escalate after (seconds, 0 = on intent)</label>
@@ -112,6 +130,7 @@ interface Agent { id: string; name: string; }
 const pending = ref(true);
 const vans = ref<Van[]>([]);
 const agents = ref<Agent[]>([]);
+const escalationTargets = ref<{ id: string; label: string }[]>([]);
 const ownedNumbers = ref<any[]>([]);
 const form = ref<any>(null);
 const editingId = ref<string | null>(null);
@@ -129,13 +148,16 @@ async function load() {
       const r = await api.get<any>(props.apiBase);
       vans.value = r.vans || []; agents.value = r.agents || [];
       ownedNumbers.value = (r.numbers || []).filter((x: any) => x.status === 'active');
+      escalationTargets.value = r.escalationTargets || (await api.get<any>('/api/voice/escalation-targets').catch(() => ({ targets: [] })))?.targets || [];
     } else {
-      const [v, a, n] = await Promise.all([
+      const [v, a, n, t] = await Promise.all([
         api.get<Van[]>(props.apiBase),
         api.get<Agent[]>('/api/agents'),
-        api.get<any[]>('/api/numbers/subscriptions').catch(() => [])
+        api.get<any[]>('/api/numbers/subscriptions').catch(() => []),
+        api.get<any>('/api/voice/escalation-targets').catch(() => ({ targets: [] }))
       ]);
       vans.value = v; agents.value = a;
+      escalationTargets.value = t?.targets || [];
       ownedNumbers.value = (n || []).filter((x: any) => x.status === 'active');
     }
   } catch (e: any) { toast.err(e.message); }
@@ -144,11 +166,14 @@ async function load() {
 
 function openCreate() {
   editingId.value = null;
-  form.value = { name: '', telnum: '', agentId: undefined, escalateTo: '', escalateAfter: 0, crmWriteback: true };
+  form.value = { name: '', telnum: '', agentId: undefined, escalateMode: 'none', escalateTo: '', escalateAfter: 0, crmWriteback: true };
 }
 function openEdit(v: Van) {
   editingId.value = v.id;
-  form.value = { ...v };
+  form.value = { ...v, escalateMode: (v as any).escalateMode || 'none' };
+}
+function onEscalateModeChange() {
+  if (form.value) form.value.escalateTo = '';
 }
 
 async function save() {

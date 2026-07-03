@@ -9,6 +9,7 @@ const Body = z.object({
   name: z.string().min(1).optional(),
   agentId: z.string().uuid().nullable().optional(),
   languages: z.array(z.string()).optional(),
+  escalateMode: z.enum(['none','endpoint','phone','ring_all']).optional(),
   escalateTo: z.string().nullable().optional(),
   escalateAfter: z.number().int().min(0).optional(),
   crmWriteback: z.boolean().optional()
@@ -36,6 +37,7 @@ export default defineEventHandler(async (event) => {
         routeType: 'ai',
         routeAgentId: row.agentId,
         routeTarget: null,
+        routeEscalateMode: row.escalateMode || 'none',
         routeEscalateTo: row.escalateTo || null,
         routeEscalateAfter: row.escalateAfter ?? 0
       })

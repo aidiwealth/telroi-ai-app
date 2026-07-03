@@ -343,7 +343,8 @@ export const vans = pgTable('vans', {
   provider: providerKindEnum('provider').notNull().default('telroi'), // who owns the number
   agentId: uuid('agent_id').references(() => aiAgents.id, { onDelete: 'set null' }),
   languages: jsonb('languages').$type<string[]>().default(['en']),
-  escalateTo: text('escalate_to'),                  // extension / group / phone for human handoff
+  escalateMode: text('escalate_mode').notNull().default('none'), // none | endpoint | phone | ring_all
+  escalateTo: text('escalate_to'),                  // endpoint id / phone number (per mode)
   escalateAfter: integer('escalate_after').default(0), // seconds before handoff (0 = on intent)
   crmWriteback: boolean('crm_writeback').notNull().default(true),
   status: vanStatusEnum('status').notNull().default('draft'),
@@ -927,7 +928,8 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   routeType: text('route_type').notNull().default('person'), // person | department | ai
   routeTarget: text('route_target'),                          // person: extension/user; (department uses departmentId)
   routeAgentId: uuid('route_agent_id').references(() => aiAgents.id, { onDelete: 'set null' }),
-  routeEscalateTo: text('route_escalate_to'),                 // AI: human handoff target
+  routeEscalateMode: text('route_escalate_mode').notNull().default('none'), // none | endpoint | phone | ring_all
+  routeEscalateTo: text('route_escalate_to'),                 // AI: human handoff target (endpoint id / phone)
   routeEscalateAfter: integer('route_escalate_after').default(0),
   // Lazy provisioning: numbers are 'local' until first used after go-live, then
   // provisioned on the country's vendor and billed from that point.
