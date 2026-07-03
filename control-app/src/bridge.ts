@@ -104,6 +104,7 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
   const cleanup = async (reason: string) => {
     if (cleanedUp) return;
     cleanedUp = true;
+    try { if (typeof stopRing === 'function') await stopRing(); } catch { /* ignore */ }
     log(`cleanup bridge ${bridge.id} (${reason})`);
     if (opts.onStatus) {
       let terminal: 'ended' | 'no-answer' | 'failed';
@@ -130,6 +131,20 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
   caller.once('StasisEnd', () => { void cleanup('caller left'); });
   caller.once('ChannelDestroyed', () => { void cleanup('caller destroyed'); });
 
+  // Play ringback to the caller so they know we're connecting them to a human
+  // (silence during a transfer feels like a dropped call). Stopped on answer/cleanup.
+  let ringing = false;
+  const stopRing = async () => {
+    if (!ringing) return;
+    ringing = false;
+    try { await caller.ringStop(); } catch { /* not ringing */ }
+  };
+  const startRing = async () => {
+    if (ringing) return;
+    ringing = true;
+    try { await caller.ring(); } catch { /* ring optional */ }
+  };
+
   // 3) Originate the outbound channel to the target endpoint.
   //    We originate INTO Stasis so we get control of the callee channel too.
   const calleeChan = client.Channel();
@@ -146,6 +161,7 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
         if (media && !cleanedUp) { log(`whispering to callee ${ch.id}`); await playToChannel(client, ch, media); }
       }
       if (cleanedUp) return;
+      await stopRing();
       await bridge.addChannel({ channel: ch.id });
       wasAnswered = true;
       answeredAt = Date.now();
@@ -170,6 +186,9 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<void> {
       callerId: opts.callerIdNum || 'Telroi',
       timeout: ringTimeout
     });
+    // Play ringback to the caller so they hear the human's line ringing instead
+    // of dead silence during the transfer. Stopped when the callee answers.
+    await startRing();
     log(`originating to ${endpoint} (ring timeout ${ringTimeout}s)`);
   } catch (err) {
     await cleanup('originate failed');
@@ -212,6 +231,7 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
   const cleanup = async (reason: string) => {
     if (cleanedUp) return;
     cleanedUp = true;
+    try { if (typeof stopDeptRing === 'function') await stopDeptRing(); } catch { /* ignore */ }
     log(`cleanup dept bridge ${bridge.id} (${reason})`);
     if (opts.onStatus) {
       let terminal: 'ended' | 'no-answer' | 'failed';
@@ -234,12 +254,18 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
   caller.once('StasisEnd', () => { void cleanup('caller left'); });
   caller.once('ChannelDestroyed', () => { void cleanup('caller destroyed'); });
 
+  // Ringback so the caller hears the team's phones ringing, not silence.
+  let deptRinging = false;
+  const stopDeptRing = async () => { if (!deptRinging) return; deptRinging = false; try { await caller.ringStop(); } catch { /* */ } };
+  const startDeptRing = async () => { if (deptRinging) return; deptRinging = true; try { await caller.ring(); } catch { /* */ } };
+
   const onMemberStasisStart = async (_event: unknown, ch: Ari.Channel) => {
     if (!callees.some((c) => c.id === ch.id)) return;
     if (answeredId) { try { await ch.hangup(); } catch { /* gone */ } return; }
     answeredId = ch.id;
     answeredEndpoint = channelEndpoint.get(ch.id) || null;
     answeredAt = Date.now();
+    await stopDeptRing();
     log(`dept: ${ch.id} answered first -> bridging; cancelling other legs`);
     try {
       await ch.answer();
@@ -260,6 +286,7 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
   client.on('StasisStart', onMemberStasisStart as never);
 
   let originateFailures = 0;
+  await startDeptRing();
   await Promise.all(endpoints.map(async (endpoint) => {
     const ch = client.Channel();
     callees.push(ch);
