@@ -330,6 +330,21 @@ export async function buildOptimizeReport(db: any, schema: any, tenantId: string
   const shortOut = events.filter((e: any) => e.direction === 'out' && (e.duration || 0) > 0 && (e.duration || 0) < 6);
   if (shortOut.length >= 30) fraud.push({ severity: 'medium', kind: 'Call velocity', detail: `${shortOut.length} very short outbound calls — possible automated dialing`, calls: shortOut.length });
 
+  // ── Inbound fraud/abuse (protects the client's routes + SIP endpoints) ──
+  const inbound = events.filter((e: any) => (e.direction || 'in') === 'in');
+  // 1. Inbound flood — many calls from one source number (robocall / spam burst).
+  const inByPhone = new Map<string, number>();
+  for (const e of inbound) if (e.phone) inByPhone.set(e.phone, (inByPhone.get(e.phone) || 0) + 1);
+  for (const [phone, n] of inByPhone) {
+    if (n >= 40) fraud.push({ severity: 'medium', kind: 'Inbound flood', detail: `High inbound volume from ${phone} (${n} calls) — possible spam or robocalling`, route: phone, calls: n });
+  }
+  // 2. Toll-fraud probing — a burst of failed/rejected inbound (endpoint scanning).
+  const inFailed = inbound.filter((e: any) => e.status === 'failed' || e.status === 'rejected' || e.status === 'unauthorized');
+  if (inFailed.length >= 25) fraud.push({ severity: 'high', kind: 'Toll-fraud probing', detail: `${inFailed.length} failed/rejected inbound attempts — possible endpoint scanning or toll-fraud probing`, calls: inFailed.length });
+  // 3. Inbound velocity — bursts of very short answered inbound (wangiri callback bait).
+  const shortIn = inbound.filter((e: any) => (e.duration || 0) > 0 && (e.duration || 0) < 4);
+  if (shortIn.length >= 40) fraud.push({ severity: 'low', kind: 'Inbound velocity', detail: `${shortIn.length} very short inbound calls — possible wangiri callback bait`, calls: shortIn.length });
+
   const agents = await aiAgentPerformance(db, schema, tenantId, sinceDays);
   const usageRows = await db.select({
     agentId: schema.aiUsage.agentId,

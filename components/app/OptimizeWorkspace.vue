@@ -39,7 +39,7 @@
           <div class="stat">
             <div class="stat-label">Routes at risk</div>
             <div class="stat-value" :style="report.overview.routesAtRisk ? 'color:var(--danger)' : ''">{{ report.overview.routesAtRisk }}</div>
-            <div class="stat-meta">Grade D or F</div>
+            <div class="stat-meta">Lowest-scoring routes</div>
           </div>
           <div class="stat">
             <div class="stat-label">AI resolution</div>
@@ -88,6 +88,13 @@
             <span class="chip" :class="report.overview.hasCarrierGrade ? 'chip--ok' : ''">{{ report.overview.hasCarrierGrade ? 'Carrier-grade' : 'Operational' }}</span>
           </div>
           <div class="op-note">Every route scored on real call data — answer rate, wait, ratings, and carrier audio metrics where available. Worst first.</div>
+          <div class="op-legend">
+            <span class="op-leg"><span class="op-grade g-A">A</span> Excellent</span>
+            <span class="op-leg"><span class="op-grade g-B">B</span> Good</span>
+            <span class="op-leg"><span class="op-grade g-C">C</span> Fair</span>
+            <span class="op-leg"><span class="op-grade g-D">D</span> Poor</span>
+            <span class="op-leg"><span class="op-grade g-F">F</span> Critical</span>
+          </div>
           <table v-if="report.routes.length" class="table op-table">
             <thead>
               <tr><th>Route</th><th>Carrier</th><th>Dir</th><th>Calls</th><th>Score</th><th>Answer</th><th>Wait</th><th>Avg dur</th><th>Rating</th><th>Signals</th></tr>
@@ -163,7 +170,7 @@
       <div v-show="tab === 'fraud'">
         <div class="card op-provider">
           <div class="card-head"><span class="card-title">Fraud &amp; anomalies</span><span class="chip" :class="report.fraud.length ? 'chip--missed' : 'chip--ok'">{{ report.fraud.length ? report.fraud.length + ' alert' + (report.fraud.length === 1 ? '' : 's') : 'All clear' }}</span></div>
-          <div class="op-note">Automated detection of IRSF, traffic pumping and abnormal call velocity from your traffic patterns. Heuristic — review before acting.</div>
+          <div class="op-note">Live detection across both inbound and outbound traffic: outbound IRSF (premium-rate destinations), traffic pumping and call velocity; inbound floods, toll-fraud probing and callback-bait patterns. Runs on your call records — SIP registration-level detection (auth failures, unexpected source IPs) is coming next. Heuristic signals — review before acting.</div>
           <table v-if="report.fraud.length" class="table op-table">
             <thead><tr><th>Severity</th><th>Type</th><th>Detail</th><th>Calls</th></tr></thead>
             <tbody>
@@ -296,7 +303,9 @@ onMounted(load);
 .op-glance-row:last-child { border-bottom: none; }
 .op-glance-row span { color: var(--ink-mute, #8a8f98); }
 .op-provider { margin-bottom: 18px; }
-.op-note { padding: 0 20px 12px; font-size: 13px; color: var(--ink-mute, #8a8f98); line-height: 1.5; }
+.op-legend { display: flex; flex-wrap: wrap; gap: 16px; padding: 0 20px 14px; font-size: 12px; color: var(--ink-mute, #8a8f98); }
+.op-leg { display: inline-flex; align-items: center; gap: 6px; }
+.op-note { padding: 4px 20px 16px; font-size: 13px; color: var(--ink-mute, #8a8f98); line-height: 1.6; max-width: 720px; }
 .op-table { width: 100%; }
 .op-route { font-weight: 500; }
 .op-dir { font-weight: 400; font-size: 12px; }
