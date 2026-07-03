@@ -68,7 +68,15 @@ function log(...args: unknown[]) {
 // digits (so +234..., 234..., spaces, etc. all compare equal on the digits).
 export function normNum(raw: string | null | undefined): string {
   if (!raw) return '';
-  return raw.replace(/[^0-9]/g, '');
+  let d = String(raw).replace(/[^0-9]/g, ''); // digits only
+  if (!d) return '';
+  // Canonicalize to a comparable national key so the same number matches no
+  // matter how it's formatted or what the carrier sends. Carriers deliver DIDs
+  // in varying forms (+234..., 234..., 0..., bare national); collapse them all.
+  // Drop a leading Nigerian country code, then a leading national-trunk 0.
+  if (d.startsWith('234')) d = d.slice(3);
+  if (d.startsWith('0')) d = d.slice(1);
+  return d || String(raw).replace(/[^0-9]/g, '');
 }
 
 // ── Load everything from NYC into fresh maps, then atomically swap in. ──
