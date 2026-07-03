@@ -28,8 +28,10 @@ export interface NumberRoute {
   routeTarget: string | null;     // person extension/user
   departmentId: string | null;
   routeAgentId: string | null;
+  routeEscalateMode: string;
   routeEscalateTo: string | null;
   routeEscalateAfter: number;
+  provider: string | null;        // carrier (ruach/kasooko/...) -> trunk for escalation
 }
 
 interface CacheState {
@@ -41,6 +43,7 @@ interface CacheState {
   agentGreetings: Map<string, string>;
   // sip_endpoints.id -> sip_username  (Option B: route_target holds the id)
   sipEndpoints: Map<string, string>;
+  tenantEndpoints: Map<string, string[]>;  // tenantId -> [sip_username] for ring_all
   // departmentId -> [sip_username, ...]  (members who can take calls; ring-all)
   departmentEndpoints: Map<string, string[]>;
   // tenantIds that reject anonymous (no caller-id) inbound calls
@@ -54,6 +57,7 @@ let state: CacheState = {
   blacklist: new Set(),
   agentGreetings: new Map(),
   sipEndpoints: new Map(),
+  tenantEndpoints: new Map(),
   departmentEndpoints: new Map(),
   blockAnonymous: new Set(),
   loadedAt: 0,
@@ -86,6 +90,7 @@ export async function refreshCache(): Promise<void> {
     const blacklist = new Set<string>();
     const agentGreetings = new Map<string, string>();
     const sipEndpoints = new Map<string, string>();
+    const tenantEndpoints = new Map<string, string[]>();
 
     // number_subscriptions — DID -> client + routing. Only active subs matter.
     const subs = await db.select({
@@ -96,8 +101,10 @@ export async function refreshCache(): Promise<void> {
       routeTarget: schema.numberSubscriptions.routeTarget,
       departmentId: schema.numberSubscriptions.departmentId,
       routeAgentId: schema.numberSubscriptions.routeAgentId,
+      routeEscalateMode: schema.numberSubscriptions.routeEscalateMode,
       routeEscalateTo: schema.numberSubscriptions.routeEscalateTo,
-      routeEscalateAfter: schema.numberSubscriptions.routeEscalateAfter
+      routeEscalateAfter: schema.numberSubscriptions.routeEscalateAfter,
+      provider: schema.numberSubscriptions.provider
     }).from(schema.numberSubscriptions);
 
     for (const s of subs) {
@@ -111,6 +118,8 @@ export async function refreshCache(): Promise<void> {
         routeTarget: s.routeTarget ?? null,
         departmentId: s.departmentId ?? null,
         routeAgentId: s.routeAgentId ?? null,
+        provider: s.provider ?? null,
+        routeEscalateMode: s.routeEscalateMode ?? 'none',
         routeEscalateTo: s.routeEscalateTo ?? null,
         routeEscalateAfter: s.routeEscalateAfter ?? 0
       });
@@ -141,10 +150,18 @@ export async function refreshCache(): Promise<void> {
     // without breaking routing.
     const eps = await db.select({
       id: schema.sipEndpoints.id,
+      tenantId: schema.sipEndpoints.tenantId,
       sipUsername: schema.sipEndpoints.sipUsername
     }).from(schema.sipEndpoints);
     for (const e of eps) {
-      if (e.sipUsername) sipEndpoints.set(e.id, e.sipUsername);
+      if (e.sipUsername) {
+        sipEndpoints.set(e.id, e.sipUsername);
+        if (e.tenantId) {
+          const arr = tenantEndpoints.get(e.tenantId) || [];
+          arr.push(e.sipUsername);
+          tenantEndpoints.set(e.tenantId, arr);
+        }
+      }
     }
 
     // department_members JOIN memberships -> departmentId -> [pbxLogin, ...].
@@ -176,7 +193,7 @@ export async function refreshCache(): Promise<void> {
     const tenantRows = await db.select({ id: schema.tenants.id, blockAnonymous: schema.tenants.blockAnonymous }).from(schema.tenants);
     for (const t of tenantRows) { if (t.blockAnonymous) blockAnonymous.add(t.id); }
 
-    state = { numbers, blacklist, agentGreetings, sipEndpoints, departmentEndpoints: deptEndpoints, blockAnonymous, loadedAt: Date.now(), ok: true };
+    state = { numbers, blacklist, agentGreetings, sipEndpoints, tenantEndpoints, departmentEndpoints: deptEndpoints, blockAnonymous, loadedAt: Date.now(), ok: true };
     log(`refreshed: ${numbers.size} numbers, ${blacklist.size} blacklist entries, ${agentGreetings.size} agent greetings, ${sipEndpoints.size} sip endpoints, ${deptEndpoints.size} departments`);
   } catch (err) {
     // On failure, keep the previous (stale) cache rather than wiping it — a brief
@@ -215,6 +232,11 @@ export function agentGreeting(agentId: string | null): string | null {
 // Option B: resolve a route_target (a sip_endpoints.id) to its SIP username,
 // so the bridge can dial PJSIP/<username>. Returns null if not found (e.g. the
 // endpoint was deleted, or route_target isn't an endpoint id).
+export function resolveTenantEndpoints(tenantId: string | null): string[] {
+  if (!tenantId) return [];
+  return state.tenantEndpoints.get(tenantId) || [];
+}
+
 export function resolveEndpoint(endpointId: string | null): string | null {
   if (!endpointId) return null;
   return state.sipEndpoints.get(endpointId) || null;

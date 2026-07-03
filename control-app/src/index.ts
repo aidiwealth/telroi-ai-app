@@ -16,7 +16,7 @@
 
 import Ari from 'ari-client';
 import { config } from './config.ts';
-import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
+import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveTenantEndpoints, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
 import { logCall } from './call-log.ts';
 import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment } from './bridge.ts';
@@ -144,24 +144,73 @@ async function main() {
             escalateAfterSec: route.routeEscalateAfter || 0,
             log: (m: string) => log(`  [ai ${chId}] ${m}`),
             onTransfer: async (transferTo: string | null) => {
+              // Escalation is CLIENT-CONFIGURED via route.routeEscalateMode:
+              //   none      -> graceful message, no handoff (never a bare drop)
+              //   endpoint  -> ring one connected endpoint (route.routeEscalateTo = endpoint id)
+              //   phone     -> dial a real number out via the carrier trunk
+              //   ring_all  -> ring ALL the tenant's registered endpoints, first answer wins
+              const mode = route.routeEscalateMode || 'none';
               const target = transferTo || route.routeEscalateTo;
-              const username = target ? resolveEndpoint(target) : null;
-              if (!username) {
-                log(`  [ai ${chId}] escalation requested but no reachable target — hanging up`);
+              const whisperText = `A I transfer. Caller ${callerNum ? 'from ' + callerNum.split('').join(' ') : 'unknown number'}. Connecting you now.`;
+              const logStatus = (user?: string) => (status: any, details?: any) =>
+                logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in', duration: details?.duration, user });
+
+              // Mode: none — say we can't transfer, then hang up gracefully (no cold drop).
+              if (mode === 'none') {
+                log(`  [ai ${chId}] escalation mode=none — playing graceful message`);
                 logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ended', direction: 'in' });
-                try { await channel.hangup(); } catch { /* gone */ }
+                try { await playAndHangup(client, channel, 'sound:vm-goodbye'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
                 return;
               }
-              log(`  [ai ${chId}] escalating to human ${target} (${username})`);
-              const whisperText = `A I transfer. Caller ${callerNum ? 'from ' + callerNum.split('').join(' ') : 'unknown number'}. Connecting you now.`;
+
+              // Mode: ring_all — ring every registered endpoint for this tenant.
+              if (mode === 'ring_all') {
+                const endpoints = resolveTenantEndpoints(route.tenantId).map((u) => `PJSIP/${u}`);
+                log(`  [ai ${chId}] escalation mode=ring_all — ${endpoints.length} endpoint(s)`);
+                if (!endpoints.length) {
+                  logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
+                  try { await playAndHangup(client, channel, 'sound:ss-noservice'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
+                  return;
+                }
+                try {
+                  await bridgeToDepartment({
+                    client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 30,
+                    onStatus: (status, details) => logStatus(details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined)(status, details)
+                  });
+                } catch (err) {
+                  log(`  [ai ${chId}] ring_all bridge failed: ${(err as Error)?.message}`);
+                  try { await channel.hangup(); } catch { /* gone */ }
+                }
+                return;
+              }
+
+              // Modes: endpoint / phone — resolve a single dial target.
+              let dialEndpoint: string | null = null;
+              let user: string | undefined;
+              if (mode === 'endpoint') {
+                const username = target ? resolveEndpoint(target) : null;
+                if (username) { dialEndpoint = `PJSIP/${username}`; user = username; }
+              } else if (mode === 'phone') {
+                const digits = (target || '').replace(/[^0-9]/g, '');
+                if (digits.length >= 7) {
+                  const trunk = route.provider ? `${route.provider}-endpoint` : 'ruach-endpoint';
+                  dialEndpoint = `PJSIP/${digits}@${trunk}`;
+                  log(`  [ai ${chId}] escalating to phone ${digits} via ${trunk}`);
+                }
+              }
+              if (!dialEndpoint) {
+                log(`  [ai ${chId}] escalation mode=${mode} but target unresolved — graceful hangup`);
+                logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ended', direction: 'in' });
+                try { await playAndHangup(client, channel, 'sound:vm-goodbye'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
+                return;
+              }
+              log(`  [ai ${chId}] escalating to human ${target} (${dialEndpoint})`);
               try {
                 await bridgeToEndpoint({
-                  client, caller: channel, endpoint: `PJSIP/${username}`,
+                  client, caller: channel, endpoint: dialEndpoint,
                   callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 30,
                   whisperText, whisperTenantId: route.tenantId, whisperAgentId: route.routeAgentId || undefined,
-                  onStatus: (status, details) => {
-                    logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in', duration: details?.duration, user: username });
-                  }
+                  onStatus: (status, details) => logStatus(user)(status, details)
                 });
               } catch (err) {
                 log(`  [ai ${chId}] escalation bridge failed: ${(err as Error)?.message}`);

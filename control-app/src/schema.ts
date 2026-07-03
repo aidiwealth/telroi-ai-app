@@ -23,11 +23,13 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull(),
   telnum: text('telnum').notNull(),
+  provider: text('provider'),
   status: text('status').notNull().default('active'),
   departmentId: uuid('department_id'),
   routeType: text('route_type').notNull().default('person'),
   routeTarget: text('route_target'),
   routeAgentId: uuid('route_agent_id'),
+  routeEscalateMode: text('route_escalate_mode').notNull().default('none'),
   routeEscalateTo: text('route_escalate_to'),
   routeEscalateAfter: integer('route_escalate_after').default(0)
 }, (t) => ({
