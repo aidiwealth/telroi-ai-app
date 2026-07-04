@@ -113,7 +113,10 @@ async function recordTurn(channel: Ari.Channel, client: Ari.Client, log: Logger)
     if (buf) { fs.unlink(path).catch(() => {}); return buf.toString('base64'); }
     return '';
   } catch (e) {
-    log(`ai: recordTurn failed: ${(e as Error)?.message}`);
+    const msg = (e as any)?.message || String(e);
+    log(`ai: recordTurn failed: ${JSON.stringify(msg)}`);
+    // Signal a dead/gone channel so the caller loop can stop instead of spinning.
+    if (/channel not found/i.test(String(msg))) throw Object.assign(new Error('channel-gone'), { channelGone: true });
     return '';
   }
 }
@@ -176,7 +179,9 @@ export async function runAiCall(opts: AiCallOptions): Promise<void> {
   while (!hungUp && turns < MAX_TURNS) {
     if (await timedEscalate()) return;
     turns++;
-    const audioB64 = await recordTurn(channel, client, log);
+    let audioB64 = '';
+    try { audioB64 = await recordTurn(channel, client, log); }
+    catch (e: any) { if (e?.channelGone) { log('ai: channel gone — ending loop'); hungUp = true; break; } }
     if (hungUp) break;
 
     const turn = await callTurn({ agentId, tenantId, callId, history, audioBase64: audioB64, audioContentType: 'audio/wav' });
