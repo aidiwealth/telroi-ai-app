@@ -88,7 +88,7 @@ async function resolveConn(tenantId: string, connId: string | null, kinds: strin
 }
 
 export async function sttTranscribe(tenantId: string, sttConnId: string | null, audio: Buffer, contentType = 'audio/wav', allowManaged = false): Promise<string> {
-  const conn = await resolveConn(tenantId, sttConnId, ['deepgram', 'openai', 'google']);
+  const conn = await resolveConn(tenantId, sttConnId, ['deepgram', 'openai', 'google-cloud']);
   try {
     if (conn?.provider === 'deepgram') {
       const res = await fetch('https://api.deepgram.com/v1/listen?punctuate=true&model=nova-2', {
@@ -109,7 +109,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const d: any = await res.json();
       return d?.text || '';
     }
-    if (conn?.provider === 'google') {
+    if (conn?.provider === 'google-cloud') {
       const rate = /rate=(\d+)/.exec(contentType)?.[1] || (/l16|pcm/i.test(contentType) ? '16000' : '8000');
       const res = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${conn.apiKey}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -145,7 +145,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
 }
 
 export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
-  const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai', 'google']);
+  const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai', 'google-cloud']);
   try {
     if (conn?.provider === 'elevenlabs') {
       const voiceId = opts.voice || (conn.meta.defaultVoice as string) || '21m00Tcm4TlvDq8ikWAM';
@@ -164,7 +164,7 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
       if (!res.ok) return null;
       return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/wav' };
     }
-    if (conn?.provider === 'google') {
+    if (conn?.provider === 'google-cloud') {
       const voice = opts.voice || (conn.meta.defaultVoice as string) || 'en-US-Neural2-C';
       const lang = (conn.meta.language as string) || voice.split('-').slice(0, 2).join('-') || 'en-US';
       const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${conn.apiKey}`, {
@@ -209,8 +209,8 @@ export async function resolveDefaultConnections(tenantId: string): Promise<Defau
   };
   return {
     llmConnId: pick(['anthropic', 'openai', 'google', 'grok']),
-    sttConnId: pick(['deepgram', 'openai', 'google']),
-    ttsConnId: pick(['elevenlabs', 'openai', 'google'])
+    sttConnId: pick(['deepgram', 'openai', 'google-cloud']),
+    ttsConnId: pick(['elevenlabs', 'openai', 'google-cloud'])
   };
 }
 
@@ -325,7 +325,7 @@ export async function resolveAgentTier(tenantId: string, agent: { llmConnId: str
     return byok ? 'byok' : 'unavailable';
   };
   const llm = role(okConn(agent.llmConnId, ['anthropic', 'openai', 'google', 'grok']), hasManagedLlm);
-  const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai', 'google']), hasManagedSpeech);
-  const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai', 'google']), hasManagedSpeech);
+  const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai', 'google-cloud']), hasManagedSpeech);
+  const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai', 'google-cloud']), hasManagedSpeech);
   return { llm, stt, tts, anyManaged: [llm, stt, tts].includes('managed') };
 }

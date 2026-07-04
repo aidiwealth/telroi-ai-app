@@ -227,7 +227,8 @@ function tierTitle(role: string, t?: string): string {
 const providers = [
   { id: 'openai', label: 'OpenAI', role: 'LLM · STT · TTS' },
   { id: 'anthropic', label: 'Anthropic (Claude)', role: 'LLM reasoning' },
-  { id: 'google', label: 'Google (Gemini)', role: 'LLM reasoning' },
+  { id: 'google', label: 'Google Gemini', role: 'LLM reasoning' },
+  { id: 'google-cloud', label: 'Google Cloud Speech', role: 'Speech-to-text · Text-to-speech' },
   { id: 'grok', label: 'Grok (xAI)', role: 'LLM reasoning' },
   { id: 'deepgram', label: 'Deepgram', role: 'Speech-to-text' },
   { id: 'elevenlabs', label: 'ElevenLabs', role: 'Text-to-speech' }
@@ -270,7 +271,7 @@ function roleConnId(role: 'stt' | 'llm' | 'tts'): string | undefined {
   const conn = connections.value.find((x) => x.provider === provider && x.status === 'ok');
   return conn?.id;
 }
-const ROLE_PREF = { stt: ['deepgram', 'openai', 'google'], llm: ['anthropic', 'openai', 'google', 'grok'], tts: ['elevenlabs', 'openai', 'google'] };
+const ROLE_PREF = { stt: ['deepgram', 'openai', 'google-cloud'], llm: ['anthropic', 'openai', 'google', 'grok'], tts: ['elevenlabs', 'openai', 'google-cloud'] };
 function connectedOk(provider: string): boolean { return connections.value.some((c) => c.provider === provider && c.status === 'ok'); }
 function roleProvider(role: 'stt' | 'llm' | 'tts'): { id: string; label: string } | null {
   for (const p of ROLE_PREF[role]) { if (connectedOk(p)) return { id: p, label: label(p) }; }
