@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
   if (body.audioBase64) {
     const audio = Buffer.from(body.audioBase64, 'base64');
     userText = (await sttTranscribe(tenantId, agent.sttConnId, audio, body.audioContentType || 'audio/wav', agent.tier === 'managed')).trim();
+    console.log(`[turn] stt=${agent.sttConnId ? 'byok' : 'managed'} userText="${userText.slice(0,100)}" (${userText.length} chars)`);
   }
 
   if (!userText) {

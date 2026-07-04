@@ -118,9 +118,11 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
           audio: { content: audio.toString('base64') }
         })
       });
-      if (!res.ok) return '';
+      if (!res.ok) { console.error(`[ai-brain] Google STT failed ${res.status}: ${(await res.text().catch(()=>'')).slice(0,200)}`); return ''; }
       const d: any = await res.json();
-      return d?.results?.map((r: any) => r.alternatives?.[0]?.transcript || '').join(' ').trim() || '';
+      const tx = d?.results?.map((r: any) => r.alternatives?.[0]?.transcript || '').join(' ').trim() || '';
+      console.log(`[ai-brain] STT(google) got ${tx.length} chars: "${tx.slice(0,80)}"`);
+      return tx;
     }
     if (!allowManaged) return '';
     const c = useRuntimeConfig() as any;
