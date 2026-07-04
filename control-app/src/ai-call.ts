@@ -40,9 +40,13 @@ async function callTurn(payload: Record<string, unknown>): Promise<TurnResponse 
       headers: { 'Content-Type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) return null;
-    return await res.json() as TurnResponse;
-  } catch {
+    if (!res.ok) { console.log(`[ai-call] turn HTTP ${res.status}`); return null; }
+    const j = await res.json() as TurnResponse;
+    const first = (payload as any).first ? 'greeting' : 'turn';
+    console.log(`[ai-call] ${first}: action=${(j as any).action || 'continue'} replyLen=${((j as any).reply || '').length} audio=${(j as any).audioBase64 ? 'yes' : 'no'} reply="${String((j as any).reply || '').slice(0, 80)}"`);
+    return j;
+  } catch (e) {
+    console.log(`[ai-call] turn fetch error: ${(e as Error)?.message}`);
     return null;
   }
 }
