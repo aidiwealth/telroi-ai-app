@@ -154,6 +154,9 @@ export async function runAiCall(opts: AiCallOptions): Promise<void> {
   };
 
   try { await channel.answer(); } catch { /* already up */ }
+  // Let the RTP media path fully establish before the first audio, otherwise the
+  // opening words of the greeting get clipped (caller hears only the tail end).
+  await new Promise((r) => setTimeout(r, 700));
 
   const greet = await callTurn({ agentId, tenantId, first: true });
   if (!greet) { log('ai: greeting turn failed'); opts.onEnd?.(turns); return; }
