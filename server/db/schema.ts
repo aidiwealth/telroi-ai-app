@@ -6,7 +6,7 @@ import {
 
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'member']);export const platformRoleEnum = pgEnum('platform_role', ['superadmin', 'staff']);
 export const providerKindEnum = pgEnum('provider_kind', ['telroi', 'twilio', 'telnyx']);
-export const aiProviderEnum = pgEnum('ai_provider', ['openai', 'anthropic', 'deepgram', 'elevenlabs', 'google', 'grok']);
+export const aiProviderEnum = pgEnum('ai_provider', ['openai', 'anthropic', 'deepgram', 'elevenlabs', 'google', 'google-cloud', 'grok']);
 export const tokenPurposeEnum = pgEnum('token_purpose', ['login']);
 export const vanStatusEnum = pgEnum('van_status', ['draft', 'live', 'paused']);
 export const currencyEnum = pgEnum('currency', ['NGN', 'USD']);
