@@ -277,12 +277,17 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: sys }] },
           contents: history.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-          generationConfig: { maxOutputTokens: 300 }
+          // Gemini 2.5 is a thinking model: it spends output tokens on hidden
+          // reasoning first, so a small budget can leave NO visible reply (empty
+          // text -> the turn treats it as a failure and cuts off). Disable thinking
+          // and give ample headroom so there's always a spoken answer.
+          generationConfig: { maxOutputTokens: 800, thinkingConfig: { thinkingBudget: 0 } }
         })
       });
-      if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
+      if (!res.ok) { console.error(`[ai-brain] Gemini LLM failed ${res.status}: ${(await res.text().catch(()=>'')).slice(0,200)}`); return { text: null, inputTokens: 0, outputTokens: 0 }; }
       const d: any = await res.json();
       const text = d.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join(' ') || '';
+      if (!text.trim()) console.error(`[ai-brain] Gemini empty reply — finishReason=${d.candidates?.[0]?.finishReason || '?'}`);
       return { text: (text || '').trim() || null, inputTokens: d.usageMetadata?.promptTokenCount || 0, outputTokens: d.usageMetadata?.candidatesTokenCount || 0 };
     }
     const isGrok = llm.provider === 'grok';
