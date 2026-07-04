@@ -21,6 +21,11 @@ export default defineEventHandler(async (event) => {
     };
   }
 
+  // Enforce the tenant's concurrent-channel limit (same guard as the dialer/widget)
+  // so API-initiated calls can't exceed paid capacity.
+  const { assertChannelAvailable } = await import('~/server/utils/channel-limits');
+  await assertChannelAvailable(ctx.tenantId);
+
   // Route by the from-number's provisioned carrier when given.
   if (p.data.from) {
     const { placeCall } = await import('~/server/utils/call-router');
