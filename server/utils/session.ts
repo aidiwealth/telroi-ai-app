@@ -4,7 +4,8 @@ import { SignJWT, jwtVerify } from 'jose';
 import type { H3Event } from 'h3';
 
 const COOKIE = 'telroi_session';
-const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+const MAX_AGE = 60 * 60 * 24 * 7; // 7 days (client sessions)
+const ADMIN_MAX_AGE = 60 * 30;      // 30 min idle (admin) — refreshed on each request
 
 export interface SessionClaims {
   userId: string;
@@ -70,15 +71,22 @@ export async function issueAdminSession(event: H3Event, claims: AdminSessionClai
   const jwt = await new SignJWT({ ...claims, kind: 'admin' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime(`${MAX_AGE}s`)
+    .setExpirationTime(`${ADMIN_MAX_AGE}s`)
     .sign(secret());
   setCookie(event, ADMIN_COOKIE, jwt, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: MAX_AGE
+    maxAge: ADMIN_MAX_AGE
   });
+}
+
+// Re-issue the admin cookie to reset the 30-min idle window. Called on each
+// authenticated admin request so active operators stay logged in; 30 min of
+// no requests lets the cookie expire (idle logout).
+export async function refreshAdminSession(event: H3Event, claims: AdminSessionClaims) {
+  await issueAdminSession(event, claims);
 }
 
 export async function readAdminSession(event: H3Event): Promise<AdminSessionClaims | null> {

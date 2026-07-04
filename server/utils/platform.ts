@@ -3,7 +3,7 @@
 // identity space from tenant users; their session carries a `platform` claim.
 import type { H3Event } from 'h3';
 import { eq } from 'drizzle-orm';
-import { readAdminSession } from './session';
+import { readAdminSession, refreshAdminSession } from './session';
 import { apiError } from './api';
 import { useDb, schema } from '../db';
 
@@ -14,6 +14,8 @@ export async function requirePlatformAdmin(event: H3Event) {
   const [admin] = await db.select().from(schema.platformAdmins)
     .where(eq(schema.platformAdmins.email, s.email)).limit(1);
   if (!admin) throw apiError('forbidden', 'Platform admin access required', 403);
+  // Rolling idle timeout: reset the 30-min window on each authenticated request.
+  try { await refreshAdminSession(event, { email: admin.email, role: admin.role }); } catch { /* non-fatal */ }
   return { email: admin.email, role: admin.role };
 }
 
