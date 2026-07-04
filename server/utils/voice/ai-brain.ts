@@ -110,15 +110,40 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       return d?.text || '';
     }
     if (conn?.provider === 'google-cloud') {
-      const rate = /rate=(\d+)/.exec(contentType)?.[1] || (/l16|pcm/i.test(contentType) ? '16000' : '8000');
+      // The audio is a WAV FILE (RIFF header + PCM). Do NOT force encoding=LINEAR16
+      // with a manual rate — that tells Google the bytes are raw headerless PCM, so
+      // it misreads the 44-byte WAV header as audio and garbles the transcript.
+      // Detect raw PCM vs a real WAV: only set explicit encoding/rate for raw PCM.
+      const isRawPcm = /l16|pcm/i.test(contentType) && !/wav/i.test(contentType);
+      const cfg: any = {
+        languageCode: (conn.meta.language as string) || 'en-US',
+        model: 'phone_call',          // tuned for 8kHz telephony audio
+        useEnhanced: true,
+        enableAutomaticPunctuation: true
+      };
+      if (isRawPcm) {
+        cfg.encoding = 'LINEAR16';
+        cfg.sampleRateHertz = Number(/rate=(\d+)/.exec(contentType)?.[1] || '16000');
+      }
+      // For a WAV file, omit encoding/sampleRateHertz — Google reads them from the header.
       const res = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${conn.apiKey}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          config: { encoding: 'LINEAR16', sampleRateHertz: Number(rate), languageCode: (conn.meta.language as string) || 'en-US' },
-          audio: { content: audio.toString('base64') }
-        })
+        body: JSON.stringify({ config: cfg, audio: { content: audio.toString('base64') } })
       });
-      if (!res.ok) { console.error(`[ai-brain] Google STT failed ${res.status}: ${(await res.text().catch(()=>'')).slice(0,200)}`); return ''; }
+      if (!res.ok) {
+        const body = (await res.text().catch(()=>'')).slice(0,300);
+        console.error(`[ai-brain] Google STT failed ${res.status}: ${body}`);
+        // 'phone_call' model isn't available in every region/project — retry without it.
+        if (/model/i.test(body)) {
+          delete cfg.model; delete cfg.useEnhanced;
+          const r2 = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${conn.apiKey}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config: cfg, audio: { content: audio.toString('base64') } })
+          });
+          if (r2.ok) { const d2: any = await r2.json(); const t2 = d2?.results?.map((r: any) => r.alternatives?.[0]?.transcript || '').join(' ').trim() || ''; console.log(`[ai-brain] STT(google,fallback) got ${t2.length} chars: "${t2.slice(0,80)}"`); return t2; }
+        }
+        return '';
+      }
       const d: any = await res.json();
       const tx = d?.results?.map((r: any) => r.alternatives?.[0]?.transcript || '').join(' ').trim() || '';
       console.log(`[ai-brain] STT(google) got ${tx.length} chars: "${tx.slice(0,80)}"`);
