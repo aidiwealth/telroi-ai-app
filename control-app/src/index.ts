@@ -26,6 +26,29 @@ import { startProvisionAgent } from './provision-agent.ts';
 // so ring_all doesn't waste originate attempts on stale/disconnected endpoints
 // ("Allocation failed"). Uses ARI endpoint state; on any error, keeps the endpoint
 // (fail-open) so a lookup glitch never silently drops a reachable agent.
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
+const INTERNAL_SECRET = process.env.PROVISION_AGENT_SECRET || process.env.TELROI_INTERNAL_SECRET || '';
+
+// Check the tenant's paid concurrent-channel limit before connecting an inbound
+// AI call. Uses the web app's unified live-call count (dialer + widget + API +
+// inbound together). Fail-open: if the check errors/times out, allow the call
+// (never drop a real caller because of a transient capacity-lookup failure).
+async function inboundHasCapacity(tenantId: string, log: (m: string) => void): Promise<boolean> {
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/voice/capacity?tenantId=${encodeURIComponent(tenantId)}`, {
+      headers: { 'x-telroi-internal': INTERNAL_SECRET },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!res.ok) { log(`capacity check HTTP ${res.status} — allowing (fail-open)`); return true; }
+    const u = await res.json() as { capacity: number; inUse: number; ok: boolean };
+    log(`capacity: ${u.inUse}/${u.capacity} in use -> ${u.ok ? 'OK' : 'BUSY'}`);
+    return !!u.ok;
+  } catch (e) {
+    log(`capacity check failed (${(e as Error)?.message}) — allowing (fail-open)`);
+    return true;
+  }
+}
+
 async function filterLiveEndpoints(client: any, usernames: string[], log: (m: string) => void): Promise<string[]> {
   const checks = await Promise.all(usernames.map(async (u) => {
     try {
@@ -150,6 +173,16 @@ async function main() {
             log(`     AI route but no agent configured — playing no-service`);
             logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
             await playAndHangup(client, channel, 'sound:ss-noservice');
+            break;
+          }
+          // Enforce the tenant's concurrent-channel limit for INBOUND too, so
+          // inbound AI calls can't exceed paid capacity (counted together with
+          // dialer/widget/API calls). Over capacity -> polite "all lines busy".
+          if (!(await inboundHasCapacity(route.tenantId, (m) => log(`  [ai ${chId}] ${m}`)))) {
+            log(`     AI route but tenant at channel capacity — playing busy`);
+            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { did: dialedDid, reason: 'channels_busy' } });
+            const busyMsg = await synthesizeMessage('All of our lines are currently busy. Please call back in a few minutes. Thank you.', route.tenantId, agentId).catch(() => null);
+            await playAndHangup(client, channel, busyMsg || 'sound:ss-noservice');
             break;
           }
           log(`     AI route -> agent ${agentId} (turn-based conversation)`);
