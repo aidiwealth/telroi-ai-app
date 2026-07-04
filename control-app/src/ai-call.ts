@@ -94,7 +94,7 @@ async function recordTurn(channel: Ari.Channel, client: Ari.Client, log: Logger)
       name,
       format: 'wav',
       maxDurationSeconds: 30,
-      maxSilenceSeconds: 2,
+      maxSilenceSeconds: 1,
       beep: false,
       ifExists: 'overwrite',
       terminateOn: '#'

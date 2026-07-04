@@ -117,8 +117,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const isRawPcm = /l16|pcm/i.test(contentType) && !/wav/i.test(contentType);
       const cfg: any = {
         languageCode: (conn.meta.language as string) || 'en-US',
-        model: 'phone_call',          // tuned for 8kHz telephony audio
-        useEnhanced: true,
+        model: 'phone_call',          // tuned for 8kHz telephony audio (keeps accuracy)
         enableAutomaticPunctuation: true
       };
       if (isRawPcm) {
