@@ -22,6 +22,25 @@ import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridge.ts';
 import { startProvisionAgent } from './provision-agent.ts';
 
+// Filter a list of PJSIP usernames to only those currently REGISTERED (online),
+// so ring_all doesn't waste originate attempts on stale/disconnected endpoints
+// ("Allocation failed"). Uses ARI endpoint state; on any error, keeps the endpoint
+// (fail-open) so a lookup glitch never silently drops a reachable agent.
+async function filterLiveEndpoints(client: any, usernames: string[], log: (m: string) => void): Promise<string[]> {
+  const checks = await Promise.all(usernames.map(async (u) => {
+    try {
+      const ep = await client.endpoints.get({ tech: 'PJSIP', resource: u });
+      // ARI reports state: 'online' (registered) | 'offline' (no contact) | 'unknown'.
+      return { u, keep: ep?.state === 'online' };
+    } catch (e) {
+      // Fail-open: a lookup glitch shouldn't drop a possibly-reachable agent.
+      log(`  [ring_all] endpoint ${u} state check failed (${(e as Error)?.message}) — keeping`);
+      return { u, keep: true };
+    }
+  }));
+  return checks.filter((c) => c.keep).map((c) => c.u);
+}
+
 // Endpoint to bridge "person" routes to. For now this is a fixed stand-in
 // (test1) to prove bridging; later, route_target maps to the client's real
 // provisioned SIP endpoint. Override via BRIDGE_ENDPOINT env if needed.
@@ -165,8 +184,10 @@ async function main() {
 
               // Mode: ring_all — ring every registered endpoint for this tenant.
               if (mode === 'ring_all') {
-                const endpoints = resolveTenantEndpoints(route.tenantId).map((u) => `PJSIP/${u}`);
-                log(`  [ai ${chId}] escalation mode=ring_all — ${endpoints.length} endpoint(s)`);
+                const allUsers = resolveTenantEndpoints(route.tenantId);
+                const liveUsers = await filterLiveEndpoints(client, allUsers, log);
+                const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
+                log(`  [ai ${chId}] escalation mode=ring_all — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
                 if (!endpoints.length) {
                   logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
                   try { await playAndHangup(client, channel, 'sound:ss-noservice'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
