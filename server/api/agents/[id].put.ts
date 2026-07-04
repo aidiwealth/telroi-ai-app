@@ -24,6 +24,15 @@ export default defineEventHandler(async (event) => {
   for (const [k, v] of Object.entries(parsed.data)) if (v !== undefined) patch[k] = v;
   if (!Object.keys(patch).length) throw apiError('invalid', 'Nothing to update');
   const db = useDb();
+  // Security: any connection assigned to this agent MUST belong to this tenant,
+  // otherwise a client could point their agent at another tenant's key.
+  const connIds = [patch.sttConnId, patch.llmConnId, patch.ttsConnId].filter((x): x is string => typeof x === 'string');
+  if (connIds.length) {
+    const owned = await db.select({ id: schema.aiConnections.id }).from(schema.aiConnections)
+      .where(eq(schema.aiConnections.tenantId, s.tenantId));
+    const ownedSet = new Set(owned.map((c: any) => c.id));
+    for (const cid of connIds) if (!ownedSet.has(cid)) throw apiError('invalid', 'Unknown connection', 400);
+  }
   const [row] = await db.update(schema.aiAgents).set(patch)
     .where(and(eq(schema.aiAgents.id, id), eq(schema.aiAgents.tenantId, s.tenantId))).returning();
   if (!row) throw apiError('not_found', 'Agent not found', 404);

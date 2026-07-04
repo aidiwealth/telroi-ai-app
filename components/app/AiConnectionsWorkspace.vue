@@ -172,6 +172,24 @@
               <div class="edit-form">
                 <label class="edit-fld"><span>Agent name</span><input v-model="agentEdit.name" class="input" placeholder="Agent name" /></label>
                 <label class="edit-fld"><span>Greeting</span><input v-model="agentEdit.greeting" class="input" placeholder="Greeting (optional)" /></label>
+                <label class="edit-fld"><span>Speech-to-text</span>
+                  <select v-model="agentEdit.sttConnId" class="select">
+                    <option value="">— None —</option>
+                    <option v-for="c in connections" :key="'stt'+c.id" :value="c.id">{{ c.provider }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
+                  </select>
+                </label>
+                <label class="edit-fld"><span>Language model</span>
+                  <select v-model="agentEdit.llmConnId" class="select">
+                    <option value="">— None —</option>
+                    <option v-for="c in connections" :key="'llm'+c.id" :value="c.id">{{ c.provider }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
+                  </select>
+                </label>
+                <label class="edit-fld"><span>Text-to-speech</span>
+                  <select v-model="agentEdit.ttsConnId" class="select">
+                    <option value="">— None —</option>
+                    <option v-for="c in connections" :key="'tts'+c.id" :value="c.id">{{ c.provider }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
+                  </select>
+                </label>
                 <div class="edit-actions">
                   <button class="btn btn-ghost btn-sm" @click="editingAgent = null">Cancel</button>
                   <button class="btn btn-dark btn-sm" :disabled="savingAgentEdit || !agentEdit.name.trim()" @click="saveAgentEdit(a.id)">{{ savingAgentEdit ? 'Saving…' : 'Save changes' }}</button>
@@ -197,7 +215,7 @@ const toast = useToast();
 
 interface Conn { id: string; provider: string; keyMasked: string; status: string; lastTestedAt: string | null; }
 interface AgentTier { llm: string; stt: string; tts: string; anyManaged: boolean; }
-interface Agent { id: string; name: string; greeting?: string | null; tier?: AgentTier; }
+interface Agent { id: string; name: string; greeting?: string | null; tier?: AgentTier; sttConnId?: string | null; llmConnId?: string | null; ttsConnId?: string | null; }
 function tierLabel(t?: string): string { return t === 'byok' ? 'Your key' : t === 'managed' ? 'Managed' : 'Not set'; }
 function tierClass(t?: string): string { return t === 'byok' ? 'tier-byok' : t === 'managed' ? 'tier-managed' : 'tier-none'; }
 function tierTitle(role: string, t?: string): string {
@@ -346,14 +364,20 @@ async function saveConnEdit(id: string) {
 }
 
 const editingAgent = ref<string | null>(null);
-const agentEdit = reactive({ name: '', greeting: '' });
+const agentEdit = reactive({ name: '', greeting: '', sttConnId: '', llmConnId: '', ttsConnId: '' });
 const savingAgentEdit = ref(false);
-function startEditAgent(a: Agent) { editingAgent.value = a.id; agentEdit.name = a.name; agentEdit.greeting = a.greeting || ''; }
+function startEditAgent(a: Agent) { editingAgent.value = a.id; agentEdit.name = a.name; agentEdit.greeting = a.greeting || ''; agentEdit.sttConnId = a.sttConnId || ''; agentEdit.llmConnId = a.llmConnId || ''; agentEdit.ttsConnId = a.ttsConnId || ''; }
 async function saveAgentEdit(id: string) {
   if (!agentEdit.name.trim()) return;
   savingAgentEdit.value = true;
   try {
-    await api.put(`${props.agentsBase}/${id}`, { name: agentEdit.name.trim(), greeting: agentEdit.greeting.trim() || null });
+    await api.put(`${props.agentsBase}/${id}`, {
+      name: agentEdit.name.trim(),
+      greeting: agentEdit.greeting.trim() || null,
+      sttConnId: agentEdit.sttConnId || null,
+      llmConnId: agentEdit.llmConnId || null,
+      ttsConnId: agentEdit.ttsConnId || null
+    });
     editingAgent.value = null; toast.ok('Agent updated'); await loadAgents();
   } catch (e: any) { toast.err(e.message); }
   finally { savingAgentEdit.value = false; }
