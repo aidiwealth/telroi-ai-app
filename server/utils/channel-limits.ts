@@ -26,16 +26,20 @@ export async function channelCapacity(tenantId: string): Promise<number> {
 export async function liveCallCount(tenantId: string): Promise<number> {
   const db = useDb();
   // 1. Live Call widget sessions actively calling/connected.
+  // Bound by startedAt too: a session stuck in calling/connected (crash, lost
+  // WebRTC) must not consume a channel forever.
+  const sessionSince = new Date(Date.now() - 20 * 60 * 1000);
   const sessions = await db.select({ id: schema.liveCallSessions.id })
     .from(schema.liveCallSessions)
     .where(and(
       eq(schema.liveCallSessions.tenantId, tenantId),
-      inArray(schema.liveCallSessions.status, ['calling', 'connected'])
+      inArray(schema.liveCallSessions.status, ['calling', 'connected']),
+      gte(schema.liveCallSessions.startedAt, sessionSince)
     ));
   // 2. Dialer / carrier call events still in progress. Guard against stale rows
   //    (no end + started within the last 2h) so a crashed call doesn't wedge a
   //    channel forever.
-  const since = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const since = new Date(Date.now() - 20 * 60 * 1000); // 20 min — a stuck/crashed call shouldn't wedge a channel longer than this
   const events = await db.select({ id: schema.callEvents.id })
     .from(schema.callEvents)
     .where(and(
