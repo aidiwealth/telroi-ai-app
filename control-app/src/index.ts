@@ -154,6 +154,18 @@ async function main() {
         return;
       }
 
+      // 2.5) Concurrency limit — check BEFORE logging this call as in-flight, so
+      //       the current call doesn't count itself. Over capacity -> "all lines busy".
+      if (!(await inboundHasCapacity(route.tenantId, (m) => log(`  [${chId}] ${m}`)))) {
+        log(`  tenant at channel capacity — playing busy`);
+        logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { did: dialedDid, reason: 'channels_busy' } });
+        const busyMsg = route.routeType === 'ai' && route.routeAgentId
+          ? await synthesizeMessage('All of our lines are currently busy. Please call back in a few minutes. Thank you.', route.tenantId, route.routeAgentId).catch(() => null)
+          : null;
+        await playAndHangup(client, channel, busyMsg || 'sound:ss-noservice');
+        return;
+      }
+
       // 3) Log the call as RINGING (async, fire-and-forget). The real outcome
       //    (answered / ended / no-answer / failed) is upserted by the bridge's
       //    onStatus callback as the call progresses. We record the dialed DID in
@@ -173,16 +185,6 @@ async function main() {
             log(`     AI route but no agent configured — playing no-service`);
             logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
             await playAndHangup(client, channel, 'sound:ss-noservice');
-            break;
-          }
-          // Enforce the tenant's concurrent-channel limit for INBOUND too, so
-          // inbound AI calls can't exceed paid capacity (counted together with
-          // dialer/widget/API calls). Over capacity -> polite "all lines busy".
-          if (!(await inboundHasCapacity(route.tenantId, (m) => log(`  [ai ${chId}] ${m}`)))) {
-            log(`     AI route but tenant at channel capacity — playing busy`);
-            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { did: dialedDid, reason: 'channels_busy' } });
-            const busyMsg = await synthesizeMessage('All of our lines are currently busy. Please call back in a few minutes. Thank you.', route.tenantId, agentId).catch(() => null);
-            await playAndHangup(client, channel, busyMsg || 'sound:ss-noservice');
             break;
           }
           log(`     AI route -> agent ${agentId} (turn-based conversation)`);
