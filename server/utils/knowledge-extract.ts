@@ -43,3 +43,20 @@ export function normalizeText(text: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
+
+
+// Extract readable text from an HTML page: drop scripts/styles/nav/footer chrome,
+// keep headings, paragraphs, and lists. Used for the "import from website URL"
+// knowledge source. Lazy import so cheerio only loads when scraping.
+export async function extractHtmlText(html: string): Promise<string> {
+  const { load } = await import('cheerio');
+  const $ = load(html);
+  // Remove non-content elements.
+  $('script, style, noscript, iframe, svg, nav, header, footer, form, button, input, [aria-hidden="true"]').remove();
+  // Prefer a main/article container if present; else fall back to body.
+  const root = $('main').length ? $('main') : ($('article').length ? $('article') : $('body'));
+  const title = ($('title').first().text() || '').trim();
+  const bodyText = root.text();
+  const combined = (title ? title + '\n\n' : '') + bodyText;
+  return combined;
+}
