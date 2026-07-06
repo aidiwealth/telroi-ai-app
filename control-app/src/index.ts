@@ -65,9 +65,11 @@ async function filterLiveEndpoints(client: any, usernames: string[], log: (m: st
 }
 
 // Endpoint to bridge "person" routes to. For now this is a fixed stand-in
-// (test1) to prove bridging; later, route_target maps to the client's real
-// provisioned SIP endpoint. Override via BRIDGE_ENDPOINT env if needed.
-const BRIDGE_ENDPOINT = process.env.BRIDGE_ENDPOINT || 'PJSIP/test1';
+// Person-routes bridge to the client's provisioned SIP endpoint (route_target ->
+// sip_endpoints.id -> PJSIP/<username>). If it doesn't resolve, the call plays a
+// no-service message rather than bridging to any default/fallback endpoint.
+// BRIDGE_ENDPOINT retained only for an optional explicit override via env.
+const BRIDGE_ENDPOINT = process.env.BRIDGE_ENDPOINT || '';
 
 function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[control-app]', ...args);
@@ -329,15 +331,19 @@ async function main() {
         default: {
           // Option B: route_target holds a sip_endpoints.id. Resolve it to the
           // client's SIP username and bridge to PJSIP/<username>. If route_target
-          // is empty or doesn't resolve, fall back to BRIDGE_ENDPOINT (test1) so
-          // existing test data still works during the transition.
+          // is empty or doesn't resolve, play no-service and hang up (no fallback
+          // to any default endpoint).
           const username = resolveEndpoint(route.routeTarget);
-          const endpoint = username ? `PJSIP/${username}` : BRIDGE_ENDPOINT;
-          if (username) {
-            log(`     Person route -> endpoint ${route.routeTarget} (${username}) :: bridging to ${endpoint}`);
-          } else {
-            log(`     Person route -> ${route.routeTarget} did not resolve to an endpoint :: falling back to ${BRIDGE_ENDPOINT}`);
+          if (!username) {
+            // No resolvable destination endpoint. Do NOT bridge to a stray/fallback
+            // endpoint — play a polite no-service message and hang up.
+            log(`     Person route -> ${route.routeTarget} did not resolve to an endpoint :: no destination, playing no-service`);
+            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { reason: 'no_destination_endpoint' } });
+            await playAndHangup(client, channel, 'sound:ss-noservice');
+            break;
           }
+          const endpoint = `PJSIP/${username}`;
+          log(`     Person route -> endpoint ${route.routeTarget} (${username}) :: bridging to ${endpoint}`);
           try {
             await bridgeToEndpoint({
               client,
