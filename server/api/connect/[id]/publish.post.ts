@@ -3,8 +3,6 @@
 import { and, eq } from 'drizzle-orm';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
-import { loadTenant } from '~/server/utils/tenant';
-import { TelroiClient } from '~/server/utils/telroi/client';
 
 // Map a Connect entry node to a Telroi number-route payload.
 function entryToRoute(nodes: any[]): Record<string, any> | null {
@@ -31,23 +29,25 @@ export default defineEventHandler(async (event) => {
   if (!flow) throw apiError('not_found', 'Flow not found', 404);
   if (!flow.telnum) throw apiError('no_number', 'Bind a phone number before publishing', 400);
 
-  const route = entryToRoute(flow.nodes as any[]);
-  if (!route) throw apiError('no_entry', 'Flow needs an entry node', 400);
+  const entry = (flow.nodes as any[])?.[0];
+  if (!entry) throw apiError('no_entry', 'Flow needs an entry step', 400);
 
-  const tenant = await loadTenant(s.tenantId);
-  const client = TelroiClient.forTenant(tenant);
-
-  // Write the route to the PBX. Surface real PBX errors (field shapes vary).
+  // The inbound resolver reads the published flow directly from the DB and a
+  // published flow overrides flat routing — so publishing is simply marking it
+  // published. We ALSO mirror the entry step onto the number's flat route, so
+  // any consumer not yet flow-aware (or if the flow is later unpublished) still
+  // has a sensible fallback. Terminal entries map cleanly; IVR entries fall back
+  // to the flow (which the resolver handles).
   try {
-    await client.editNumberRoute(flow.telnum, route);
-    // Register workflow webhooks (the dashboard receiver fans them out).
-    const base = useRuntimeConfig().public.appBaseUrl;
-    if ((flow.workflows as any[])?.length) {
-      await client.addWebhook({ type: 'history', url: `${base}/api/webhooks/telroi` }).catch(() => {});
+    const set: any = {};
+    if (entry.type === 'route_van') { set.routeType = 'ai'; set.routeAgentId = entry.config?.target || null; }
+    else if (entry.type === 'route_user') { set.routeType = 'person'; set.routeTarget = entry.config?.target || null; }
+    else if (entry.type === 'route_group') { set.routeType = 'department'; set.departmentId = entry.config?.target || null; }
+    if (Object.keys(set).length) {
+      await db.update(schema.numberSubscriptions).set(set)
+        .where(and(eq(schema.numberSubscriptions.tenantId, s.tenantId), eq(schema.numberSubscriptions.telnum, flow.telnum!)));
     }
-  } catch (e: any) {
-    throw apiError('publish_failed', `PBX rejected the route: ${e?.message || e}`, 502);
-  }
+  } catch { /* mirror is best-effort; the flow itself is authoritative */ }
 
   const [row] = await db.update(schema.connectFlows)
     .set({ status: 'published', publishedAt: new Date() }).where(eq(schema.connectFlows.id, id)).returning();
