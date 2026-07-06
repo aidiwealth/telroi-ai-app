@@ -224,6 +224,7 @@ export const tenants = pgTable('tenants', {
 
 /* ---------- Users ---------- */
 export const users = pgTable('users', {
+  copilotOnboarded: boolean('copilot_onboarded').notNull().default(false),
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull(),
   name: text('name'),

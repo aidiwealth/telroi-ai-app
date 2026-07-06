@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, onMounted } from 'vue';
 const props = withDefaults(defineProps<{ apiBase?: string }>(), { apiBase: '/api/copilot' });
 
 interface Msg { role: 'user' | 'assistant'; content: string; links?: Array<{ label: string; to: string }>; action?: any; actionState?: 'pending' | 'running' | 'done' | 'cancelled'; actionResult?: string; }
@@ -95,6 +95,21 @@ const suggestions = ['How are my calls doing?', 'How do I set up an AI agent?', 
 function open() { collapsed.value = false; nextTick(() => inputEl.value?.focus()); }
 function close() { collapsed.value = true; }
 function reset() { messages.value = []; draft.value = ''; }
+
+onMounted(async () => {
+  // First visit after signup: open the copilot once (server-tracked per account)
+  // with a warm setup welcome pointing to the setup checklist in the sidebar.
+  try {
+    const me = await $fetch<{ user?: { copilotOnboarded?: boolean } }>('/api/auth/me');
+    if (!me?.user || me.user.copilotOnboarded) return;
+    await $fetch('/api/copilot/onboarded', { method: 'POST' }).catch(() => {});
+    messages.value.push({
+      role: 'assistant',
+      content: "Welcome to Telroi! I'm your Copilot \u2014 I can help you set up and run your account. To get started, open the setup checklist from the tab on the right edge of your screen: it walks you through connecting an AI agent, adding a number, and going live. Ask me anything along the way \u2014 like \u201chow do I set up an AI agent?\u201d or \u201ccreate a department called Sales\u201d \u2014 and I'll guide you or do it for you."
+    });
+    setTimeout(() => { collapsed.value = false; }, 900);
+  } catch { /* ignore */ }
+});
 
 function autoGrow() { const el = inputEl.value; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
 function onKey(e: KeyboardEvent) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }
