@@ -2,6 +2,7 @@
 // Mints real browser-voice access tokens / SIP credentials per provider so the
 // front-end WebRTC SDK can register and place calls (mic + ringing + audio).
 import { SignJWT } from 'jose';
+import { DEFAULT_SIP_DOMAIN } from '~/server/utils/sip-config';
 import { voiceCredentials } from './voice-credentials';
 
 // ── Twilio Voice access token ──
@@ -71,7 +72,7 @@ export async function asteriskVoiceToken(identity: string) {
       statusCode: 409, data: { error: { code: 'webrtc_not_provisioned' } }
     });
   }
-  const sipDomain = process.env.SIP_DOMAIN || 'sip.telroi.ai';
+  const sipDomain = process.env.SIP_DOMAIN || DEFAULT_SIP_DOMAIN;
   const wsServer = (useRuntimeConfig().public as any)?.sipWsServer || `wss://${sipDomain}:8089/ws`;
   return { provider: 'telroi', sipUsername: ep.sipUsername, sipPassword: decrypt(ep.secretEnc!), sipDomain, wsServer };
 }

@@ -87,7 +87,7 @@ export function useVoiceCall() {
         const SIP = await import('sip.js');
         // Validate the token has what we need before building URIs, so a missing
         // field gives a clear message instead of a cryptic "Invalid to URI: undefined".
-        const sipDomain = tok.sipDomain || 'sip.telroi.ai';
+        const sipDomain = tok.sipDomain || 'sip.telroi.ai'; // mirrors server DEFAULT_SIP_DOMAIN; token normally supplies this
         if (!tok.sipUsername || !tok.wsServer) {
           throw new Error('Calling is not fully set up for this number yet. Please pick a different "Call from" number or contact support.');
         }
