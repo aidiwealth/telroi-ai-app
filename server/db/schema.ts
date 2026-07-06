@@ -517,6 +517,31 @@ export const crmImportJobs = pgTable('crm_import_jobs', {
   tenantIdx: index('crm_import_jobs_tenant_idx').on(t.tenantId)
 }));
 
+/* ---------- Knowledge Base ----------
+   Per-agent training documents (PDF / Word / text). The original file is stored
+   in R2 (fileKey); extractedText holds the parsed plain text used to ground the
+   agent's answers. Scoped to an agent so each AI only knows its own material. */
+export const knowledgeDocuments = pgTable('knowledge_documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  agentId: uuid('agent_id').notNull().references(() => aiAgents.id, { onDelete: 'cascade' }),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  fileName: text('file_name').notNull(),
+  fileKey: text('file_key'),                 // R2 object key for the original file
+  fileType: text('file_type'),               // pdf | docx | txt | md
+  sizeBytes: integer('size_bytes').notNull().default(0),
+  status: text('status').notNull().default('processing'), // processing | ready | failed
+  extractedText: text('extracted_text'),     // parsed plain text (for grounding)
+  charCount: integer('char_count').notNull().default(0),
+  error: text('error'),
+  enabled: boolean('enabled').notNull().default(true), // client can toggle a doc off without deleting
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  tenantIdx: index('knowledge_documents_tenant_idx').on(t.tenantId),
+  agentIdx: index('knowledge_documents_agent_idx').on(t.agentId)
+}));
+
 // Third-party integration connections (Zapier, Pipedrive, HubSpot). One row per// tenant+provider once connected. Credentials/tokens are encrypted at rest.
 export const integrations = pgTable('integrations', {
   id: uuid('id').primaryKey().defaultRandom(),
