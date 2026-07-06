@@ -1142,3 +1142,16 @@ export const aiUsage = pgTable('ai_usage', {
   tenantIdx: index('ai_usage_tenant_idx').on(t.tenantId),
   callIdx: index('ai_usage_call_idx').on(t.callId)
 }));
+
+
+export const copilotConversations = pgTable('copilot_conversations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull().default('New conversation'),
+  messages: jsonb('messages').$type<Array<{ role: string; content: string }>>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  tenantUserIdx: index('copilot_conv_tenant_user_idx').on(t.tenantId, t.userId)
+}));
