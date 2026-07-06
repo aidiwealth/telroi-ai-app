@@ -30,7 +30,15 @@ function sysPrompt(ctx: string): string {
     'You are Telroi Copilot, the in-app assistant for a voice-AI platform.',
     'You help clients understand and run their account: setting up SIP, AI agents, knowledge bases, numbers, VANs (Virtual AI Numbers), call analysis, and features.',
     'Be concise and practical. Prefer 1-3 short sentences. When a task belongs on a specific page, tell the user briefly and include a deep-link.',
-    'You cannot yet perform actions (create/buy/provision) directly — for those, explain the steps and link the page. Never claim you did something you did not do.',
+    'You can perform a small set of safe actions on the user\'s behalf. When the user clearly wants one, PROPOSE it (do not claim it is done). To propose, end your reply with a single line: ACTION: {"type":"...","args":{...}} using ONLY these types:',
+    '  - create_van {name, telnum, agentId?} — create a Virtual AI Number on an owned number',
+    '  - add_blacklist {telnum, comment?} — block a number',
+    '  - create_department {name, description?} — add a department',
+    '  - set_agent_language {agentId, language} — language is a BCP-47 code (en-NG, yo-NG, ig-NG, ha-NG, fr-FR, ...)',
+    '  - knowledge_url {agentId, url} — add a web page to an agent\'s knowledge base',
+    '  - knowledge_drive {agentId, url} — add a Google Drive file to an agent\'s knowledge',
+    '  - toggle_feature {feature, enabled} — enable/disable a feature',
+    'Use the exact agent id from the snapshot for agentId. If a required detail is missing (which number, which agent), ASK instead of proposing. Only ONE action per reply. For anything not in this list (buying numbers, provisioning SIP, payments), explain and link the page — do not propose. Keep your normal reply text above the ACTION line short.',
     'Be accurate about where things live: payments/funding are on the Wallet page (/wallet), NOT settings. Knowledge base is on /connect inside an agent. If you are not certain which page or how something works, say so plainly and suggest the closest page rather than guessing or inventing steps.',
     'If asked something outside the Telroi product, gently redirect.',
     '',
@@ -50,6 +58,19 @@ const LABELS: Record<string, string> = {
   '/live-call': 'Live Call', '/apps': 'Apps', '/settings': 'Settings'
 };
 
+function previewFor(type: string, a: any): string {
+  switch (type) {
+    case 'create_van': return `Create Virtual AI Number "${a.name}" on ${a.telnum}` + (a.agentId ? ' (bound to the selected agent)' : '');
+    case 'add_blacklist': return `Block ${a.telnum}` + (a.comment ? ` \u2014 ${a.comment}` : '');
+    case 'create_department': return `Create department "${a.name}"`;
+    case 'set_agent_language': return `Set the agent's language to ${a.language}`;
+    case 'knowledge_url': return `Add ${a.url} to the agent's knowledge base`;
+    case 'knowledge_drive': return `Import a Google Drive file into the agent's knowledge base`;
+    case 'toggle_feature': return `${a.enabled ? 'Enable' : 'Disable'} ${a.feature}`;
+    default: return 'Perform this action';
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   const body = await readBody(event);
@@ -64,16 +85,31 @@ export default defineEventHandler(async (event) => {
   let ctx = '';
   try {
     const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
-    const [agentCount] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.aiAgents).where(eq(schema.aiAgents.tenantId, s.tenantId));
+    const agents = await db.select({ id: schema.aiAgents.id, name: schema.aiAgents.name, language: schema.aiAgents.language }).from(schema.aiAgents).where(eq(schema.aiAgents.tenantId, s.tenantId)).limit(25);
     const [vanCount] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.vans).where(eq(schema.vans.tenantId, s.tenantId)).catch(() => [{ n: 0 }] as any);
-    ctx = `- AI agents: ${agentCount?.n ?? 0}\n- Virtual AI Numbers: ${vanCount?.n ?? 0}\n- Window: last 7 days`;
+    const agentLines = agents.length ? agents.map((a) => `  - "${a.name}" id=${a.id} lang=${a.language}`).join('\n') : '  (none yet)';
+    ctx = `AI agents (${agents.length}):\n${agentLines}\nVirtual AI Numbers: ${vanCount?.n ?? 0}`;
   } catch { ctx = '(snapshot unavailable)'; }
 
   // Cheap managed model (Haiku / gpt-4o-mini). Copilot is orchestration, not deep reasoning.
   const llm = await resolveAgentLlm(s.tenantId, null, true);
   if (!llm) throw apiError('unavailable', 'Copilot is not configured', 503);
 
-  const raw = (await llmReply(llm, sysPrompt(ctx), [...history, { role: 'user', content: message }])) || '';
+  let raw = (await llmReply(llm, sysPrompt(ctx), [...history, { role: 'user', content: message }])) || '';
+
+  // Parse an optional trailing ACTION: {json} line into a structured proposal.
+  let action: any = null;
+  const am = raw.match(/\n?ACTION:\s*(\{[\s\S]*\})\s*$/i);
+  if (am) {
+    try {
+      const parsed = JSON.parse(am[1]);
+      const ALLOWED = ['create_van','add_blacklist','create_department','set_agent_language','knowledge_url','knowledge_drive','toggle_feature'];
+      if (parsed && ALLOWED.includes(parsed.type) && parsed.args && typeof parsed.args === 'object') {
+        action = { type: parsed.type, args: parsed.args, preview: previewFor(parsed.type, parsed.args) };
+      }
+    } catch { /* ignore malformed */ }
+    raw = raw.slice(0, am.index).trim();
+  }
 
   // Parse an optional trailing "LINKS: /a | /b" line into structured deep-links.
   const allowed = ['/wallet', '/calls', '/numbers', '/connect', '/vans', '/ai', '/sip', '/optimize', '/blacklist', '/people', '/teams', '/crm', '/live-call', '/apps', '/settings'];
@@ -84,5 +120,5 @@ export default defineEventHandler(async (event) => {
     links = m[1].split('|').map((p) => p.trim()).filter((p) => allowed.includes(p))
       .map((to) => ({ to, label: LABELS[to] || (to.replace('/', '').replace(/^\w/, (c) => c.toUpperCase()) || 'Open') }));
   }
-  return { reply, links };
+  return { reply, links, action };
 });
