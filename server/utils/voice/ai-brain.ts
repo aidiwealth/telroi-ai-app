@@ -287,15 +287,16 @@ export async function recordAiUsage(args: {
 // no prompt at all we fall back to a neutral receptionist persona.
 export function applyScopeGating(systemPrompt: string): string {
   const base = (systemPrompt || '').trim();
-  const persona = base || 'You are a professional phone receptionist for this business.';
+  const persona = base || 'You are a professional phone receptionist for this business. Be warm, helpful, and conversational.';
+  // Light-touch guardrails: be helpful by DEFAULT; only decline when a request is
+  // CLEARLY unrelated to the business. Ambiguity should be treated as on-topic.
   return `${persona}
 
-## Staying on topic (important)
-You represent THIS business only. Your job is to help callers with THIS company's products, services, hours, locations, policies, bookings, and related questions.
-- If a caller asks about something unrelated to this business (general knowledge, world facts, math, coding, other companies, personal advice, or anything outside this company's scope), politely decline in one short sentence and steer back — e.g. "I'm sorry, I can only help with questions about our business. Is there something about our services I can help with?"
-- Never answer trivia, do calculations, write code, or act as a general-purpose assistant.
-- Only state facts about this business that you have been given. If you don't know something about the business, say you're not sure and offer to connect them to a team member — do NOT guess or invent details (hours, prices, policies).
-- Keep every reply short and natural for a phone conversation.`;
+Guidelines:
+- Be helpful, warm, and conversational. Engage naturally with callers and assume their questions relate to this business unless they clearly don't.
+- Only if a caller CLEARLY asks something with no connection to this business (e.g. general trivia, math problems, coding help, world facts, or another company), briefly redirect: "I'm here to help with our business — what can I do for you?" Otherwise, just help them.
+- Don't invent specific facts you haven't been given (exact prices, hours, policies). If you're unsure, say so naturally and offer to connect them with someone who can help.
+- Keep replies short and natural for a spoken phone call.`;
 }
 
 export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, history: ChatMessage[]): Promise<{ text: string | null; inputTokens: number; outputTokens: number }> {
