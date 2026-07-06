@@ -213,6 +213,11 @@
                     <button class="btn btn-dark btn-sm" :disabled="kbDriveBusy === a.id || !(kbDriveUrl[a.id] || '').trim()" @click="importKbDrive(a.id)">{{ kbDriveBusy === a.id ? 'Importing…' : 'Import' }}</button>
                   </div>
                   <div class="kb-drive-hint">The file must be shared as "Anyone with the link can view".</div>
+                  <div class="kb-drive kb-url-row">
+                    <input v-model="kbUrl[a.id]" class="input kb-drive-input" placeholder="Or paste a website URL (e.g. your services page)…" @keyup.enter="importKbUrl(a.id)" />
+                    <button class="btn btn-dark btn-sm" :disabled="kbUrlBusy === a.id || !(kbUrl[a.id] || '').trim()" @click="importKbUrl(a.id)">{{ kbUrlBusy === a.id ? 'Importing…' : 'Import' }}</button>
+                  </div>
+                  <div class="kb-drive-hint">We'll read the page's text and use it to train the agent.</div>
                   <div v-if="kbError" class="kb-error">{{ kbError }}</div>
                   <div v-if="(kbDocs[a.id] || []).length" class="kb-table">
                     <div class="kb-tr kb-th">
@@ -417,6 +422,8 @@ const kbDragOver = ref<string | null>(null);
 const kbUploading = ref<string | null>(null);
 const kbError = ref('');
 const kbDriveUrl = reactive<Record<string, string>>({});
+const kbUrl = reactive<Record<string, string>>({});
+const kbUrlBusy = ref<string | null>(null);
 const kbDriveBusy = ref<string | null>(null);
 
 async function loadKbDocs(agentId: string) {
@@ -474,6 +481,20 @@ async function importKbDrive(agentId: string) {
   } finally { kbDriveBusy.value = null; }
 }
 
+async function importKbUrl(agentId: string) {
+  const url = (kbUrl[agentId] || '').trim();
+  if (!url) return;
+  kbError.value = '';
+  kbUrlBusy.value = agentId;
+  try {
+    await api.post(`/api/agents/${agentId}/knowledge/import-url`, { url });
+    kbUrl[agentId] = '';
+    await loadKbDocs(agentId);
+  } catch (e: any) {
+    kbError.value = e?.data?.message || e?.message || 'Could not import that page';
+  } finally { kbUrlBusy.value = null; }
+}
+
 async function toggleKbDoc(agentId: string, d: any) {
   if (d.status !== 'ready') return;
   const next = !d.enabled;
@@ -496,6 +517,7 @@ function kbTypeLabel(type: string): string {
   if (t === 'pdf') return 'PDF';
   if (t === 'docx') return 'DOC';
   if (t === 'md') return 'MD';
+  if (t === 'url') return 'WEB';
   return 'TXT';
 }
 async function saveAgentEdit(id: string) {
@@ -575,6 +597,8 @@ onMounted(() => { load(); loadAgents(); });
 .kb-drive { display: flex; gap: 8px; }
 .kb-drive-input { flex: 1; }
 .kb-drive-hint { font-size: 11px; color: var(--text-muted, #8a8f98); margin-top: 6px; }
+.kb-url-row { margin-top: 10px; }
+.kb-fico-url { background: rgba(125,140,255,0.16); color: #a8b4ff; }
 .kb-del { border: none; background: none; color: var(--text-muted, #8a8f98); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
 .kb-del:hover { color: #ff6b6b; }
 .ai-card { overflow: hidden; margin-bottom: 24px; }
