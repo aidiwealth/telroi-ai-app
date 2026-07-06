@@ -207,6 +207,12 @@
                       <span class="kb-drop-sub">PDF, Word (.docx), text or markdown · up to 15MB each</span>
                     </template>
                   </div>
+                  <div class="kb-or"><span>or</span></div>
+                  <div class="kb-drive">
+                    <input v-model="kbDriveUrl[a.id]" class="input kb-drive-input" placeholder="Paste a Google Drive share link…" @keyup.enter="importKbDrive(a.id)" />
+                    <button class="btn btn-dark btn-sm" :disabled="kbDriveBusy === a.id || !(kbDriveUrl[a.id] || '').trim()" @click="importKbDrive(a.id)">{{ kbDriveBusy === a.id ? 'Importing…' : 'Import' }}</button>
+                  </div>
+                  <div class="kb-drive-hint">The file must be shared as "Anyone with the link can view".</div>
                   <div v-if="kbError" class="kb-error">{{ kbError }}</div>
                   <div v-if="(kbDocs[a.id] || []).length" class="kb-table">
                     <div class="kb-tr kb-th">
@@ -410,6 +416,8 @@ const kbDocs = reactive<Record<string, any[]>>({});
 const kbDragOver = ref<string | null>(null);
 const kbUploading = ref<string | null>(null);
 const kbError = ref('');
+const kbDriveUrl = reactive<Record<string, string>>({});
+const kbDriveBusy = ref<string | null>(null);
 
 async function loadKbDocs(agentId: string) {
   try { kbDocs[agentId] = await api.get<any[]>(`/api/agents/${agentId}/knowledge`); }
@@ -450,6 +458,20 @@ async function uploadKbFiles(files: File[], agentId: string) {
 async function deleteKbDoc(agentId: string, docId: string) {
   try { await api.del(`/api/agents/${agentId}/knowledge/${docId}`); await loadKbDocs(agentId); }
   catch (e: any) { toast.err(e?.message || 'Could not remove'); }
+}
+
+async function importKbDrive(agentId: string) {
+  const url = (kbDriveUrl[agentId] || '').trim();
+  if (!url) return;
+  kbError.value = '';
+  kbDriveBusy.value = agentId;
+  try {
+    await api.post(`/api/agents/${agentId}/knowledge/import-drive`, { url });
+    kbDriveUrl[agentId] = '';
+    await loadKbDocs(agentId);
+  } catch (e: any) {
+    kbError.value = e?.data?.message || e?.message || 'Could not import that Drive link';
+  } finally { kbDriveBusy.value = null; }
 }
 
 async function toggleKbDoc(agentId: string, d: any) {
@@ -547,6 +569,12 @@ onMounted(() => { load(); loadAgents(); });
 .kb-toggle-on { background: #4ec27f; }
 .kb-toggle-dot { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
 .kb-toggle-on .kb-toggle-dot { transform: translateX(14px); }
+.kb-or { display: flex; align-items: center; text-align: center; margin: 12px 0; color: var(--text-muted, #8a8f98); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.kb-or::before, .kb-or::after { content: ''; flex: 1; height: 1px; background: var(--rule, rgba(255,255,255,0.08)); }
+.kb-or span { padding: 0 10px; }
+.kb-drive { display: flex; gap: 8px; }
+.kb-drive-input { flex: 1; }
+.kb-drive-hint { font-size: 11px; color: var(--text-muted, #8a8f98); margin-top: 6px; }
 .kb-del { border: none; background: none; color: var(--text-muted, #8a8f98); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
 .kb-del:hover { color: #ff6b6b; }
 .ai-card { overflow: hidden; margin-bottom: 24px; }
