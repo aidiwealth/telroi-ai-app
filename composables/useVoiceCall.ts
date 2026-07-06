@@ -85,14 +85,26 @@ export function useVoiceCall() {
         telnyxClient.connect();
       } else if (provider === 'digidite' || provider === 'telroi' || provider === 'asterisk') {
         const SIP = await import('sip.js');
-        const uri = SIP.UserAgent.makeURI(`sip:${tok.sipUsername}@${tok.sipDomain}`);
+        // Validate the token has what we need before building URIs, so a missing
+        // field gives a clear message instead of a cryptic "Invalid to URI: undefined".
+        const sipDomain = tok.sipDomain || 'sip.telroi.ai';
+        if (!tok.sipUsername || !tok.wsServer) {
+          throw new Error('Calling is not fully set up for this number yet. Please pick a different "Call from" number or contact support.');
+        }
+        if (!opts.to || !opts.to.trim()) {
+          throw new Error('Please enter a number to call.');
+        }
+        const uri = SIP.UserAgent.makeURI(`sip:${tok.sipUsername}@${sipDomain}`);
         sipUA = new SIP.UserAgent({
           uri, transportOptions: { server: tok.wsServer },
           authorizationUsername: tok.sipUsername, authorizationPassword: tok.sipPassword
         });
         await sipUA.start();
-        const dialNumber = (tok.dialPrefix || '') + opts.to;
-        const target = SIP.UserAgent.makeURI(`sip:${dialNumber}@${tok.sipDomain}`);
+        const dialNumber = (tok.dialPrefix || '') + opts.to.trim();
+        const target = SIP.UserAgent.makeURI(`sip:${dialNumber}@${sipDomain}`);
+        if (!target) {
+          throw new Error(`Could not dial ${opts.to} — the number or dialing setup looks invalid. Try a different format (e.g. 0803... or 234...).`);
+        }
         const inviter = new SIP.Inviter(sipUA, target, { sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false } } });
         activeConn = inviter;
         inviter.stateChange.addListener((st: string) => {
