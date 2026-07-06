@@ -29,9 +29,14 @@ export default defineEventHandler(async (event) => {
   // Fetch the file from Drive.
   const directUrl = toDirectDriveUrl(url);
   let buffer: Buffer;
+  let headerName = '';
   try {
     const res = await fetch(directUrl);
     if (!res.ok) throw new Error(`status ${res.status}`);
+    // Drive returns the real filename in Content-Disposition — use it if present.
+    const cd = res.headers.get('content-disposition') || '';
+    const m = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i);
+    if (m) headerName = decodeURIComponent(m[1]).trim();
     const arr = await res.arrayBuffer();
     if (arr.byteLength > MAX_BYTES) throw apiError('invalid', 'File exceeds the 15MB limit', 400);
     buffer = Buffer.from(arr);
@@ -42,8 +47,8 @@ export default defineEventHandler(async (event) => {
 
   // Derive a filename + type. Drive direct downloads don't always give a clean name,
   // so fall back to the link and let detection use content where possible.
-  const guessName = (url.match(/\/d\/[^/]+\/?([^?]+)?/)?.[0] || 'drive-document');
-  const fileName = decodeURIComponent((guessName.split('/').pop() || 'drive-document')).slice(0, 120) || 'drive-document';
+  // Use the Drive-provided filename; fall back to a clean generic name (never "view").
+  const fileName = (headerName || 'Google Drive document').slice(0, 120);
   const fileType = detectFileType(fileName) || 'pdf'; // Drive docs are commonly PDF exports
   if (!['pdf', 'docx', 'txt', 'md'].includes(fileType)) {
     throw apiError('invalid', 'Unsupported file type. Share a PDF, Word, or text document.', 400);
