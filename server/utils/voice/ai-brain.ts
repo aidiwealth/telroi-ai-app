@@ -287,16 +287,16 @@ export async function recordAiUsage(args: {
 // no prompt at all we fall back to a neutral receptionist persona.
 export function applyScopeGating(systemPrompt: string): string {
   const base = (systemPrompt || '').trim();
-  const persona = base || 'You are a professional phone receptionist for this business. Be warm, helpful, and conversational.';
-  // Light-touch guardrails: be helpful by DEFAULT; only decline when a request is
-  // CLEARLY unrelated to the business. Ambiguity should be treated as on-topic.
-  return `${persona}
+  if (!base) {
+    return 'You are a warm, helpful phone receptionist for this business. Answer callers naturally and conversationally, help them with whatever they need related to the business, and keep replies short and spoken-friendly.';
+  }
+  // Minimal, non-intrusive nudge: keep the client's persona fully intact and just
+  // add one gentle line. We do NOT add heavy guardrails that make the agent refuse
+  // or deflect — the client's own prompt defines the domain; over-restricting hurts
+  // the core experience. Only clearly-unrelated asks should be softly redirected.
+  return `${base}
 
-Guidelines:
-- Be helpful, warm, and conversational. Engage naturally with callers and assume their questions relate to this business unless they clearly don't.
-- Only if a caller CLEARLY asks something with no connection to this business (e.g. general trivia, math problems, coding help, world facts, or another company), briefly redirect: "I'm here to help with our business — what can I do for you?" Otherwise, just help them.
-- Don't invent specific facts you haven't been given (exact prices, hours, policies). If you're unsure, say so naturally and offer to connect them with someone who can help.
-- Keep replies short and natural for a spoken phone call.`;
+(If a caller asks something with clearly no connection to this business — like general trivia, math, or coding — gently steer back to how you can help them with the business. Otherwise, always engage naturally and helpfully. Keep replies short and spoken-friendly.)`;
 }
 
 export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, history: ChatMessage[]): Promise<{ text: string | null; inputTokens: number; outputTokens: number }> {
