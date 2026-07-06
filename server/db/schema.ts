@@ -949,6 +949,8 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   provider: text('provider').notNull().default('telroi'), // carried from inventory; invisible to customer
   channels: integer('channels').notNull().default(1),
   status: text('status').notNull().default('active'),  // active | suspended | cancelled
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),      // when the client released it
+  graceEndsAt: timestamp('grace_ends_at', { withTimezone: true }),     // inventory returns to pool after this
   departmentId: uuid('department_id').references(() => departments.id, { onDelete: 'set null' }),
   // Unified inbound routing (carrier-agnostic). One model for every number
   // regardless of vendor: route an incoming call to a person, a department, or
