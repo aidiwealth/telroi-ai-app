@@ -190,32 +190,41 @@
                     <option v-for="c in connections" :key="'tts'+c.id" :value="c.id">{{ c.provider }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
                   </select>
                 </label>
-                <div class="kb-section">
-                  <span class="kb-label">Knowledge base <span class="kb-hint">— train this agent on your company docs (PDF, Word, text)</span></span>
-                  <div
-                    class="kb-drop"
-                    :class="{ 'kb-drop-over': kbDragOver === a.id }"
-                    @dragover.prevent="kbDragOver = a.id"
-                    @dragleave.prevent="kbDragOver = null"
-                    @drop.prevent="onKbDrop($event, a.id)"
-                    @click="triggerKbPick(a.id)"
-                  >
+                <div class="kb-card">
+                  <div class="kb-head">
+                    <div class="kb-head-left">
+                      <span class="kb-title">Knowledge base</span>
+                      <span class="kb-sub">Train this agent on your company documents — it answers callers using them.</span>
+                    </div>
+                    <div v-if="(kbDocs[a.id] || []).length" class="kb-stats">{{ (kbDocs[a.id] || []).length }} file{{ (kbDocs[a.id] || []).length === 1 ? '' : 's' }} · {{ kbTotalSize(a.id) }}</div>
+                  </div>
+                  <div class="kb-drop" :class="{ 'kb-drop-over': kbDragOver === a.id, 'kb-drop-busy': kbUploading === a.id }" @dragover.prevent="kbDragOver = a.id" @dragleave.prevent="kbDragOver = null" @drop.prevent="onKbDrop($event, a.id)" @click="triggerKbPick(a.id)">
                     <input :ref="(el) => setKbInput(a.id, el)" type="file" accept=".pdf,.docx,.txt,.md" multiple class="kb-file-input" @change="onKbPick($event, a.id)" />
-                    <span v-if="kbUploading === a.id" class="kb-drop-text">Uploading & processing…</span>
-                    <span v-else class="kb-drop-text">Drag files here or click to upload<br /><span class="kb-drop-sub">PDF, Word (.docx), text or markdown · up to 15MB each</span></span>
+                    <div class="kb-drop-icon">&#8593;</div>
+                    <span v-if="kbUploading === a.id" class="kb-drop-text">Uploading &amp; processing…</span>
+                    <template v-else>
+                      <span class="kb-drop-text">Drag files here, or <span class="kb-drop-link">browse</span></span>
+                      <span class="kb-drop-sub">PDF, Word (.docx), text or markdown · up to 15MB each</span>
+                    </template>
                   </div>
                   <div v-if="kbError" class="kb-error">{{ kbError }}</div>
-                  <ul v-if="(kbDocs[a.id] || []).length" class="kb-list">
-                    <li v-for="d in kbDocs[a.id]" :key="d.id" class="kb-item">
-                      <span class="kb-item-name">{{ d.fileName }}</span>
-                      <span class="kb-item-meta">
-                        <span v-if="d.status === 'ready'" class="kb-badge kb-badge-ok">{{ (d.charCount || 0).toLocaleString() }} chars</span>
-                        <span v-else-if="d.status === 'processing'" class="kb-badge">processing…</span>
-                        <span v-else class="kb-badge kb-badge-err">failed</span>
+                  <div v-if="(kbDocs[a.id] || []).length" class="kb-table">
+                    <div class="kb-tr kb-th">
+                      <span>Document</span><span>Type</span><span>Size</span><span>Status</span><span>On</span><span></span>
+                    </div>
+                    <div v-for="d in kbDocs[a.id]" :key="d.id" class="kb-tr" :class="{ 'kb-tr-off': !d.enabled }">
+                      <span class="kb-c-name"><span class="kb-fico" :class="'kb-fico-' + (d.fileType || 'txt')">{{ kbTypeLabel(d.fileType) }}</span><span class="kb-fname" :title="d.fileName">{{ d.fileName }}</span></span>
+                      <span class="kb-c-type">{{ (d.fileType || '').toUpperCase() }}</span>
+                      <span class="kb-c-size">{{ kbFmtSize(d.sizeBytes) }}</span>
+                      <span>
+                        <span v-if="d.status === 'ready'" class="kb-badge kb-badge-ok">Ready</span>
+                        <span v-else-if="d.status === 'processing'" class="kb-badge">Processing…</span>
+                        <span v-else class="kb-badge kb-badge-err" :title="d.error || 'failed'">Failed</span>
                       </span>
-                      <button class="kb-del" title="Remove" @click="deleteKbDoc(a.id, d.id)">×</button>
-                    </li>
-                  </ul>
+                      <span><button class="kb-toggle" :class="{ 'kb-toggle-on': d.enabled }" :disabled="d.status !== 'ready'" :title="d.enabled ? 'Used in answers' : 'Not used'" @click="toggleKbDoc(a.id, d)"><span class="kb-toggle-dot"></span></button></span>
+                      <span><button class="kb-del" title="Remove" @click="deleteKbDoc(a.id, d.id)">×</button></span>
+                    </div>
+                  </div>
                 </div>
                 <div class="edit-actions">
                   <button class="btn btn-ghost btn-sm" @click="editingAgent = null">Cancel</button>
@@ -442,6 +451,31 @@ async function deleteKbDoc(agentId: string, docId: string) {
   try { await api.del(`/api/agents/${agentId}/knowledge/${docId}`); await loadKbDocs(agentId); }
   catch (e: any) { toast.err(e?.message || 'Could not remove'); }
 }
+
+async function toggleKbDoc(agentId: string, d: any) {
+  if (d.status !== 'ready') return;
+  const next = !d.enabled;
+  d.enabled = next;
+  try { await api.patch(`/api/agents/${agentId}/knowledge/${d.id}`, { enabled: next }); }
+  catch (e: any) { d.enabled = !next; toast.err(e?.message || 'Could not update'); }
+}
+function kbTotalSize(agentId: string): string {
+  const total = (kbDocs[agentId] || []).reduce((sum: number, d: any) => sum + (d.sizeBytes || 0), 0);
+  return kbFmtSize(total);
+}
+function kbFmtSize(bytes: number): string {
+  const b = bytes || 0;
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(0) + ' KB';
+  return (b / (1024 * 1024)).toFixed(1) + ' MB';
+}
+function kbTypeLabel(type: string): string {
+  const t = (type || '').toLowerCase();
+  if (t === 'pdf') return 'PDF';
+  if (t === 'docx') return 'DOC';
+  if (t === 'md') return 'MD';
+  return 'TXT';
+}
 async function saveAgentEdit(id: string) {
   if (!agentEdit.name.trim()) return;
   savingAgentEdit.value = true;
@@ -478,22 +512,41 @@ onMounted(() => { load(); loadAgents(); });
 
 <style scoped>
 /* Knowledge base uploader */
-.kb-section { margin: 6px 0 4px; padding-top: 12px; border-top: 1px solid var(--rule, rgba(255,255,255,0.08)); }
-.kb-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-.kb-hint { font-weight: 400; color: var(--text-muted, #8a8f98); font-size: 12px; }
-.kb-drop { position: relative; border: 1.5px dashed var(--border, rgba(255,255,255,0.18)); border-radius: 10px; padding: 18px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; background: var(--paper, rgba(255,255,255,0.02)); }
+.kb-card { margin: 12px 0 4px; padding: 16px; border: 1px solid var(--rule, rgba(255,255,255,0.08)); border-radius: 12px; background: var(--paper, rgba(255,255,255,0.02)); }
+.kb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.kb-head-left { display: flex; flex-direction: column; gap: 2px; }
+.kb-title { font-size: 14px; font-weight: 600; }
+.kb-sub { font-size: 12px; color: var(--text-muted, #8a8f98); }
+.kb-stats { font-size: 12px; color: var(--text-muted, #8a8f98); white-space: nowrap; padding-top: 2px; }
+.kb-drop { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; border: 1.5px dashed var(--border, rgba(255,255,255,0.18)); border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
 .kb-drop:hover { border-color: #7d8cff; background: rgba(125,140,255,0.04); }
 .kb-drop-over { border-color: #7d8cff; background: rgba(125,140,255,0.10); }
+.kb-drop-busy { opacity: 0.7; pointer-events: none; }
 .kb-file-input { display: none; }
-.kb-drop-text { font-size: 13px; color: var(--text-muted, #8a8f98); }
-.kb-drop-sub { font-size: 11px; opacity: 0.75; }
+.kb-drop-icon { font-size: 18px; color: #7d8cff; }
+.kb-drop-text { font-size: 13px; color: var(--text, #e8e8ea); }
+.kb-drop-link { color: #7d8cff; text-decoration: underline; }
+.kb-drop-sub { font-size: 11px; color: var(--text-muted, #8a8f98); }
 .kb-error { color: #ff6b6b; font-size: 12px; margin-top: 8px; }
-.kb-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.kb-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--rule, rgba(255,255,255,0.08)); border-radius: 8px; background: var(--paper-2, rgba(255,255,255,0.02)); }
-.kb-item-name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-table { margin-top: 12px; border: 1px solid var(--rule, rgba(255,255,255,0.08)); border-radius: 8px; overflow: hidden; }
+.kb-tr { display: grid; grid-template-columns: minmax(0,1fr) 56px 64px 92px 44px 32px; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--rule, rgba(255,255,255,0.06)); font-size: 13px; }
+.kb-tr:last-child { border-bottom: none; }
+.kb-th { background: var(--paper-2, rgba(255,255,255,0.03)); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted, #8a8f98); font-weight: 600; }
+.kb-tr-off { opacity: 0.5; }
+.kb-c-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.kb-fico { flex-shrink: 0; font-size: 9px; font-weight: 700; padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,0.08); color: var(--text-muted, #8a8f98); }
+.kb-fico-pdf { background: rgba(255,107,107,0.16); color: #ff8a8a; }
+.kb-fico-docx { background: rgba(90,140,255,0.16); color: #8aa8ff; }
+.kb-fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-c-type, .kb-c-size { color: var(--text-muted, #8a8f98); font-size: 12px; }
 .kb-badge { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.06); color: var(--text-muted, #8a8f98); }
 .kb-badge-ok { background: rgba(80,200,120,0.14); color: #4ec27f; }
 .kb-badge-err { background: rgba(255,107,107,0.14); color: #ff6b6b; }
+.kb-toggle { width: 32px; height: 18px; border-radius: 9px; border: none; background: rgba(255,255,255,0.14); position: relative; cursor: pointer; transition: background .15s; padding: 0; }
+.kb-toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.kb-toggle-on { background: #4ec27f; }
+.kb-toggle-dot { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.kb-toggle-on .kb-toggle-dot { transform: translateX(14px); }
 .kb-del { border: none; background: none; color: var(--text-muted, #8a8f98); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px; }
 .kb-del:hover { color: #ff6b6b; }
 .ai-card { overflow: hidden; margin-bottom: 24px; }
