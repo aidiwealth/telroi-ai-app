@@ -12,9 +12,9 @@ const NAV = `Accurate page map — use these EXACT paths and never invent one:
 - /wallet — WALLET: balance, fund/top up, payments, transactions (payments live HERE, not in settings)
 - /calls — call history, recordings, analytics
 - /numbers — phone numbers: buy/manage numbers, routing, escalation
-- /connect — AI agents: create/edit agents, greeting, system prompt, KNOWLEDGE BASE (upload docs, Drive/URL import), language
+- /ai — AI agents: create/edit agents, greeting, system prompt, KNOWLEDGE BASE (upload docs, Drive/URL import), language, voice
 - /vans — AI Numbers (Virtual AI Numbers): bind an agent to a number
-- /ai — AI Connections: STT/LLM/TTS provider connections (OpenAI, Anthropic, Deepgram, Google)
+- /connect — Connect: call-handling flows (greet, route, escalate, trigger workflows) \u2014 NOT where AI agents or knowledge live
 - /sip — SIP endpoints: provision/manage SIP accounts and softphones
 - /optimize — AI optimization settings
 - /blacklist — blocked numbers
@@ -53,8 +53,8 @@ function sysPrompt(ctx: string): string {
 }
 
 const LABELS: Record<string, string> = {
-  '/wallet': 'Wallet', '/calls': 'Calls', '/numbers': 'Numbers', '/connect': 'AI Agents',
-  '/vans': 'AI Numbers', '/ai': 'AI Connections', '/sip': 'SIP', '/optimize': 'Optimize',
+  '/wallet': 'Wallet', '/calls': 'Calls', '/numbers': 'Numbers', '/connect': 'Connect',
+  '/vans': 'AI Numbers', '/ai': 'AI Agents', '/sip': 'SIP', '/optimize': 'Optimize',
   '/blacklist': 'Blacklist', '/people': 'People', '/teams': 'Teams', '/crm': 'CRM',
   '/live-call': 'Live Call', '/apps': 'Apps', '/settings': 'Settings'
 };
