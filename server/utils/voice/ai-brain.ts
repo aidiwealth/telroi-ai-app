@@ -87,6 +87,32 @@ async function resolveConn(tenantId: string, connId: string | null, kinds: strin
   return null;
 }
 
+// Google/Deepgram STT hallucinate on near-silence or noise, emitting phantom text:
+// single filler words ("you", "thank you", "bye"), repeated fragments, or text in
+// an unexpected language/script (e.g. Korean/Chinese on an English agent). Treat
+// these as EMPTY so the agent nudges ("didn't catch that") instead of replying to
+// garbage. This is conservative: it only rejects the well-known junk patterns.
+function isLikelyHallucination(text: string, expectedLang: string): boolean {
+  const t = (text || '').trim();
+  if (!t) return true;
+  const lower = t.toLowerCase().replace(/[.,!?]/g, '').trim();
+  // Common single-word/short filler hallucinations on silence.
+  const junk = new Set(['you', 'thank you', 'thanks', 'bye', 'okay', 'ok', 'uh', 'um', 'hmm', 'yeah', 'the', 'a', 'so', 'hello', 'hi', 'you you', 'you you you']);
+  if (junk.has(lower)) return true;
+  // Repeated single token (e.g. "you you you you").
+  const words = lower.split(/\s+/);
+  if (words.length >= 2 && new Set(words).size === 1) return true;
+  // Script/language mismatch: if the agent expects a Latin-script language (en/es/
+  // fr/pt etc.) but the transcript is largely CJK/Hangul/Cyrillic/Arabic, it's almost
+  // certainly a silence hallucination.
+  const expectsLatin = /^(en|es|fr|pt|de|it|nl|sv|no|da|fi|pl)/i.test(expectedLang || 'en');
+  if (expectsLatin) {
+    const nonLatin = (t.match(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff]/g) || []).length;
+    if (nonLatin > 0 && nonLatin >= t.replace(/\s/g, '').length * 0.3) return true;
+  }
+  return false;
+}
+
 export async function sttTranscribe(tenantId: string, sttConnId: string | null, audio: Buffer, contentType = 'audio/wav', allowManaged = false): Promise<string> {
   const conn = await resolveConn(tenantId, sttConnId, ['deepgram', 'openai', 'google-cloud']);
   try {
@@ -96,7 +122,10 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       });
       if (!res.ok) return '';
       const d: any = await res.json();
-      return d?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
+      const dgTx = (d?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
+      const dgLang = (conn.meta.language as string) || 'en-US';
+      if (isLikelyHallucination(dgTx, dgLang)) { console.log(`[ai-brain] STT(deepgram) rejected likely hallucination: "${dgTx.slice(0,80)}"`); return ''; }
+      return dgTx;
     }
     if (conn?.provider === 'openai') {
       const form = new FormData();
@@ -107,7 +136,10 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       });
       if (!res.ok) return '';
       const d: any = await res.json();
-      return d?.text || '';
+      const oaiTx = (d?.text || '').trim();
+      const oaiLang = (conn.meta.language as string) || 'en-US';
+      if (isLikelyHallucination(oaiTx, oaiLang)) { console.log(`[ai-brain] STT(openai) rejected likely hallucination: "${oaiTx.slice(0,80)}"`); return ''; }
+      return oaiTx;
     }
     if (conn?.provider === 'google-cloud') {
       // The audio is a WAV FILE (RIFF header + PCM). Do NOT force encoding=LINEAR16
