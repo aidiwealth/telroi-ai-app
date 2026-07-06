@@ -43,21 +43,24 @@
             <p class="lc-sub">This is exactly how the widget will appear on your site.</p>
             <div class="lc-preview" :class="prev.bubblePosition">
               <div v-if="prevOpen" class="lc-pv-panel">
-                <div class="lc-pv-head">
-                  <div class="lc-pv-icon">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z"/></svg>
-                  </div>
-                  <div class="lc-pv-htext">
-                    <div class="lc-pv-title">{{ prev.greeting }}</div>
-                    <div class="lc-pv-status"><span class="lc-pv-dot"></span>We're online now</div>
-                  </div>
+                <div class="lc-pv-head2">
+                  <div class="lc-pv-status"><span class="lc-pv-dot"></span>We're online now</div>
+                  <span class="lc-pv-x">×</span>
                 </div>
                 <div class="lc-pv-body">
-                  <p class="lc-pv-p">Talk to {{ prev.routeTo === 'ai' ? 'our smart assistant' : 'a real person' }} in seconds — no phone tag, no hold music. Just leave your name and number and we'll ring you straight away.</p>
-                  <input class="lc-pv-input" placeholder="Your name" disabled />
-                  <input class="lc-pv-input" placeholder="Mobile number" disabled />
-                  <button class="lc-pv-btn" :style="{ background: prev.bubbleColor }">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:7px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z"/></svg>Start call
+                  <div class="lc-pv-hero">
+                    <div class="lc-pv-orb" :style="{ '--oc': prev.bubbleColor }">
+                      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z"/></svg>
+                    </div>
+                    <div class="lc-pv-h2">{{ prev.greeting }}</div>
+                    <div class="lc-pv-hsub">Enter your details — we'll ring you back in seconds.</div>
+                  </div>
+                  <div class="lc-pv-row">
+                    <input class="lc-pv-pill" placeholder="Name" disabled />
+                    <input class="lc-pv-pill" placeholder="Number" disabled />
+                  </div>
+                  <button class="lc-pv-btn2" :style="{ background: prev.bubbleColor }">Request call
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;vertical-align:-3px"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                   </button>
                   <p class="lc-pv-route muted">Routes to {{ prev.routeTo === 'ai' ? 'your AI agent' : 'a live agent' }}<template v-if="prev.csatEnabled"> · asks for a rating after</template></p>
                 </div>
@@ -236,6 +239,17 @@ useHead({ title: 'Live Call — Telroi' });
 /* Bottom-left */
 .lc-preview.bottom-left .lc-pv-bubble, .lc-preview.bottom-left .lc-pv-panel { left: 18px; right: auto; }
 /* Middle-right: edge tab centered on the right edge, panel beside it */
+.lc-pv-head2 { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 4px; }
+.lc-pv-x { color: #b5b1a8; font-size: 17px; }
+.lc-pv-hero { text-align: center; padding: 4px 0 2px; }
+.lc-pv-orb { position: relative; width: 92px; height: 92px; margin: 0 auto 14px; border-radius: 50%; background: color-mix(in srgb, var(--oc) 10%, transparent); display: flex; align-items: center; justify-content: center; }
+.lc-pv-orb::before { content: ''; position: absolute; inset: 11px; border-radius: 50%; background: color-mix(in srgb, var(--oc) 16%, transparent); }
+.lc-pv-orb svg { position: relative; z-index: 1; width: 44px; height: 44px; padding: 9px; border-radius: 50%; background: var(--oc); box-sizing: border-box; }
+.lc-pv-h2 { font-size: 17px; font-weight: 600; color: #1a1a1a; }
+.lc-pv-hsub { font-size: 12.5px; color: #8a877f; margin: 4px 0 16px; line-height: 1.5; }
+.lc-pv-row { display: flex; gap: 8px; margin-bottom: 11px; }
+.lc-pv-pill { flex: 1; min-width: 0; box-sizing: border-box; padding: 11px 12px; border: 1px solid #eceae4; border-radius: 12px; font-size: 13px; background: #f5f4f0; color: #a8a49c; }
+.lc-pv-btn2 { width: 100%; padding: 14px; border: none; border-radius: 999px; color: #fff; font-size: 14.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: default; }
 .lc-preview.middle-right .lc-pv-bubble { bottom: auto; top: 50%; right: 0; transform: translateY(-50%); width: 46px; height: auto; padding: 12px 10px; border-radius: 12px 0 0 12px; }
 .lc-preview.middle-right .lc-pv-panel { bottom: auto; top: 50%; right: 60px; transform: translateY(-50%); }
 /* Middle-left: edge tab centered on the left edge, panel beside it */
