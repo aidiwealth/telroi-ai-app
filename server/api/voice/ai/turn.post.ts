@@ -25,20 +25,20 @@ export default defineEventHandler(async (event) => {
 
   if (first) {
     const greeting = agent.greeting || 'Hello, thanks for calling. How can I help you today?';
-    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, greeting, {}, agent.tier === 'managed');
+    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, greeting, { language: agent.language }, agent.tier === 'managed');
     return { reply: greeting, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [{ role: 'assistant', content: greeting }], action: 'continue' };
   }
 
   let userText = '';
   if (body.audioBase64) {
     const audio = Buffer.from(body.audioBase64, 'base64');
-    userText = (await sttTranscribe(tenantId, agent.sttConnId, audio, body.audioContentType || 'audio/wav', agent.tier === 'managed')).trim();
+    userText = (await sttTranscribe(tenantId, agent.sttConnId, audio, body.audioContentType || 'audio/wav', agent.tier === 'managed', agent.language)).trim();
     console.log(`[turn] stt=${agent.sttConnId ? 'byok' : 'managed'} userText="${userText.slice(0,100)}" (${userText.length} chars)`);
   }
 
   if (!userText) {
     const nudge = 'Sorry, I did not catch that. Could you say that again?';
-    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, nudge, {}, agent.tier === 'managed');
+    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, nudge, { language: agent.language }, agent.tier === 'managed');
     return { reply: nudge, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history, action: 'continue' };
   }
 
@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const tts = await ttsSynthesize(tenantId, agent.ttsConnId, clean, {}, agent.tier === 'managed');
+  const tts = await ttsSynthesize(tenantId, agent.ttsConnId, clean, { language: agent.language }, agent.tier === 'managed');
 
   const sttSeconds = body.audioBase64 ? Math.round(Buffer.from(body.audioBase64, 'base64').length / 16000) : 0;
   void recordAiUsage({

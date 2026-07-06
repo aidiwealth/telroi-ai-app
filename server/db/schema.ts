@@ -325,6 +325,7 @@ export const aiAgents = pgTable('ai_agents', {
   llmConnId: uuid('llm_conn_id').references(() => aiConnections.id, { onDelete: 'set null' }),
   ttsConnId: uuid('tts_conn_id').references(() => aiConnections.id, { onDelete: 'set null' }),
   fallback: jsonb('fallback').$type<Record<string, unknown>>().default({}), // e.g. transfer-to-human
+  language: text('language').notNull().default('en-NG'), // BCP-47 code for STT/TTS (en-NG, yo-NG, ig-NG, ha-NG, fr-FR, ...)
   tier: aiTierEnum('tier').notNull().default('byok'), // byok = client keys; managed = Telroi keys (billed)
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({

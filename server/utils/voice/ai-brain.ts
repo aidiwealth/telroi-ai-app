@@ -113,17 +113,19 @@ function isLikelyHallucination(text: string, expectedLang: string): boolean {
   return false;
 }
 
-export async function sttTranscribe(tenantId: string, sttConnId: string | null, audio: Buffer, contentType = 'audio/wav', allowManaged = false): Promise<string> {
+export async function sttTranscribe(tenantId: string, sttConnId: string | null, audio: Buffer, contentType = 'audio/wav', allowManaged = false, language?: string): Promise<string> {
   const conn = await resolveConn(tenantId, sttConnId, ['deepgram', 'openai', 'google-cloud']);
+  // Agent language overrides the connection default; falls back to the conn meta then en-US.
+  const lang = language || (conn?.meta?.language as string) || 'en-US';
   try {
     if (conn?.provider === 'deepgram') {
-      const res = await fetch('https://api.deepgram.com/v1/listen?punctuate=true&model=nova-2', {
+      const res = await fetch(`https://api.deepgram.com/v1/listen?punctuate=true&model=nova-2&language=${encodeURIComponent((lang.split('-')[0]) || 'en')}`, {
         method: 'POST', headers: { Authorization: `Token ${conn.apiKey}`, 'Content-Type': contentType }, body: audio
       });
       if (!res.ok) return '';
       const d: any = await res.json();
       const dgTx = (d?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
-      const dgLang = (conn.meta.language as string) || 'en-US';
+      const dgLang = lang;
       if (isLikelyHallucination(dgTx, dgLang)) { console.log(`[ai-brain] STT(deepgram) rejected likely hallucination: "${dgTx.slice(0,80)}"`); return ''; }
       return dgTx;
     }
@@ -131,13 +133,14 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const form = new FormData();
       form.append('file', new Blob([audio], { type: contentType }), 'turn.wav');
       form.append('model', 'whisper-1');
+      form.append('language', (lang.split('-')[0]) || 'en');
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST', headers: { Authorization: `Bearer ${conn.apiKey}` }, body: form as any
       });
       if (!res.ok) return '';
       const d: any = await res.json();
       const oaiTx = (d?.text || '').trim();
-      const oaiLang = (conn.meta.language as string) || 'en-US';
+      const oaiLang = lang;
       if (isLikelyHallucination(oaiTx, oaiLang)) { console.log(`[ai-brain] STT(openai) rejected likely hallucination: "${oaiTx.slice(0,80)}"`); return ''; }
       return oaiTx;
     }
@@ -148,7 +151,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       // Detect raw PCM vs a real WAV: only set explicit encoding/rate for raw PCM.
       const isRawPcm = /l16|pcm/i.test(contentType) && !/wav/i.test(contentType);
       const cfg: any = {
-        languageCode: (conn.meta.language as string) || 'en-US',
+        languageCode: lang,
         model: 'phone_call',          // tuned for 8kHz telephony audio (keeps accuracy)
         enableAutomaticPunctuation: true
       };
@@ -202,7 +205,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
   } catch { return ''; }
 }
 
-export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
+export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string; language?: string } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
   const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai', 'google-cloud']);
   try {
     if (conn?.provider === 'elevenlabs') {
@@ -223,11 +226,13 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
       return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/wav' };
     }
     if (conn?.provider === 'google-cloud') {
-      const voice = opts.voice || (conn.meta.defaultVoice as string) || 'en-US-Neural2-C';
-      const lang = (conn.meta.language as string) || voice.split('-').slice(0, 2).join('-') || 'en-US';
+      // Prefer the agent language; let Google auto-pick a voice for that language
+      // (omit an explicit voice name so it doesn't force an en-US voice on yo-NG etc).
+      const lang = opts.language || (conn.meta.language as string) || 'en-US';
+      const voice = opts.voice || (conn.meta.defaultVoice as string) || '';
       const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${conn.apiKey}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: { text }, voice: { languageCode: lang, name: voice }, audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 16000 } })
+        body: JSON.stringify({ input: { text }, voice: voice ? { languageCode: lang, name: voice } : { languageCode: lang }, audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 16000 } })
       });
       if (!res.ok) { console.error(`[ai-brain] Google TTS failed ${res.status}`); return null; }
       const d: any = await res.json();
