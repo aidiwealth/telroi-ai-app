@@ -13,6 +13,7 @@
       </div>
     </div>
     <SetupTasks />
+    <CopilotDock />
     <IdleLogout />
     <TourGuide />
     <IncomingCall />

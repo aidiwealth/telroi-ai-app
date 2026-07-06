@@ -20,6 +20,7 @@
         <div class="shell-inner"><slot /></div>
       </div>
     </div>
+    <CopilotDock />
     <AdminTasks />
     <IdleLogout mode="admin" />
     <TourGuide />
