@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!secret || given !== secret) throw createError({ statusCode: 401, statusMessage: 'unauthorized' });
 
   const body = await readBody(event).catch(() => ({} as any));
-  const { agentId, tenantId, first } = body || {};
+  const { agentId, tenantId, first, telnum } = body || {};
   if (!agentId || !tenantId) throw createError({ statusCode: 400, statusMessage: 'agentId and tenantId required' });
 
   const [agent] = await useDb().select().from(schema.aiAgents)
@@ -49,7 +49,22 @@ export default defineEventHandler(async (event) => {
 
   // Ground the agent in the client's uploaded company documents (knowledge base).
   const kbContext = await buildKnowledgeContext(agentId, tenantId).catch(() => '');
-  const groundedPrompt = (agent.systemPrompt || '') + kbContext;
+  // A published Connect flow bound to this number can add per-call instructions
+  // for how the AI should handle the call (a script/behaviour), on top of the
+  // agent's own persona. Same agent, different behaviour per number/flow.
+  let flowInstructions = '';
+  if (telnum) {
+    try {
+      const [flow] = await useDb().select({ nodes: schema.connectFlows.nodes }).from(schema.connectFlows)
+        .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.telnum, telnum), eq(schema.connectFlows.status, 'published'))).limit(1);
+      const nodes = (flow?.nodes as any[]) || [];
+      const aiNode = nodes.find((n) => n.type === 'route_van' && n.config?.aiInstructions);
+      if (aiNode?.config?.aiInstructions) {
+        flowInstructions = `\n\nFor this call specifically, follow these instructions:\n${aiNode.config.aiInstructions}`;
+      }
+    } catch { /* flow instructions are optional */ }
+  }
+  const groundedPrompt = (agent.systemPrompt || '') + flowInstructions + kbContext;
   const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, groundedPrompt, nextHistory);
   if (!reply) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
 
