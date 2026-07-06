@@ -3,6 +3,7 @@
 // Stateless: the control-app holds the running history and passes it each turn.
 // Auth: shared secret header (x-telroi-internal).
 import { eq, and } from 'drizzle-orm';
+import { buildKnowledgeContext } from '~/server/utils/knowledge-retrieve';
 import { useDb, schema } from '~/server/db';
 import { resolveAgentLlm, llmReplyWithUsage, sttTranscribe, ttsSynthesize, recordAiUsage, type ChatMessage } from '~/server/utils/voice/ai-brain';
 
@@ -46,7 +47,10 @@ export default defineEventHandler(async (event) => {
   const llm = await resolveAgentLlm(tenantId, agent.llmConnId, agent.tier === 'managed');
   if (!llm) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
 
-  const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, agent.systemPrompt || '', nextHistory);
+  // Ground the agent in the client's uploaded company documents (knowledge base).
+  const kbContext = await buildKnowledgeContext(agentId, tenantId).catch(() => '');
+  const groundedPrompt = (agent.systemPrompt || '') + kbContext;
+  const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, groundedPrompt, nextHistory);
   if (!reply) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
 
   let action: 'continue' | 'hangup' | 'transfer' = 'continue';
