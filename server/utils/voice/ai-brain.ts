@@ -99,6 +99,12 @@ function isLikelyHallucination(text: string, expectedLang: string): boolean {
   // Common single-word/short filler hallucinations on silence.
   const junk = new Set(['you', 'thank you', 'thanks', 'bye', 'okay', 'ok', 'uh', 'um', 'hmm', 'yeah', 'the', 'a', 'so', 'hello', 'hi', 'you you', 'you you you']);
   if (junk.has(lower)) return true;
+  // Whisper's classic silence artifacts: subtitle credits, channel sign-offs, and
+  // stray URLs it learned from captioned training data. None are real caller speech.
+  if (/\b(subs?|subtitles?|captions?|transcription)\b.*\b(by|created|provided|amara|zeoranger)\b/i.test(t)) return true;
+  if (/thanks?\s+for\s+watching|please\s+subscribe|like\s+and\s+subscribe|see\s+you\s+(next|in the next)/i.test(t)) return true;
+  if (/https?:\/\/|www\.|\.com\b|\.co\.uk\b|\.org\b/i.test(t)) return true;  // URLs are never spoken caller turns
+  if (/©|\ball rights reserved\b/i.test(t)) return true;
   // Repeated single token (e.g. "you you you you").
   const words = lower.split(/\s+/);
   if (words.length >= 2 && new Set(words).size === 1) return true;
@@ -198,7 +204,12 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST', headers: { Authorization: `Bearer ${managedKey}` }, body: form as any
       });
-      if (res.ok) { const d: any = await res.json(); return d?.text || ''; }
+      if (res.ok) {
+        const d: any = await res.json();
+        const tx = (d?.text || '').trim();
+        if (isLikelyHallucination(tx, lang)) { console.log(`[ai-brain] managed STT rejected likely hallucination: "${tx.slice(0,80)}"`); return ''; }
+        return tx;
+      }
       console.error(`[ai-brain] managed STT (OpenAI) failed ${res.status}`);
     }
     return '';
