@@ -3,7 +3,7 @@
     <!-- Collapsed: edge pill on the right, below the setup-tasks dock -->
     <div v-if="collapsed" class="cp-dock">
       <button class="cp-edge" @click="open()" title="Copilot — ask me to help run your account">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3a4 4 0 0 1 4 4c0 1.5-.8 2.3-1.5 3M12 3a4 4 0 0 0-4 4c0 1.5.8 2.3 1.5 3M9 17h6M10 21h4M12 10v7"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4c3.9 0 7 2.6 7 5.8 0 .7-.6 1.2-1.3 1.2H6.3C5.6 11 5 10.5 5 9.8 5 6.6 8.1 4 12 4z"/><path d="M3.5 13.5c1.2.9 3 1.5 5 1.5M20.5 13.5c-1.2.9-3 1.5-5 1.5"/><circle cx="12" cy="8" r="1.2" fill="currentColor" stroke="none"/><path d="M8 15c0 1.5 1.8 2.5 4 2.5s4-1 4-2.5"/></svg>
         <span>Copilot</span>
       </button>
     </div>
@@ -112,8 +112,8 @@ async function send(preset?: string) {
 
 <style scoped>
 /* Collapsed edge pill (unchanged position: right-middle, under setup tasks) */
-.cp-dock { position: fixed; right: 0; top: calc(50% + 84px); transform: translateY(-50%); z-index: 89; }
-.cp-edge { display: flex; align-items: center; gap: 7px; padding: 10px 12px 10px 14px; border: none; border-radius: 12px 0 0 12px; background: var(--ink, #0C2057); color: #fff; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.18); font-size: 13px; font-weight: 600; }
+.cp-dock { position: fixed; right: 0; top: calc(50% + 52px); z-index: 89; }
+.cp-edge { display: flex; align-items: center; gap: 7px; padding: 10px 12px 10px 14px; border: none; border-radius: 12px 0 0 12px; background: var(--signal, #1a4b72); color: #fff; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.18); font-size: 13px; font-weight: 600; }
 .cp-edge svg { width: 18px; height: 18px; }
 .cp-edge:hover { filter: brightness(1.08); }
 
@@ -134,17 +134,17 @@ async function send(preset?: string) {
 .cp-thread { max-width: 640px; margin: 0 auto; padding: 28px 24px; display: flex; flex-direction: column; gap: 26px; }
 
 .cp-welcome { text-align: center; padding: 48px 0 24px; }
-.cp-welcome-icon { width: 48px; height: 48px; margin: 0 auto 18px; border-radius: 14px; background: var(--ink, #0C2057); color: #fff; display: flex; align-items: center; justify-content: center; }
+.cp-welcome-icon { width: 48px; height: 48px; margin: 0 auto 18px; border-radius: 14px; background: var(--signal, #1a4b72); color: #fff; display: flex; align-items: center; justify-content: center; }
 .cp-welcome-icon svg { width: 26px; height: 26px; }
 .cp-welcome-t { font-size: 21px; font-weight: 700; margin: 0 0 6px; color: var(--ink, #14203a); }
 .cp-welcome-s { font-size: 14px; color: var(--ink-soft, #666); margin: 0 0 24px; }
 .cp-sugs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 460px; margin: 0 auto; }
-.cp-sug { text-align: left; padding: 13px 15px; border: 1px solid var(--rule-2, rgba(0,0,0,0.1)); border-radius: 12px; background: none; cursor: pointer; font-size: 13.5px; color: var(--ink, #0C2057); transition: all .12s; }
-.cp-sug:hover { background: var(--paper-2, #f7f6f2); border-color: var(--ink, #0C2057); }
+.cp-sug { text-align: left; padding: 13px 15px; border: 1px solid var(--rule-2, rgba(0,0,0,0.1)); border-radius: 12px; background: none; cursor: pointer; font-size: 13.5px; color: var(--signal, #1a4b72); transition: all .12s; }
+.cp-sug:hover { background: var(--paper-2, #f7f6f2); border-color: var(--signal, #1a4b72); }
 
 .cp-row { display: flex; gap: 14px; }
 .cp-avatar { flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
-.cp-avatar.assistant { background: var(--ink, #0C2057); color: #fff; }
+.cp-avatar.assistant { background: var(--signal, #1a4b72); color: #fff; }
 .cp-avatar.assistant svg { width: 17px; height: 17px; }
 .cp-avatar.user { background: var(--paper-2, #e8e6df); color: var(--ink-soft, #555); }
 .cp-content { flex: 1; min-width: 0; padding-top: 4px; }
@@ -160,9 +160,9 @@ async function send(preset?: string) {
 
 .cp-input-wrap { border-top: 1px solid var(--rule-2, rgba(0,0,0,0.07)); padding: 14px 24px 12px; }
 .cp-input { max-width: 640px; margin: 0 auto; display: flex; gap: 10px; align-items: flex-end; border: 1px solid var(--rule-2, rgba(0,0,0,0.14)); border-radius: 14px; padding: 8px 8px 8px 14px; background: var(--paper, #fff); }
-.cp-input:focus-within { border-color: var(--ink, #0C2057); }
+.cp-input:focus-within { border-color: var(--signal, #1a4b72); }
 .cp-in { flex: 1; border: none; outline: none; resize: none; font-size: 14.5px; line-height: 1.5; font-family: inherit; padding: 5px 0; max-height: 160px; background: transparent; color: var(--ink, #1a2438); }
-.cp-send { flex-shrink: 0; border: none; background: var(--ink, #0C2057); color: #fff; border-radius: 10px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.cp-send { flex-shrink: 0; border: none; background: var(--signal, #1a4b72); color: #fff; border-radius: 10px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .cp-send:disabled { opacity: .35; cursor: not-allowed; }
 .cp-send svg { width: 17px; height: 17px; }
 .cp-foot { max-width: 640px; margin: 8px auto 0; text-align: center; font-size: 11.5px; color: var(--ink-mute, #aaa); }
