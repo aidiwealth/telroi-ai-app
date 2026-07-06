@@ -44,6 +44,17 @@
                 <div v-if="m.links && m.links.length" class="cp-links">
                   <NuxtLink v-for="l in m.links" :key="l.to" :to="l.to" class="cp-link" @click="close()">{{ l.label }} →</NuxtLink>
                 </div>
+                <div v-if="m.action" class="cp-action" :class="'cp-action-' + (m.actionState || 'pending')">
+                  <div class="cp-action-row"><i class="cp-action-ic"></i><span class="cp-action-txt">{{ m.action.preview }}</span></div>
+                  <div v-if="m.actionState === 'pending'" class="cp-action-btns">
+                    <button class="cp-act-cancel" @click="cancelAction(m)">Cancel</button>
+                    <button class="cp-act-confirm" @click="confirmAction(m)">Confirm</button>
+                  </div>
+                  <div v-else-if="m.actionState === 'running'" class="cp-action-status">Working…</div>
+                  <div v-else-if="m.actionState === 'done'" class="cp-action-status cp-ok">✓ {{ m.actionResult }}</div>
+                  <div v-else-if="m.actionState === 'cancelled'" class="cp-action-status">Cancelled</div>
+                  <div v-if="m.actionResult && m.actionState === 'pending'" class="cp-action-err">{{ m.actionResult }}</div>
+                </div>
               </div>
             </div>
 
@@ -72,7 +83,7 @@
 import { ref, nextTick } from 'vue';
 const props = withDefaults(defineProps<{ apiBase?: string }>(), { apiBase: '/api/copilot' });
 
-interface Msg { role: 'user' | 'assistant'; content: string; links?: Array<{ label: string; to: string }>; }
+interface Msg { role: 'user' | 'assistant'; content: string; links?: Array<{ label: string; to: string }>; action?: any; actionState?: 'pending' | 'running' | 'done' | 'cancelled'; actionResult?: string; }
 const collapsed = ref(true);
 const draft = ref('');
 const busy = ref(false);
@@ -90,6 +101,22 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Enter' && !e.shiftKey) { e.pre
 
 async function scrollDown() { await nextTick(); if (scrollEl.value) scrollEl.value.scrollTop = scrollEl.value.scrollHeight; }
 
+async function confirmAction(m: any) {
+  if (!m.action || m.actionState !== 'pending') return;
+  m.actionState = 'running';
+  try {
+    const r = await $fetch<{ ok: boolean; message?: string }>(`${props.apiBase}/execute`, {
+      method: 'POST', body: { action: m.action.type, args: m.action.args }
+    });
+    m.actionState = 'done';
+    m.actionResult = r.message || 'Done.';
+  } catch (e: any) {
+    m.actionState = 'pending';
+    m.actionResult = e?.data?.message || 'That did not work. Please try again.';
+  }
+}
+function cancelAction(m: any) { if (m.actionState === 'pending') m.actionState = 'cancelled'; }
+
 async function send(preset?: string) {
   const text = (preset || draft.value).trim();
   if (!text || busy.value) return;
@@ -100,10 +127,10 @@ async function send(preset?: string) {
   busy.value = true;
   try {
     const history = messages.value.slice(-6).map((m) => ({ role: m.role, content: m.content }));
-    const r = await $fetch<{ reply: string; links?: Array<{ label: string; to: string }> }>(`${props.apiBase}/chat`, {
+    const r = await $fetch<{ reply: string; links?: Array<{ label: string; to: string }>; action?: any }>(`${props.apiBase}/chat`, {
       method: 'POST', body: { message: text, history: history.slice(0, -1) }
     });
-    messages.value.push({ role: 'assistant', content: r.reply || 'Sorry, I could not respond.', links: r.links });
+    messages.value.push({ role: 'assistant', content: r.reply || (r.action ? '' : 'Sorry, I could not respond.'), links: r.links, action: r.action || null, actionState: r.action ? 'pending' : undefined });
   } catch (e: any) {
     messages.value.push({ role: 'assistant', content: e?.data?.message || 'Something went wrong. Please try again.' });
   } finally { busy.value = false; await scrollDown(); }
@@ -152,6 +179,16 @@ async function send(preset?: string) {
 .cp-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .cp-link { font-size: 13px; padding: 6px 12px; border-radius: 9px; background: rgba(200,150,46,0.14); color: #a8791f; text-decoration: none; font-weight: 600; }
 .cp-link:hover { background: rgba(200,150,46,0.24); }
+.cp-action { margin-top: 12px; border: 1px solid var(--rule-2, rgba(0,0,0,0.1)); border-radius: 12px; padding: 12px 14px; background: var(--paper-2, #f7f6f2); }
+.cp-action-row { display: flex; align-items: flex-start; gap: 9px; }
+.cp-action-ic { flex-shrink: 0; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--signal, #1a4b72); }
+.cp-action-txt { font-size: 13.5px; color: var(--ink, #1a2438); line-height: 1.5; }
+.cp-action-btns { display: flex; gap: 8px; margin-top: 11px; }
+.cp-act-confirm { flex: 1; padding: 9px; border: none; border-radius: 9px; background: var(--signal, #1a4b72); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+.cp-act-cancel { padding: 9px 14px; border: 1px solid var(--rule-2, rgba(0,0,0,0.14)); border-radius: 9px; background: none; color: var(--ink-soft, #555); font-size: 13px; cursor: pointer; }
+.cp-action-status { margin-top: 9px; font-size: 13px; color: var(--ink-soft, #666); }
+.cp-action-status.cp-ok { color: #2a8c5a; font-weight: 600; }
+.cp-action-err { margin-top: 8px; font-size: 12.5px; color: #c0392b; }
 .cp-typing { display: flex; gap: 5px; padding-top: 6px; }
 .cp-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-mute, #bbb); animation: cpb 1s infinite; }
 .cp-typing span:nth-child(2) { animation-delay: .15s; }
