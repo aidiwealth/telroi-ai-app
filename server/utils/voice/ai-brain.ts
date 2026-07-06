@@ -280,8 +280,26 @@ export async function recordAiUsage(args: {
   } catch { /* usage tracking must never break a call */ }
 }
 
+// Wraps a client's system prompt with scope discipline so the AI stays on the
+// company's domain and politely declines/deflects off-topic requests (general
+// knowledge, coding, math, other companies, world facts, etc.) rather than acting
+// as a general assistant. Kept spoken-friendly and brief. If the client supplied
+// no prompt at all we fall back to a neutral receptionist persona.
+export function applyScopeGating(systemPrompt: string): string {
+  const base = (systemPrompt || '').trim();
+  const persona = base || 'You are a professional phone receptionist for this business.';
+  return `${persona}
+
+## Staying on topic (important)
+You represent THIS business only. Your job is to help callers with THIS company's products, services, hours, locations, policies, bookings, and related questions.
+- If a caller asks about something unrelated to this business (general knowledge, world facts, math, coding, other companies, personal advice, or anything outside this company's scope), politely decline in one short sentence and steer back — e.g. "I'm sorry, I can only help with questions about our business. Is there something about our services I can help with?"
+- Never answer trivia, do calculations, write code, or act as a general-purpose assistant.
+- Only state facts about this business that you have been given. If you don't know something about the business, say you're not sure and offer to connect them to a team member — do NOT guess or invent details (hours, prices, policies).
+- Keep every reply short and natural for a phone conversation.`;
+}
+
 export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, history: ChatMessage[]): Promise<{ text: string | null; inputTokens: number; outputTokens: number }> {
-  const sys = systemPrompt || 'You are a helpful phone assistant. Keep replies short, natural, and spoken-friendly.';
+  const sys = applyScopeGating(systemPrompt);
   try {
     if (llm.provider === 'anthropic') {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
