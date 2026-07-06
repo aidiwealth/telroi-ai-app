@@ -529,6 +529,8 @@ export const knowledgeDocuments = pgTable('knowledge_documents', {
   fileName: text('file_name').notNull(),
   fileKey: text('file_key'),                 // R2 object key for the original file
   fileType: text('file_type'),               // pdf | docx | txt | md
+  sourceType: text('source_type').notNull().default('upload'), // upload | drive | url
+  sourceUrl: text('source_url'),             // original Drive/web link (for external sources + refresh)
   sizeBytes: integer('size_bytes').notNull().default(0),
   status: text('status').notNull().default('processing'), // processing | ready | failed
   extractedText: text('extracted_text'),     // parsed plain text (for grounding)
