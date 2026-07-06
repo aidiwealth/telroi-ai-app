@@ -190,6 +190,11 @@
                     <option v-for="c in connections" :key="'tts'+c.id" :value="c.id">{{ c.provider }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
                   </select>
                 </label>
+                <label class="edit-fld"><span>Language</span>
+                  <select v-model="agentEdit.language" class="select">
+                    <option v-for="l in AGENT_LANGUAGES" :key="l.code" :value="l.code">{{ l.label }}</option>
+                  </select>
+                </label>
                 <div class="kb-card">
                   <div class="kb-head">
                     <div class="kb-head-left">
@@ -256,13 +261,26 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 
+// Supported agent languages (BCP-47) — mirrors server/utils/voice/languages.ts.
+const AGENT_LANGUAGES = [
+  { code: 'en-NG', label: 'English (Nigeria)' }, { code: 'yo-NG', label: 'Yoruba' },
+  { code: 'ig-NG', label: 'Igbo' }, { code: 'ha-NG', label: 'Hausa' },
+  { code: 'sw-KE', label: 'Swahili' }, { code: 'am-ET', label: 'Amharic' },
+  { code: 'zu-ZA', label: 'Zulu' }, { code: 'af-ZA', label: 'Afrikaans' },
+  { code: 'en-US', label: 'English (US)' }, { code: 'en-GB', label: 'English (UK)' },
+  { code: 'fr-FR', label: 'French' }, { code: 'ar-XA', label: 'Arabic' },
+  { code: 'pt-PT', label: 'Portuguese' }, { code: 'es-ES', label: 'Spanish' },
+  { code: 'de-DE', label: 'German' }, { code: 'hi-IN', label: 'Hindi' },
+  { code: 'zh', label: 'Chinese (Mandarin)' }
+];
+
 const props = withDefaults(defineProps<{ apiBase?: string; agentsBase?: string }>(), { apiBase: '/api/ai/connections', agentsBase: '/api/agents' });
 const api = useApi();
 const toast = useToast();
 
 interface Conn { id: string; provider: string; keyMasked: string; status: string; lastTestedAt: string | null; }
 interface AgentTier { llm: string; stt: string; tts: string; anyManaged: boolean; }
-interface Agent { id: string; name: string; greeting?: string | null; tier?: AgentTier; sttConnId?: string | null; llmConnId?: string | null; ttsConnId?: string | null; }
+interface Agent { id: string; name: string; greeting?: string | null; tier?: AgentTier; sttConnId?: string | null; llmConnId?: string | null; ttsConnId?: string | null; language?: string; }
 function tierLabel(t?: string): string { return t === 'byok' ? 'Your key' : t === 'managed' ? 'Managed' : 'Not set'; }
 function tierClass(t?: string): string { return t === 'byok' ? 'tier-byok' : t === 'managed' ? 'tier-managed' : 'tier-none'; }
 function tierTitle(role: string, t?: string): string {
@@ -304,7 +322,7 @@ const agents = ref<Agent[]>([]);
 const agentsPending = ref(true);
 const showAgent = ref(false);
 const savingAgent = ref(false);
-const agentDraft = reactive({ name: '', greeting: '', tier: 'byok' as 'byok' | 'managed' });
+const agentDraft = reactive({ name: '', greeting: '', tier: 'byok' as 'byok' | 'managed', language: 'en-NG' });
 
 // Guided setup wizard. Step 1 = tier choice, step 2 = the three parts (BYOK only), then name.
 const wizardStep = ref(1);
@@ -329,7 +347,7 @@ function roleOptions(role: 'stt' | 'llm' | 'tts'): { id: string; label: string }
 }
 function resetWizard() {
   wizardStep.value = 1; showAdvanced.value = false;
-  agentDraft.name = ''; agentDraft.greeting = ''; agentDraft.tier = 'byok';
+  agentDraft.name = ''; agentDraft.greeting = ''; agentDraft.tier = 'byok'; agentDraft.language = 'en-NG';
   roleChoice.stt = ''; roleChoice.llm = ''; roleChoice.tts = '';
 }
 function chooseTier(t: 'byok' | 'managed') {
@@ -353,7 +371,7 @@ async function createAgent() {
   if (!agentDraft.name.trim()) return;
   savingAgent.value = true;
   try {
-    const abody: any = { name: agentDraft.name.trim(), greeting: agentDraft.greeting.trim() || undefined, tier: agentDraft.tier };
+    const abody: any = { name: agentDraft.name.trim(), greeting: agentDraft.greeting.trim() || undefined, tier: agentDraft.tier, language: agentDraft.language };
     if (agentDraft.tier === 'byok') {
       const stt = roleConnId('stt'); const llm = roleConnId('llm'); const tts = roleConnId('tts');
       if (stt) abody.sttConnId = stt;
@@ -412,9 +430,9 @@ async function saveConnEdit(id: string) {
 }
 
 const editingAgent = ref<string | null>(null);
-const agentEdit = reactive({ name: '', greeting: '', sttConnId: '', llmConnId: '', ttsConnId: '' });
+const agentEdit = reactive({ name: '', greeting: '', sttConnId: '', llmConnId: '', ttsConnId: '', language: 'en-NG' });
 const savingAgentEdit = ref(false);
-function startEditAgent(a: Agent) { editingAgent.value = a.id; agentEdit.name = a.name; agentEdit.greeting = a.greeting || ''; agentEdit.sttConnId = a.sttConnId || ''; agentEdit.llmConnId = a.llmConnId || ''; agentEdit.ttsConnId = a.ttsConnId || ''; loadKbDocs(a.id); }
+function startEditAgent(a: Agent) { editingAgent.value = a.id; agentEdit.name = a.name; agentEdit.greeting = a.greeting || ''; agentEdit.sttConnId = a.sttConnId || ''; agentEdit.llmConnId = a.llmConnId || ''; agentEdit.ttsConnId = a.ttsConnId || ''; agentEdit.language = a.language || 'en-NG'; loadKbDocs(a.id); }
 
 // ── Knowledge base (per-agent document training) ──
 const kbDocs = reactive<Record<string, any[]>>({});
@@ -529,7 +547,8 @@ async function saveAgentEdit(id: string) {
       greeting: agentEdit.greeting.trim() || null,
       sttConnId: agentEdit.sttConnId || null,
       llmConnId: agentEdit.llmConnId || null,
-      ttsConnId: agentEdit.ttsConnId || null
+      ttsConnId: agentEdit.ttsConnId || null,
+      language: agentEdit.language
     });
     editingAgent.value = null; toast.ok('Agent updated'); await loadAgents();
   } catch (e: any) { toast.err(e.message); }
