@@ -204,6 +204,7 @@ async function main() {
             client, channel,
             tenantId: route.tenantId,
             agentId,
+            telnum: dialedDid,
             callId: chId,
             escalateAfterSec: route.routeEscalateAfter || 0,
             log: (m: string) => log(`  [ai ${chId}] ${m}`),

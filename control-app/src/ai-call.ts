@@ -126,6 +126,7 @@ export interface AiCallOptions {
   channel: Ari.Channel;
   tenantId: string;
   agentId: string;
+  telnum?: string;  // dialed DID — lets a published flow inject per-call AI instructions
   callId?: string;
   escalateAfterSec?: number; // >0 = auto-escalate to a human after this many seconds
   log: Logger;
@@ -145,7 +146,7 @@ async function finalizeCall(tenantId: string, callId: string | undefined): Promi
 }
 
 export async function runAiCall(opts: AiCallOptions): Promise<void> {
-  const { client, channel, tenantId, agentId, callId, log } = opts;
+  const { client, channel, tenantId, agentId, telnum, callId, log } = opts;
   const escalateAfterSec = opts.escalateAfterSec && opts.escalateAfterSec > 0 ? opts.escalateAfterSec : 0;
   const startedAt = Date.now();
   let history: ChatMessage[] = [];
@@ -165,7 +166,7 @@ export async function runAiCall(opts: AiCallOptions): Promise<void> {
   // opening words of the greeting get clipped (caller hears only the tail end).
   await new Promise((r) => setTimeout(r, 700));
 
-  const greet = await callTurn({ agentId, tenantId, first: true });
+  const greet = await callTurn({ agentId, tenantId, telnum, first: true });
   if (!greet) { log('ai: greeting turn failed'); opts.onEnd?.(turns); return; }
   history = greet.history || [];
   if (greet.audioBase64) {
@@ -184,7 +185,7 @@ export async function runAiCall(opts: AiCallOptions): Promise<void> {
     catch (e: any) { if (e?.channelGone) { log('ai: channel gone — ending loop'); hungUp = true; break; } }
     if (hungUp) break;
 
-    const turn = await callTurn({ agentId, tenantId, callId, history, audioBase64: audioB64, audioContentType: 'audio/wav' });
+    const turn = await callTurn({ agentId, tenantId, telnum, callId, history, audioBase64: audioB64, audioContentType: 'audio/wav' });
     if (!turn) { log('ai: turn failed — ending'); break; }
     history = turn.history || history;
 
