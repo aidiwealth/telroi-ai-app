@@ -11,9 +11,17 @@
     <!-- Open: centered full conversation view (Claude/ChatGPT style) -->
     <div v-else class="cp-scrim" @click.self="close()">
       <div class="cp-modal">
+        <div v-if="showHistory" class="cp-history">
+          <div class="cp-history-head">Previous chats<button class="cp-x" @click="showHistory = false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+          <div class="cp-history-list">
+            <button v-if="!history.length" class="cp-history-empty" disabled>No saved chats yet</button>
+            <button v-for="h in history" :key="h.id" class="cp-history-item" @click="openConversation(h.id)">{{ h.title }}</button>
+          </div>
+        </div>
         <div class="cp-head">
           <div class="cp-title"><span class="cp-dot" /> Telroi Copilot</div>
           <div class="cp-head-actions">
+            <button class="cp-ghost" @click="toggleHistory()" title="Chat history">History</button>
             <button v-if="messages.length" class="cp-ghost" @click="reset()" title="New conversation">New chat</button>
             <button class="cp-x" @click="close()" title="Close">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -88,13 +96,37 @@ const collapsed = ref(true);
 const draft = ref('');
 const busy = ref(false);
 const messages = ref<Msg[]>([]);
+const conversationId = ref<string | null>(null);
+const history = ref<Array<{ id: string; title: string; updatedAt: string }>>([]);
+const showHistory = ref(false);
 const scrollEl = ref<HTMLElement | null>(null);
 const inputEl = ref<HTMLTextAreaElement | null>(null);
 const suggestions = ['How are my calls doing?', 'How do I set up an AI agent?', 'Create a Virtual AI Number', 'Upload a knowledge base'];
 
 function open() { collapsed.value = false; nextTick(() => inputEl.value?.focus()); }
 function close() { collapsed.value = true; }
-function reset() { messages.value = []; draft.value = ''; }
+function reset() { messages.value = []; draft.value = ''; conversationId.value = null; showHistory.value = false; }
+
+async function loadHistory() {
+  try { history.value = await $fetch(`${props.apiBase}/conversations`); } catch { history.value = []; }
+}
+async function openConversation(id: string) {
+  try {
+    const c = await $fetch<{ id: string; messages: Msg[] }>(`${props.apiBase}/conversations/${id}`);
+    messages.value = (c.messages || []).map((m: any) => ({ role: m.role, content: m.content }));
+    conversationId.value = c.id; showHistory.value = false;
+    await scrollDown();
+  } catch { /* ignore */ }
+}
+async function saveConversation() {
+  const plain = messages.value.filter((m) => m.content).map((m) => ({ role: m.role, content: m.content }));
+  if (!plain.length) return;
+  try {
+    const r = await $fetch<{ id: string }>(`${props.apiBase}/conversations/save`, { method: 'POST', body: { id: conversationId.value, messages: plain } });
+    if (r?.id) conversationId.value = r.id;
+  } catch { /* ignore */ }
+}
+async function toggleHistory() { showHistory.value = !showHistory.value; if (showHistory.value) await loadHistory(); }
 
 onMounted(async () => {
   // First visit after signup: open the copilot once (server-tracked per account)
@@ -148,7 +180,7 @@ async function send(preset?: string) {
     messages.value.push({ role: 'assistant', content: r.reply || (r.action ? '' : 'Sorry, I could not respond.'), links: r.links, action: r.action || null, actionState: r.action ? 'pending' : undefined });
   } catch (e: any) {
     messages.value.push({ role: 'assistant', content: e?.data?.message || 'Something went wrong. Please try again.' });
-  } finally { busy.value = false; await scrollDown(); }
+  } finally { busy.value = false; await scrollDown(); saveConversation(); }
 }
 </script>
 
@@ -172,6 +204,12 @@ async function send(preset?: string) {
 .cp-x { border: none; background: none; cursor: pointer; color: var(--ink-mute, #999); padding: 4px; }
 .cp-x svg { width: 18px; height: 18px; }
 
+.cp-history { position: absolute; inset: 0; z-index: 3; background: var(--paper, #fff); display: flex; flex-direction: column; }
+.cp-history-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--rule-2, rgba(0,0,0,0.07)); font-weight: 600; font-size: 14px; }
+.cp-history-list { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+.cp-history-item { text-align: left; padding: 12px 14px; border: none; background: none; border-radius: 10px; cursor: pointer; font-size: 13.5px; color: var(--ink, #1a2438); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-history-item:hover { background: var(--paper-2, #f5f4ef); }
+.cp-history-empty { text-align: center; padding: 24px; color: var(--ink-mute, #999); font-size: 13px; background: none; border: none; }
 .cp-body { flex: 1; overflow-y: auto; }
 .cp-thread { max-width: 640px; margin: 0 auto; padding: 28px 24px; display: flex; flex-direction: column; gap: 26px; }
 
