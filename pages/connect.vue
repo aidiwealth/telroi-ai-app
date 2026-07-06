@@ -35,39 +35,45 @@
         </div>
 
         <!-- Nodes -->
-        <div class="cn-flow">
+        <!-- Step palette -->
+        <div class="cn-palette">
+          <span class="cn-palette-label">Drag a step into the flow, or click to add:</span>
+          <div class="cn-palette-items">
+            <button v-for="p in PALETTE" :key="p.type" class="cn-palette-chip" draggable="true"
+                    @dragstart="onPaletteDragStart(p.type, $event)" @click="appendNode(p.type)">
+              <span class="cn-chip-icon" v-html="nodeIcon(p.type)" />{{ p.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="cn-flow" @dragover.prevent @drop="onFlowDrop">
           <div class="cn-entry-label">Incoming call →</div>
-          <div v-for="(node, i) in current.nodes" :key="node.id" class="cn-node">
+          <p v-if="!current.nodes.length" class="cn-flow-empty muted">Drag a step here to start building the call flow.</p>
+          <div v-for="(node, i) in current.nodes" :key="node.id"
+               class="cn-node" :class="{ 'cn-node-dragover': dragOverIndex === i, 'cn-node-dragging': dragIndex === i }"
+               draggable="true"
+               @dragstart="onDragStart(i)" @dragover="onDragOver(i, $event)" @drop.stop="onDrop(i)" @dragend="dragOverIndex = null">
+            <div class="cn-drag-handle" title="Drag to reorder">⋮⋮</div>
             <div class="cn-node-icon" :class="`nt-${node.type}`" v-html="nodeIcon(node.type)" />
             <div class="cn-node-body">
               <div class="cn-node-type">{{ nodeLabel(node.type) }} <span v-if="i === 0" class="cn-entry-pill">entry</span></div>
               <input v-model="node.config.target" v-if="['route_user','route_group','route_van'].includes(node.type)"
                      class="input cn-node-input" :placeholder="targetPlaceholder(node.type)" @blur="saveFlow" />
+              <textarea v-if="node.type === 'route_van'" v-model="node.config.aiInstructions"
+                        class="input cn-node-input cn-ai-instr" rows="2"
+                        placeholder="Optional: how the AI should handle this call (e.g. verify the caller's account, then offer billing or support)" @blur="saveFlow"></textarea>
               <input v-model="node.config.text" v-if="['greeting','voicemail'].includes(node.type)"
-                     class="input cn-node-input" placeholder="Greeting text or media id" @blur="saveFlow" />
+                     class="input cn-node-input" placeholder="What the caller hears" @blur="saveFlow" />
               <div v-if="node.type === 'menu'" class="cn-menu-opts">
+                <input v-model="node.config.text" class="input cn-node-input" placeholder="Menu prompt (e.g. Press 1 for sales, 2 for support)" @blur="saveFlow" />
                 <div v-for="(opt, oi) in (node.config.options || [])" :key="oi" class="cn-menu-opt">
-                  <span class="cn-digit mono">{{ opt.digit }}</span>
+                  <input v-model="opt.digit" class="input cn-digit-input mono" placeholder="1" @blur="saveFlow" />
                   <input v-model="opt.label" class="input cn-node-input" placeholder="e.g. Sales" @blur="saveFlow" />
                 </div>
                 <button class="cn-add-opt" @click="addMenuOption(node)">+ Add option</button>
               </div>
             </div>
-            <button class="cn-node-del" @click="removeNode(i)">✕</button>
-          </div>
-
-          <!-- Add node -->
-          <div class="cn-add-node">
-            <select v-model="newNodeType" class="select cn-add-select">
-              <option value="greeting">Greeting</option>
-              <option value="menu">Menu (IVR)</option>
-              <option value="route_user">Route to person</option>
-              <option value="route_group">Route to department</option>
-              <option value="route_van">Route to AI Number (VAN)</option>
-              <option value="voicemail">Voicemail</option>
-              <option value="hangup">Hang up</option>
-            </select>
-            <button class="btn btn-ghost btn-sm" @click="addNode">+ Add step</button>
+            <button class="cn-node-del" @click="removeNode(i)" title="Remove step">✕</button>
           </div>
         </div>
 
@@ -85,7 +91,6 @@
             <select v-model="wf.action" class="select cn-wf-sel" @change="saveFlow">
               <option value="crm_write">Write to CRM</option>
               <option value="webhook">Call webhook</option>
-              <option value="sms_notify">SMS notify</option>
             </select>
             <button class="cn-node-del" @click="removeWorkflow(i)">✕</button>
           </div>
@@ -113,6 +118,48 @@ const current = ref<any>(null);
 const numbers = ref<any[]>([]);
 const newNodeType = ref('greeting');
 const publishing = ref(false);
+const dragIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+
+// Palette of step types (drag onto the flow, or click to append).
+const PALETTE = [
+  { type: 'greeting', label: 'Greeting' },
+  { type: 'menu', label: 'Menu (IVR)' },
+  { type: 'route_user', label: 'Route to person' },
+  { type: 'route_group', label: 'Route to department' },
+  { type: 'route_van', label: 'Route to AI' },
+  { type: 'voicemail', label: 'Voicemail' },
+  { type: 'hangup', label: 'Hang up' }
+];
+
+function makeNode(type: string) {
+  const id = Math.random().toString(36).slice(2, 9);
+  const config: any = type === 'menu' ? { options: [] } : {};
+  return { id, type, config };
+}
+function appendNode(type: string) {
+  if (!current.value) return;
+  current.value.nodes.push(makeNode(type));
+  saveFlow();
+}
+// Reorder within the flow.
+function onDragStart(i: number) { dragIndex.value = i; }
+function onDragOver(i: number, e: DragEvent) { e.preventDefault(); dragOverIndex.value = i; }
+function onDrop(i: number) {
+  const from = dragIndex.value;
+  if (from === null || from === i) { dragIndex.value = null; dragOverIndex.value = null; return; }
+  const nodes = current.value.nodes;
+  const [moved] = nodes.splice(from, 1);
+  nodes.splice(i, 0, moved);
+  dragIndex.value = null; dragOverIndex.value = null;
+  saveFlow();
+}
+// Drop a palette item onto the flow.
+function onPaletteDragStart(type: string, e: DragEvent) { e.dataTransfer?.setData('text/palette', type); }
+function onFlowDrop(e: DragEvent) {
+  const type = e.dataTransfer?.getData('text/palette');
+  if (type) { appendNode(type); }
+}
 
 function nodeLabel(t: string) {
   return ({ greeting: 'Greeting', menu: 'Menu (IVR)', route_user: 'Route to person', route_group: 'Route to department', route_van: 'Route to AI Number', voicemail: 'Voicemail', hangup: 'Hang up' } as any)[t] || t;
@@ -240,6 +287,20 @@ onMounted(load);
 .cn-add-node { display: flex; gap: 10px; margin-top: 8px; }
 .cn-add-select { width: 220px; }
 
+.cn-palette { margin-bottom: 16px; padding: 14px 16px; background: var(--paper-2); border: 1px solid var(--rule-2); border-radius: 12px; }
+.cn-palette-label { font-size: 12.5px; color: var(--ink-soft); display: block; margin-bottom: 10px; }
+.cn-palette-items { display: flex; flex-wrap: wrap; gap: 8px; }
+.cn-palette-chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid var(--rule-2); border-radius: 9px; background: var(--paper); font-size: 13px; cursor: grab; color: var(--ink); }
+.cn-palette-chip:hover { border-color: var(--signal); color: var(--signal); }
+.cn-palette-chip:active { cursor: grabbing; }
+.cn-chip-icon { display: inline-flex; }
+.cn-flow-empty { text-align: center; padding: 24px; border: 1.5px dashed var(--rule-2); border-radius: 10px; font-size: 13px; }
+.cn-drag-handle { cursor: grab; color: var(--ink-mute); font-size: 13px; letter-spacing: -2px; padding: 0 4px; user-select: none; }
+.cn-drag-handle:active { cursor: grabbing; }
+.cn-node-dragging { opacity: 0.5; }
+.cn-node-dragover { border-color: var(--signal); box-shadow: 0 -2px 0 var(--signal); }
+.cn-ai-instr { resize: vertical; min-height: 42px; font-family: inherit; }
+.cn-digit-input { width: 48px; text-align: center; flex: none; }
 .cn-workflows { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--rule); }
 .cn-section-label { font-size: 14px; font-weight: 500; margin-bottom: 14px; }
 .cn-wf { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
