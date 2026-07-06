@@ -25,20 +25,20 @@
         <div class="afs-preview-label">Preview</div>
         <div class="afs-preview" :class="model.bubblePosition || 'middle-right'">
           <div class="afs-pv-panel">
-            <div class="afs-pv-head">
-              <div class="afs-pv-icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z"/></svg>
-              </div>
-              <div class="afs-pv-htext">
-                <div class="afs-pv-title">{{ model.greeting || 'Need help? Call us.' }}</div>
-                <div class="afs-pv-status"><span class="afs-pv-dot"></span>We're online now</div>
-              </div>
+            <div class="afs-pv-head2">
+              <div class="afs-pv-status"><span class="afs-pv-dot"></span>We're online now</div>
             </div>
             <div class="afs-pv-body">
-              <div class="afs-pv-lead">Talk to {{ model.routeTo === 'ai' ? 'our assistant' : 'a real person' }} in seconds — leave your name and number and we'll call you straight back.</div>
-              <div class="afs-pv-input">Your name</div>
-              <div class="afs-pv-input">Mobile number</div>
-              <div class="afs-pv-btn" :style="{ background: model.bubbleColor }">Start call</div>
+              <div class="afs-pv-orb" :style="{ '--oc': model.bubbleColor }">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z"/></svg>
+              </div>
+              <div class="afs-pv-h2">{{ model.greeting || 'Call our team' }}</div>
+              <div class="afs-pv-lead">Enter your details — we'll ring you back in seconds.</div>
+              <div class="afs-pv-row">
+                <div class="afs-pv-pill">Name</div>
+                <div class="afs-pv-pill">Number</div>
+              </div>
+              <div class="afs-pv-btn2" :style="{ background: model.bubbleColor }">Request call →</div>
               <div class="afs-pv-route">Routes to {{ model.routeTo === 'ai' ? 'AI agent' : 'a live agent' }}<template v-if="model.csatEnabled"> · rating after</template></div>
             </div>
           </div>
@@ -127,6 +127,14 @@ onMounted(load);
 .afs-preview-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-mute); margin-bottom: 10px; }
 .afs-preview { position: relative; height: 300px; background: var(--paper-2); border: 1px dashed var(--rule-2); border-radius: 12px; }
 .afs-pv-bubble { position: absolute; bottom: 16px; right: 16px; width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(0,0,0,.16); }
+.afs-pv-head2 { padding: 12px 14px 2px; }
+.afs-pv-orb { position: relative; width: 66px; height: 66px; margin: 6px auto 10px; border-radius: 50%; background: color-mix(in srgb, var(--oc) 10%, transparent); display: flex; align-items: center; justify-content: center; }
+.afs-pv-orb::before { content: ''; position: absolute; inset: 8px; border-radius: 50%; background: color-mix(in srgb, var(--oc) 16%, transparent); }
+.afs-pv-orb svg { position: relative; z-index: 1; width: 34px; height: 34px; padding: 7px; border-radius: 50%; background: var(--oc); box-sizing: border-box; }
+.afs-pv-h2 { text-align: center; font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.afs-pv-row { display: flex; gap: 6px; margin: 8px 0; }
+.afs-pv-pill { flex: 1; padding: 8px 9px; border-radius: 9px; background: #f5f4f0; color: #a8a49c; font-size: 11px; text-align: center; }
+.afs-pv-btn2 { padding: 10px; border-radius: 999px; color: #fff; font-size: 12.5px; font-weight: 600; text-align: center; }
 .afs-pv-panel { position: absolute; bottom: 78px; right: 16px; width: 248px; background: #fff; border-radius: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.16); overflow: hidden; }
 .afs-preview.bottom-left .afs-pv-bubble, .afs-preview.bottom-left .afs-pv-panel { left: 16px; right: auto; }
 .afs-preview.middle-right .afs-pv-bubble { bottom: auto; top: 50%; right: 0; transform: translateY(-50%); width: 44px; height: auto; padding: 11px 9px; border-radius: 12px 0 0 12px; }
@@ -140,7 +148,7 @@ onMounted(load);
 .afs-pv-status { display: flex; align-items: center; gap: 5px; margin-top: 2px; font-size: 11px; color: #8a8780; }
 .afs-pv-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live, #00d28a); box-shadow: 0 0 0 3px rgba(0,210,138,.16); }
 .afs-pv-body { padding: 14px 15px; }
-.afs-pv-lead { font-size: 11.5px; color: #6b6862; line-height: 1.5; margin-bottom: 11px; }
+.afs-pv-lead { font-size: 11.5px; color: #6b6862; line-height: 1.5; margin-bottom: 11px;  text-align: center; }
 .afs-pv-input { border: 1px solid #e4e1da; border-radius: 9px; padding: 9px 11px; margin-bottom: 8px; font-size: 12.5px; color: #aaa; background: #faf9f6; }
 .afs-pv-btn { border-radius: 9px; padding: 10px; text-align: center; color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 5px 14px rgba(26,75,114,.24); }
 .afs-pv-route { font-size: 11px; color: #888; text-align: center; margin-top: 8px; }
