@@ -8,14 +8,22 @@ import { and, eq, gte, sql } from 'drizzle-orm';
 import { resolveAgentLlm, llmReply, type ChatMessage } from '~/server/utils/voice/ai-brain';
 
 // A compact map of where things live, so the copilot can deep-link accurately.
-const NAV = `Pages the user can be sent to (use these exact paths in links):
-- /numbers — phone numbers, routing, escalation
-- /teams — departments and members
+const NAV = `Accurate page map — use these EXACT paths and never invent one:
+- /wallet — WALLET: balance, fund/top up, payments, transactions (payments live HERE, not in settings)
+- /calls — call history, recordings, analytics
+- /numbers — phone numbers: buy/manage numbers, routing, escalation
+- /connect — AI agents: create/edit agents, greeting, system prompt, KNOWLEDGE BASE (upload docs, Drive/URL import), language
+- /vans — AI Numbers (Virtual AI Numbers): bind an agent to a number
+- /ai — AI Connections: STT/LLM/TTS provider connections (OpenAI, Anthropic, Deepgram, Google)
+- /sip — SIP endpoints: provision/manage SIP accounts and softphones
+- /optimize — AI optimization settings
 - /blacklist — blocked numbers
-- /connect — AI agents, connections, knowledge base, VANs
-- /calls — call history and recordings
-- /settings — plan, billing, workspace, webhooks, members, compliance
-- /apps — integrations (HubSpot, Zoho, etc.)`;
+- /people — team members
+- /teams — departments/teams
+- /crm — contacts / CRM
+- /live-call — live call console
+- /apps — integrations (HubSpot, Zoho, etc.)
+- /settings — plan tier, workspace name/timezone, webhooks, members, compliance (NOT payments — those are in /wallet)`;
 
 function sysPrompt(ctx: string): string {
   return [
@@ -23,6 +31,7 @@ function sysPrompt(ctx: string): string {
     'You help clients understand and run their account: setting up SIP, AI agents, knowledge bases, numbers, VANs (Virtual AI Numbers), call analysis, and features.',
     'Be concise and practical. Prefer 1-3 short sentences. When a task belongs on a specific page, tell the user briefly and include a deep-link.',
     'You cannot yet perform actions (create/buy/provision) directly — for those, explain the steps and link the page. Never claim you did something you did not do.',
+    'Be accurate about where things live: payments/funding are on the Wallet page (/wallet), NOT settings. Knowledge base is on /connect inside an agent. If you are not certain which page or how something works, say so plainly and suggest the closest page rather than guessing or inventing steps.',
     'If asked something outside the Telroi product, gently redirect.',
     '',
     NAV,
@@ -33,6 +42,13 @@ function sysPrompt(ctx: string): string {
     'When you want to point the user to a page, end your reply with a line exactly like: LINKS: /numbers | /calls  (pipe-separated paths, only from the list above). Omit the LINKS line if none apply.'
   ].join('\n');
 }
+
+const LABELS: Record<string, string> = {
+  '/wallet': 'Wallet', '/calls': 'Calls', '/numbers': 'Numbers', '/connect': 'AI Agents',
+  '/vans': 'AI Numbers', '/ai': 'AI Connections', '/sip': 'SIP', '/optimize': 'Optimize',
+  '/blacklist': 'Blacklist', '/people': 'People', '/teams': 'Teams', '/crm': 'CRM',
+  '/live-call': 'Live Call', '/apps': 'Apps', '/settings': 'Settings'
+};
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
@@ -60,13 +76,13 @@ export default defineEventHandler(async (event) => {
   const raw = (await llmReply(llm, sysPrompt(ctx), [...history, { role: 'user', content: message }])) || '';
 
   // Parse an optional trailing "LINKS: /a | /b" line into structured deep-links.
-  const allowed = ['/numbers', '/teams', '/blacklist', '/connect', '/calls', '/settings', '/apps'];
+  const allowed = ['/wallet', '/calls', '/numbers', '/connect', '/vans', '/ai', '/sip', '/optimize', '/blacklist', '/people', '/teams', '/crm', '/live-call', '/apps', '/settings'];
   let reply = raw; let links: Array<{ label: string; to: string }> = [];
   const m = raw.match(/\n?LINKS:\s*(.+)\s*$/i);
   if (m) {
     reply = raw.slice(0, m.index).trim();
     links = m[1].split('|').map((p) => p.trim()).filter((p) => allowed.includes(p))
-      .map((to) => ({ to, label: to.replace('/', '').replace(/^\w/, (c) => c.toUpperCase()) || 'Open' }));
+      .map((to) => ({ to, label: LABELS[to] || (to.replace('/', '').replace(/^\w/, (c) => c.toUpperCase()) || 'Open') }));
   }
   return { reply, links };
 });
