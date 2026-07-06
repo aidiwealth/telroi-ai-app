@@ -427,7 +427,7 @@ const kbUrlBusy = ref<string | null>(null);
 const kbDriveBusy = ref<string | null>(null);
 
 async function loadKbDocs(agentId: string) {
-  try { kbDocs[agentId] = await api.get<any[]>(`/api/agents/${agentId}/knowledge`); }
+  try { kbDocs[agentId] = await api.get<any[]>(`${props.agentsBase}/${agentId}/knowledge`); }
   catch { kbDocs[agentId] = []; }
 }
 function triggerKbPick(agentId: string) {
@@ -454,7 +454,7 @@ async function uploadKbFiles(files: File[], agentId: string) {
       const fd = new FormData();
       fd.append('file', file);
       try {
-        await api.post(`/api/agents/${agentId}/knowledge/upload`, fd);
+        await api.post(`${props.agentsBase}/${agentId}/knowledge/upload`, fd);
       } catch (e: any) {
         kbError.value = e?.data?.message || e?.message || `Could not upload ${file.name}`;
       }
@@ -463,7 +463,7 @@ async function uploadKbFiles(files: File[], agentId: string) {
   } finally { kbUploading.value = null; }
 }
 async function deleteKbDoc(agentId: string, docId: string) {
-  try { await api.del(`/api/agents/${agentId}/knowledge/${docId}`); await loadKbDocs(agentId); }
+  try { await api.del(`${props.agentsBase}/${agentId}/knowledge/${docId}`); await loadKbDocs(agentId); }
   catch (e: any) { toast.err(e?.message || 'Could not remove'); }
 }
 
@@ -473,7 +473,7 @@ async function importKbDrive(agentId: string) {
   kbError.value = '';
   kbDriveBusy.value = agentId;
   try {
-    await api.post(`/api/agents/${agentId}/knowledge/import-drive`, { url });
+    await api.post(`${props.agentsBase}/${agentId}/knowledge/import-drive`, { url });
     kbDriveUrl[agentId] = '';
     await loadKbDocs(agentId);
   } catch (e: any) {
@@ -487,7 +487,7 @@ async function importKbUrl(agentId: string) {
   kbError.value = '';
   kbUrlBusy.value = agentId;
   try {
-    await api.post(`/api/agents/${agentId}/knowledge/import-url`, { url });
+    await api.post(`${props.agentsBase}/${agentId}/knowledge/import-url`, { url });
     kbUrl[agentId] = '';
     await loadKbDocs(agentId);
   } catch (e: any) {
@@ -499,7 +499,7 @@ async function toggleKbDoc(agentId: string, d: any) {
   if (d.status !== 'ready') return;
   const next = !d.enabled;
   d.enabled = next;
-  try { await api.patch(`/api/agents/${agentId}/knowledge/${d.id}`, { enabled: next }); }
+  try { await api.patch(`${props.agentsBase}/${agentId}/knowledge/${d.id}`, { enabled: next }); }
   catch (e: any) { d.enabled = !next; toast.err(e?.message || 'Could not update'); }
 }
 function kbTotalSize(agentId: string): string {
