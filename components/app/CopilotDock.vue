@@ -193,7 +193,7 @@ async function send(preset?: string) {
 
 /* Centered conversation modal */
 .cp-scrim { position: fixed; inset: 0; z-index: 210; background: rgba(12,16,30,0.55); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; }
-.cp-modal { width: 100%; max-width: 760px; height: 100%; max-height: 820px; display: flex; flex-direction: column; background: var(--paper, #fff); border-radius: 18px; box-shadow: 0 24px 80px rgba(0,0,0,0.4); overflow: hidden; }
+.cp-modal { position: relative; width: 100%; max-width: 760px; height: 100%; max-height: 820px; display: flex; flex-direction: column; background: var(--paper, #fff); border-radius: 18px; box-shadow: 0 24px 80px rgba(0,0,0,0.4); overflow: hidden; }
 
 .cp-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--rule-2, rgba(0,0,0,0.07)); }
 .cp-title { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; }
