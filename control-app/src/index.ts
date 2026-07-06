@@ -191,6 +191,14 @@ async function main() {
           }
           log(`     AI route -> agent ${agentId} (turn-based conversation)`);
           logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'answered', direction: 'in', raw: { did: dialedDid, callerName, agent: agentId } });
+          // Terminal-status guarantee: whenever the caller channel leaves the app
+          // (normal end, transfer, hangup, or an unexpected throw in runAiCall), mark
+          // the call ended so it can never linger as 'answered' and falsely consume a
+          // channel. Upserts by callid, so a richer terminal status written elsewhere
+          // (e.g. bridge 'ended' with duration) still stands; this is the safety net.
+          channel.once('StasisEnd', () => {
+            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ended', direction: 'in' });
+          });
           const { runAiCall } = await import('./ai-call.ts');
           await runAiCall({
             client, channel,
