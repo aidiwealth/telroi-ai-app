@@ -18,7 +18,7 @@ const ACTIONS: Record<string, z.ZodTypeAny> = {
   knowledge_url: z.object({ agentId: z.string().uuid(), url: z.string().min(4) }),
   knowledge_drive: z.object({ agentId: z.string().uuid(), url: z.string().min(4) }),
   toggle_feature: z.object({ feature: z.string().min(1), enabled: z.boolean() }),
-  buy_number: z.object({ inventoryId: z.string().uuid(), channels: z.number().int().min(1).max(50).optional() })
+  buy_number: z.object({ inventoryId: z.string().uuid().optional(), telnum: z.string().optional(), channels: z.number().int().min(1).max(50).optional() }).refine((v) => v.inventoryId || v.telnum, { message: 'inventoryId or telnum required' })
 };
 
 async function assertAgent(db: any, tenantId: string, agentId: string) {
@@ -79,10 +79,24 @@ export default defineEventHandler(async (event) => {
       return { ok: true, message: `${args.enabled ? 'Enabled' : 'Disabled'} ${args.feature}.`, result: r };
     }
     case 'buy_number': {
-      // Reuse the real purchase endpoint (inventory lock + wallet debit + provisioning).
-      // Dashboard path: debit the wallet directly; if funds are short it errors clearly.
+      // Resolve to an available inventory row. Accept either a UUID or a telnum,
+      // so a mismatched identifier from the copilot still lands on the right number.
+      let invId = args.inventoryId as string | undefined;
+      const digits = (v: string) => (v || '').replace(/\D/g, '');
+      if (!invId && args.telnum) {
+        const rows = await db.select({ id: schema.numberInventory.id, telnum: schema.numberInventory.telnum })
+          .from(schema.numberInventory).where(eq(schema.numberInventory.status, 'available'));
+        const match = rows.find((r) => digits(r.telnum) === digits(args.telnum) || digits(r.telnum).endsWith(digits(args.telnum)));
+        if (!match) throw apiError('unavailable', 'That number is no longer available.', 409);
+        invId = match.id;
+      } else if (invId) {
+        // Guard: if the copilot passed a telnum-looking value as inventoryId, it won't be a real row.
+        const [ok] = await db.select({ id: schema.numberInventory.id }).from(schema.numberInventory)
+          .where(and(eq(schema.numberInventory.id, invId), eq(schema.numberInventory.status, 'available'))).limit(1);
+        if (!ok) throw apiError('unavailable', 'That number is no longer available.', 409);
+      }
       const r = await $fetch('/api/numbers/purchase', {
-        method: 'POST', body: { inventoryId: args.inventoryId, channels: args.channels || 1 },
+        method: 'POST', body: { inventoryId: invId, channels: args.channels || 1 },
         headers: { cookie: getHeader(event, 'cookie') || '' }
       }).catch((e: any) => { throw apiError('invalid', e?.data?.message || 'Could not buy that number. Check your wallet balance.', 400); });
       return { ok: true, message: 'Number purchased and added to your account.', result: r };
