@@ -47,7 +47,7 @@ export default defineEventHandler((event) => {
       { name: 'Speech', description: 'Text-to-speech synthesis and speech-to-text transcription.' },
       { name: 'Calls', description: 'Originate and list voice calls.' },
       { name: 'Numbers', description: 'List the phone numbers provisioned to your workspace.' },
-      { name: 'AI Agents', description: 'List AI agents and Virtual AI Numbers.' },
+      { name: 'AI Agents', description: 'List AI agents and Virtual AI Numbers, and read the knowledge documents an agent is trained on.' },
       { name: 'Contacts', description: 'Create and sync CRM contacts.' },
       { name: 'Webhooks', description: 'Events Telroi POSTs to your endpoint (call.completed, voicemail.received, …). Subscribe in the dashboard or via Zapier; verify the X-Telroi-Signature HMAC.' }
     ],
@@ -147,6 +147,9 @@ export default defineEventHandler((event) => {
             type: 'object', required: ['phone'],
             properties: {
               phone: { type: 'string', description: 'Number to call, E.164.', example: '+14155550101' },
+              from: { type: 'string', description: 'One of your provisioned numbers, to pin the carrier route.' },
+              user: { type: 'string', description: 'Connect the call to this teammate (SIP user).' },
+              group: { type: 'string', description: 'Connect the call to this department/group.' },
               from: { type: 'string', description: 'Your provisioned number to dial from.', example: '+2348012340001' },
               user: { type: 'string', description: 'Teammate to connect the call to.' },
               group: { type: 'string', description: 'Department/group to ring.' }
@@ -192,8 +195,16 @@ export default defineEventHandler((event) => {
         },
         post: {
           tags: ['AI Agents'], summary: 'Create a Virtual AI Number', operationId: 'createVan',
-          requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, telnum: { type: 'string' }, agent: { type: 'string' } } } } } },
+          requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name', 'telnum'], properties: { name: { type: 'string', description: 'Display name for the Virtual AI Number.' }, telnum: { type: 'string', description: 'The phone number to attach, E.164.' }, provider: { type: 'string', enum: ['telroi', 'twilio', 'telnyx'], description: 'Carrier/provider for the number. Defaults to telroi.' }, agentId: { type: 'string', format: 'uuid', description: 'The AI agent to answer calls on this number.' }, escalateTo: { type: 'string', description: 'Optional escalation target (SIP user or department) if the AI hands off.' } } } } } },
           responses: { 200: { description: 'VAN created.', content: { 'application/json': { schema: { type: 'object' } } } } }
+        }
+      },
+      '/v1/agents/{id}/knowledge': {
+        get: {
+          tags: ['AI Agents'], summary: "List an agent's knowledge documents", operationId: 'listAgentKnowledge',
+          description: 'Returns the documents an AI agent is trained on, with extraction status and size. Read-only; upload and manage documents in the dashboard.',
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'The AI agent id.' }],
+          responses: { 200: { description: 'A list of knowledge documents.', content: { 'application/json': { schema: { type: 'object', properties: { object: { const: 'list' }, data: { type: 'array', items: { type: 'object', properties: { object: { const: 'knowledge_document' }, id: { type: 'string' }, file_name: { type: 'string' }, file_type: { type: 'string' }, source_type: { type: 'string', enum: ['upload', 'drive', 'url'] }, status: { type: 'string', enum: ['processing', 'ready', 'failed'] }, char_count: { type: 'integer' }, enabled: { type: 'boolean' } } } } } }, example: { object: 'list', data: [{ object: 'knowledge_document', id: 'kd_1a2b', file_name: 'pricing.pdf', file_type: 'pdf', source_type: 'upload', status: 'ready', char_count: 1840, enabled: true }] } } } } }
         }
       },
       '/v1/contacts': {
@@ -202,7 +213,7 @@ export default defineEventHandler((event) => {
           description: 'Creates one contact, or up to 1000 in a single batch by sending an array. Contacts are matched/deduplicated by phone number.',
           requestBody: { required: true, content: { 'application/json': { schema: {
             oneOf: [
-              { type: 'object', required: ['phone'], properties: { name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, company: { type: 'string' } } },
+              { type: 'object', required: ['phone'], properties: { phone: { type: 'string', description: 'Contact phone, E.164.' }, name: { type: 'string' }, email: { type: 'string' }, company: { type: 'string' }, city: { type: 'string' }, region: { type: 'string' }, country: { type: 'string' } } },
               { type: 'array', maxItems: 1000, items: { type: 'object', required: ['phone'], properties: { name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, company: { type: 'string' } } } }
             ]
           }, examples: { one: { value: { name: 'Ada Lovelace', phone: '+2348011112222', email: 'ada@example.com' } } } } } },
