@@ -112,7 +112,14 @@ export default defineNuxtConfig({
   ],
 
   nitro: {
-    preset: 'node-server'
+    preset: 'node-server',
+    // pdf-parse pulls in pdfjs-dist, which loads a separate worker file at runtime.
+    // Bundling it breaks the worker path resolution ("Cannot find pdf.worker.mjs"),
+    // so keep these external and load them from node_modules at runtime instead.
+    externals: {
+      external: ['pdf-parse', 'pdfjs-dist']
+    },
+    moduleSideEffects: ['pdf-parse', 'pdfjs-dist']
   },
 
   typescript: {
