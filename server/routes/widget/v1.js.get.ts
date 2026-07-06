@@ -78,39 +78,44 @@ const WIDGET_JS = String.raw`(function () {
     overlay.appendChild(panel);
     overlay.onclick = function (e) { if (e.target === overlay) closePanel(); };
 
-    var head = el('div', 'position:relative;display:flex;align-items:center;gap:11px;padding:18px 18px 15px;background:#f7f6f3;border-bottom:1px solid #ececec');
-    var accentBar = el('div', 'position:absolute;top:0;left:0;right:0;height:3px;background:' + color); head.appendChild(accentBar);
-    var avatar = el('div', 'flex:none;width:40px;height:40px;border-radius:50%;background:#fff;color:#9a9690;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(10,10,11,.08);border:1px solid #ececec');
-    avatar.innerHTML = '<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z\"/></svg>';
-    var headText = el('div', 'flex:1;min-width:0');
-    var headTitle = el('div', 'font-size:15px;font-weight:650;color:#0A0A0B;letter-spacing:-.01em;line-height:1.2', cfg.greeting || 'Call us');
-    var headSub = el('div', 'display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12px;color:#8a8780');
-    headSub.innerHTML = '<span style=\"width:6px;height:6px;border-radius:50%;background:#00d28a;box-shadow:0 0 0 3px rgba(0,210,138,.18)\"></span>We\'re online \u00b7 replies in seconds';
-    headText.appendChild(headTitle); headText.appendChild(headSub);
-    var headClose = el('button', 'flex:none;background:#fff;border:1px solid #ececec;color:#9a9690;cursor:pointer;width:30px;height:30px;border-radius:50%;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;transition:color .15s,border-color .15s', '&times;');
-    headClose.onmouseenter = function(){ headClose.style.color = '#0A0A0B'; headClose.style.borderColor = '#d8d5ce'; };
-    headClose.onmouseleave = function(){ headClose.style.color = '#9a9690'; headClose.style.borderColor = '#ececec'; };
+    var head = el('div', 'display:flex;align-items:center;justify-content:space-between;padding:20px 22px 6px;background:#fff');
+    var headSub = el('div', 'display:flex;align-items:center;gap:7px;font-size:12.5px;color:#5f5c55');
+    headSub.innerHTML = '<span style=\"width:7px;height:7px;border-radius:50%;background:#00d28a;box-shadow:0 0 0 3px rgba(0,210,138,.18)\"></span>We\'re online now';
+    var headClose = el('button', 'flex:none;background:#f2f0ec;border:none;color:#9a9690;cursor:pointer;width:28px;height:28px;border-radius:50%;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;transition:color .15s,background .15s', '&times;');
+    headClose.onmouseenter = function(){ headClose.style.color = '#0A0A0B'; headClose.style.background = '#e8e5df'; };
+    headClose.onmouseleave = function(){ headClose.style.color = '#9a9690'; headClose.style.background = '#f2f0ec'; };
     headClose.onclick = function () { closePanel(); };
-    head.appendChild(avatar); head.appendChild(headText); head.appendChild(headClose);
-    var bodyWrap = el('div', 'padding:18px;overflow-y:auto');
+    head.appendChild(headSub); head.appendChild(headClose);
+    var bodyWrap = el('div', 'padding:6px 22px 24px;overflow-y:auto');
     panel.appendChild(head); panel.appendChild(bodyWrap);
 
     function showForm() {
       bodyWrap.innerHTML = '';
-      var p = el('p', 'font-size:13.5px;color:#6b6862;margin:0 0 16px;line-height:1.55', 'Leave your name and number and we\'ll connect your call in seconds \u2014 no phone tag, no hold music.');
-      var n = el('input'); n.placeholder = 'Your name'; n.value = userName; n.style.cssText = inp(); focusable(n, color);
-      var ph = el('input'); ph.placeholder = 'Mobile number'; ph.value = userPhone; ph.type = 'tel'; ph.style.cssText = inp(); focusable(ph, color);
-      var btn = el('button', btnCss(color), '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:7px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z"/></svg>Start call');
-      var err = el('div', 'color:#c0392b;font-size:12px;margin-top:8px;display:none');
+      var hero = el('div', 'text-align:center;padding:6px 0 2px');
+      var orb = el('div', 'position:relative;width:104px;height:104px;margin:0 auto 16px');
+      orb.innerHTML = '<div style="position:absolute;inset:0;border-radius:50%;background:' + hexA(color,.10) + '"></div>'
+        + '<div style="position:absolute;inset:12px;border-radius:50%;background:' + hexA(color,.16) + '"></div>'
+        + '<div style="position:absolute;inset:24px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center">'
+        + '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z"/></svg></div>';
+      var title = el('div', 'font-size:18px;font-weight:600;color:#1a1a1a;letter-spacing:-.01em', cfg.greeting || 'Call our team');
+      var sub = el('div', 'font-size:13px;color:#8a877f;margin:5px 0 18px;line-height:1.5', "Enter your details \u2014 we'll ring you back in seconds.");
+      hero.appendChild(orb); hero.appendChild(title); hero.appendChild(sub);
+      var row = el('div', 'display:flex;gap:9px;margin-bottom:12px');
+      var n = el('input'); n.placeholder = 'Name'; n.value = userName; n.style.cssText = pill(); focusable(n, color);
+      var ph = el('input'); ph.placeholder = 'Number'; ph.value = userPhone; ph.type = 'tel'; ph.style.cssText = pill(); focusable(ph, color);
+      row.appendChild(n); row.appendChild(ph);
+      var btn = el('button', orbBtnCss(color), 'Request call<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;vertical-align:-3px"><path d="M5 12h14M13 6l6 6-6 6"/></svg>');
+      btnHover(btn);
+      var err = el('div', 'color:#c0392b;font-size:12px;margin-top:10px;text-align:center;display:none');
       btn.onclick = function () {
         if (!n.value.trim() || ph.value.replace(/\D/g,'').length < 6) { err.style.display = 'block'; err.textContent = 'Please enter your name and a valid mobile number.'; return; }
-        btn.disabled = true; btn.textContent = 'Connecting…';
+        btn.disabled = true; btn.innerHTML = 'Connecting\u2026';
         api('session', { key: KEY, name: n.value.trim(), phone: ph.value.trim(), visitorType: visitorType, externalUserId: userId, pageUrl: location.href })
           .then(function (r) { if (!r.ok) throw 0; sessionId = r.sessionId; return api('call', { key: KEY, sessionId: sessionId }); })
           .then(function (r) { showCalling(r); })
-          .catch(function () { if (cfg.csatEnabled && sessionId) { showCsat('failed'); } else { btn.disabled = false; btn.textContent = 'Start call'; err.style.display = 'block'; err.textContent = 'Could not connect. Please try again.'; } });
+          .catch(function () { if (cfg.csatEnabled && sessionId) { showCsat('failed'); } else { btn.disabled = false; btn.innerHTML = 'Request call'; err.style.display = 'block'; err.textContent = 'Could not connect. Please try again.'; } });
       };
-      bodyWrap.appendChild(p); bodyWrap.appendChild(n); bodyWrap.appendChild(ph); bodyWrap.appendChild(btn); bodyWrap.appendChild(err);
+      bodyWrap.appendChild(hero); bodyWrap.appendChild(row); bodyWrap.appendChild(btn); bodyWrap.appendChild(err);
     }
     function showCalling(callResp) {
       var routedTo = callResp.routedTo;
@@ -238,6 +243,8 @@ const WIDGET_JS = String.raw`(function () {
     document.body.appendChild(overlay);
   }
   function inp() { return 'width:100%;box-sizing:border-box;padding:12px 14px;margin-bottom:10px;border:1px solid #e4e1da;border-radius:11px;font-size:14px;color:#0A0A0B;background:#faf9f6;outline:none;transition:border-color .15s,background .15s,box-shadow .15s;font-family:inherit'; }
+  function pill() { return 'flex:1;min-width:0;box-sizing:border-box;padding:12px 13px;border:1px solid #eceae4;border-radius:12px;font-size:13.5px;color:#0A0A0B;background:#f5f4f0;outline:none;transition:border-color .15s,background .15s,box-shadow .15s;font-family:inherit'; }
+  function orbBtnCss(c) { return 'width:100%;padding:15px;border:none;border-radius:999px;background:' + c + ';color:#fff;font-size:15px;font-weight:600;cursor:pointer;letter-spacing:-.01em;box-shadow:0 8px 22px ' + hexA(c, .32) + ';transition:transform .12s,box-shadow .15s,opacity .15s;display:flex;align-items:center;justify-content:center;font-family:inherit'; }
   function btnCss(c) { return 'width:100%;padding:13px;border:none;border-radius:11px;background:' + c + ';color:#fff;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:-.01em;box-shadow:0 6px 16px ' + hexA(c, .30) + ';transition:transform .12s,box-shadow .15s,opacity .15s;display:flex;align-items:center;justify-content:center;font-family:inherit'; }
   // Turn a hex color into rgba() with the given alpha (for soft shadows/rings).
   function hexA(hex, a) {

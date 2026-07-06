@@ -25,7 +25,7 @@
           <div class="cp-thread">
             <div v-if="!messages.length" class="cp-welcome">
               <div class="cp-welcome-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3a4 4 0 0 1 4 4c0 1.5-.8 2.3-1.5 3M12 3a4 4 0 0 0-4 4c0 1.5.8 2.3 1.5 3M9 17h6M10 21h4M12 10v7"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4c3.9 0 7 2.6 7 5.8 0 .7-.6 1.2-1.3 1.2H6.3C5.6 11 5 10.5 5 9.8 5 6.6 8.1 4 12 4z"/><path d="M3.5 13.5c1.2.9 3 1.5 5 1.5M20.5 13.5c-1.2.9-3 1.5-5 1.5"/><circle cx="12" cy="8" r="1.2" fill="currentColor" stroke="none"/><path d="M8 15c0 1.5 1.8 2.5 4 2.5s4-1 4-2.5"/></svg>
               </div>
               <h2 class="cp-welcome-t">How can I help you run your account?</h2>
               <p class="cp-welcome-s">Ask about your calls, set up agents and numbers, or find a feature.</p>
@@ -36,7 +36,7 @@
 
             <div v-for="(m, i) in messages" :key="i" class="cp-row" :class="m.role">
               <div class="cp-avatar" :class="m.role">
-                <template v-if="m.role === 'assistant'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3a4 4 0 0 1 4 4c0 1.5-.8 2.3-1.5 3M12 3a4 4 0 0 0-4 4c0 1.5.8 2.3 1.5 3M9 17h6M10 21h4M12 10v7"/></svg></template>
+                <template v-if="m.role === 'assistant'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4c3.9 0 7 2.6 7 5.8 0 .7-.6 1.2-1.3 1.2H6.3C5.6 11 5 10.5 5 9.8 5 6.6 8.1 4 12 4z"/><path d="M3.5 13.5c1.2.9 3 1.5 5 1.5M20.5 13.5c-1.2.9-3 1.5-5 1.5"/><circle cx="12" cy="8" r="1.2" fill="currentColor" stroke="none"/><path d="M8 15c0 1.5 1.8 2.5 4 2.5s4-1 4-2.5"/></svg></template>
                 <template v-else>You</template>
               </div>
               <div class="cp-content">
@@ -48,7 +48,7 @@
             </div>
 
             <div v-if="busy" class="cp-row assistant">
-              <div class="cp-avatar assistant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3a4 4 0 0 1 4 4c0 1.5-.8 2.3-1.5 3M12 3a4 4 0 0 0-4 4c0 1.5.8 2.3 1.5 3M9 17h6M10 21h4M12 10v7"/></svg></div>
+              <div class="cp-avatar assistant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4c3.9 0 7 2.6 7 5.8 0 .7-.6 1.2-1.3 1.2H6.3C5.6 11 5 10.5 5 9.8 5 6.6 8.1 4 12 4z"/><path d="M3.5 13.5c1.2.9 3 1.5 5 1.5M20.5 13.5c-1.2.9-3 1.5-5 1.5"/><circle cx="12" cy="8" r="1.2" fill="currentColor" stroke="none"/><path d="M8 15c0 1.5 1.8 2.5 4 2.5s4-1 4-2.5"/></svg></div>
               <div class="cp-content"><div class="cp-typing"><span /><span /><span /></div></div>
             </div>
           </div>
