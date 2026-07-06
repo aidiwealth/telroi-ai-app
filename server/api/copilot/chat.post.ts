@@ -38,6 +38,7 @@ function sysPrompt(ctx: string): string {
     '  - knowledge_url {agentId, url} — add a web page to an agent\'s knowledge base',
     '  - knowledge_drive {agentId, url} — add a Google Drive file to an agent\'s knowledge',
     '  - toggle_feature {feature, enabled} — enable/disable a feature',
+    '  - buy_number {inventoryId, channels?} — PURCHASE a phone number. This SPENDS money from the wallet. Only propose a specific inventoryId from the Available numbers list above, and only after the user has clearly chosen one. If they only say buy a number without picking, first LIST the available numbers with their price and ask which one; do NOT propose buy_number yet.',
     'Use the exact agent id from the snapshot for agentId. If a required detail is missing (which number, which agent), ASK instead of proposing. Only ONE action per reply. For anything not in this list (buying numbers, provisioning SIP, payments), explain and link the page — do not propose. Keep your normal reply text above the ACTION line short.',
     'Be accurate about where things live: payments/funding are on the Wallet page (/wallet), NOT settings. Knowledge base is on /connect inside an agent. If you are not certain which page or how something works, say so plainly and suggest the closest page rather than guessing or inventing steps.',
     'You are strictly a Telroi account assistant. If asked anything unrelated to Telroi or running this account (general knowledge, trivia, world facts, capitals, people, math, coding, opinions, etc.), do NOT answer it \u2014 not even partially, not even as an aside. Never state the fact and then redirect. Instead reply only with a brief redirect, e.g. \"I can only help with your Telroi account \u2014 things like AI agents, numbers, calls, or knowledge bases. What would you like to do?\" Do not include the answer to their off-topic question anywhere in your reply.',
@@ -67,6 +68,7 @@ function previewFor(type: string, a: any): string {
     case 'knowledge_url': return `Add ${a.url} to the agent's knowledge base`;
     case 'knowledge_drive': return `Import a Google Drive file into the agent's knowledge base`;
     case 'toggle_feature': return `${a.enabled ? 'Enable' : 'Disable'} ${a.feature}`;
+    case 'buy_number': return `Purchase this phone number — this will charge your wallet. Review the cost shown before confirming.`;
     default: return 'Perform this action';
   }
 }
@@ -91,6 +93,18 @@ export default defineEventHandler(async (event) => {
     ctx = `AI agents (${agents.length}):\n${agentLines}\nVirtual AI Numbers: ${vanCount?.n ?? 0}`;
   } catch { ctx = '(snapshot unavailable)'; }
 
+  let numbersCtx = '';
+  if (/\b(buy|purchase|get|add|new)\b.*\bnumber\b|\bnumber\b.*\b(buy|purchase)\b|virtual number|phone number/i.test(message)) {
+    try {
+      const av: any = await $fetch('/api/numbers/available', { headers: { cookie: getHeader(event, 'cookie') || '' } });
+      const cur = av?.currency || 'USD';
+      const price = ((av?.firstMonthMinor ?? 0) / 100).toFixed(2);
+      const list = (av?.numbers || []).slice(0, 8).map((n: any) => `  - ${n.telnum} (${n.regionLabel}) inventoryId=${n.id}`).join('\n');
+      numbersCtx = `\n\nAvailable numbers to buy (first month ~${cur} ${price} each, DID + 1 channel):\n${list || '  (none available right now)'}`;
+    } catch { /* ignore */ }
+  }
+  ctx += numbersCtx;
+
   // Cheap managed model (Haiku / gpt-4o-mini). Copilot is orchestration, not deep reasoning.
   const llm = await resolveAgentLlm(s.tenantId, null, true);
   if (!llm) throw apiError('unavailable', 'Copilot is not configured', 503);
@@ -103,7 +117,7 @@ export default defineEventHandler(async (event) => {
   if (am) {
     try {
       const parsed = JSON.parse(am[1]);
-      const ALLOWED = ['create_van','add_blacklist','create_department','set_agent_language','knowledge_url','knowledge_drive','toggle_feature'];
+      const ALLOWED = ['create_van','add_blacklist','create_department','set_agent_language','knowledge_url','knowledge_drive','toggle_feature','buy_number'];
       if (parsed && ALLOWED.includes(parsed.type) && parsed.args && typeof parsed.args === 'object') {
         action = { type: parsed.type, args: parsed.args, preview: previewFor(parsed.type, parsed.args) };
       }

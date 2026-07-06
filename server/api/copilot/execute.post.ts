@@ -17,7 +17,8 @@ const ACTIONS: Record<string, z.ZodTypeAny> = {
   set_agent_language: z.object({ agentId: z.string().uuid(), language: z.enum(AGENT_LANGS as [string, ...string[]]) }),
   knowledge_url: z.object({ agentId: z.string().uuid(), url: z.string().min(4) }),
   knowledge_drive: z.object({ agentId: z.string().uuid(), url: z.string().min(4) }),
-  toggle_feature: z.object({ feature: z.string().min(1), enabled: z.boolean() })
+  toggle_feature: z.object({ feature: z.string().min(1), enabled: z.boolean() }),
+  buy_number: z.object({ inventoryId: z.string().uuid(), channels: z.number().int().min(1).max(50).optional() })
 };
 
 async function assertAgent(db: any, tenantId: string, agentId: string) {
@@ -76,6 +77,15 @@ export default defineEventHandler(async (event) => {
         method: 'PUT', body: { enabled: args.enabled }, headers: { cookie: getHeader(event, 'cookie') || '' }
       }).catch((e: any) => { throw apiError('invalid', e?.data?.message || 'Could not update feature', 400); });
       return { ok: true, message: `${args.enabled ? 'Enabled' : 'Disabled'} ${args.feature}.`, result: r };
+    }
+    case 'buy_number': {
+      // Reuse the real purchase endpoint (inventory lock + wallet debit + provisioning).
+      // Dashboard path: debit the wallet directly; if funds are short it errors clearly.
+      const r = await $fetch('/api/numbers/purchase', {
+        method: 'POST', body: { inventoryId: args.inventoryId, channels: args.channels || 1 },
+        headers: { cookie: getHeader(event, 'cookie') || '' }
+      }).catch((e: any) => { throw apiError('invalid', e?.data?.message || 'Could not buy that number. Check your wallet balance.', 400); });
+      return { ok: true, message: 'Number purchased and added to your account.', result: r };
     }
   }
   throw apiError('invalid', 'Unhandled action', 400);
