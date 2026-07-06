@@ -57,8 +57,18 @@
             <div class="cn-node-icon" :class="`nt-${node.type}`" v-html="nodeIcon(node.type)" />
             <div class="cn-node-body">
               <div class="cn-node-type">{{ nodeLabel(node.type) }} <span v-if="i === 0" class="cn-entry-pill">entry</span></div>
-              <input v-model="node.config.target" v-if="['route_user','route_group','route_van'].includes(node.type)"
-                     class="input cn-node-input" :placeholder="targetPlaceholder(node.type)" @blur="saveFlow" />
+              <select v-if="node.type === 'route_van'" v-model="node.config.target" class="select cn-node-input" @change="saveFlow">
+                <option :value="undefined" disabled>Choose an AI agent…</option>
+                <option v-for="a in agents" :key="a.id" :value="a.id">{{ a.name }}</option>
+              </select>
+              <select v-if="node.type === 'route_group'" v-model="node.config.target" class="select cn-node-input" @change="saveFlow">
+                <option :value="undefined" disabled>Choose a department…</option>
+                <option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option>
+              </select>
+              <select v-if="node.type === 'route_user'" v-model="node.config.target" class="select cn-node-input" @change="saveFlow">
+                <option :value="undefined" disabled>Choose a person…</option>
+                <option v-for="m in members" :key="m.id" :value="m.id">{{ m.name || m.email }}</option>
+              </select>
               <textarea v-if="node.type === 'route_van'" v-model="node.config.aiInstructions"
                         class="input cn-node-input cn-ai-instr" rows="2"
                         placeholder="Optional: how the AI should handle this call (e.g. verify the caller's account, then offer billing or support)" @blur="saveFlow"></textarea>
@@ -116,6 +126,9 @@ const pending = ref(true);
 const flows = ref<any[]>([]);
 const current = ref<any>(null);
 const numbers = ref<any[]>([]);
+const agents = ref<any[]>([]);
+const departments = ref<any[]>([]);
+const members = ref<any[]>([]);
 const newNodeType = ref('greeting');
 const publishing = ref(false);
 const dragIndex = ref<number | null>(null);
@@ -184,12 +197,18 @@ function targetPlaceholder(t: string) {
 async function load() {
   pending.value = true;
   try {
-    const [f, n] = await Promise.all([
+    const [f, n, ag, dep, mem] = await Promise.all([
       api.get<any[]>('/api/connect'),
-      api.get<{ items: any[] }>('/api/voice/numbers').catch(() => ({ items: [] }))
+      api.get<{ items: any[] }>('/api/voice/numbers').catch(() => ({ items: [] })),
+      api.get<any[]>('/api/agents').catch(() => []),
+      api.get<{ departments: any[] }>('/api/departments').catch(() => ({ departments: [] })),
+      api.get<{ members: any[] }>('/api/tenant/members').catch(() => ({ members: [] }))
     ]);
     flows.value = f;
     numbers.value = n.items || [];
+    agents.value = Array.isArray(ag) ? ag : ((ag as any)?.items || []);
+    departments.value = dep.departments || [];
+    members.value = mem.members || [];
     if (f.length && !current.value) select(f[0]);
   } catch (e: any) { toast.err(e.message); }
   finally { pending.value = false; }
