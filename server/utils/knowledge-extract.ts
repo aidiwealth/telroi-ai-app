@@ -18,27 +18,11 @@ export async function extractText(buffer: Buffer, fileType: KbFileType): Promise
     return buffer.toString('utf-8');
   }
   if (fileType === 'pdf') {
-    // pdf-parse v2 uses a PDFParse class: new PDFParse({ data }) -> getText().
-    // Lazy import so the heavy PDF lib only loads when a PDF is actually parsed.
-    const mod = await import('pdf-parse') as any;
-    const PDFParse = mod.PDFParse;
-    // Point pdfjs at its bundled worker in node_modules so the parser can find it
-    // in the server build (avoids "Cannot find module pdf.worker.mjs").
-    try {
-      if (PDFParse.setWorker && PDFParse.isNodeJS) {
-        const { createRequire } = await import('node:module');
-        const require = createRequire(import.meta.url);
-        const workerPath = require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs');
-        PDFParse.setWorker(workerPath);
-      }
-    } catch { /* fall back to default worker resolution */ }
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
-    try {
-      const res = await parser.getText();
-      return res?.text || '';
-    } finally {
-      try { await parser.destroy(); } catch { /* noop */ }
-    }
+    // pdf-parse v1: simple default-export function, no separate pdfjs worker file
+    // (bundles cleanly in the server output, unlike v2 which needs pdf.worker.mjs).
+    const pdfParse = (await import('pdf-parse')).default as (b: Buffer) => Promise<{ text: string }>;
+    const res = await pdfParse(buffer);
+    return res?.text || '';
   }
   if (fileType === 'docx') {
     const mammoth = await import('mammoth');
