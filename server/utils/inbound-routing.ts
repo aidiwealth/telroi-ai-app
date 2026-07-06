@@ -55,8 +55,11 @@ export interface InboundAction {
 // as an IVR action the carrier webhooks render (Gather/dialplan).
 async function resolveFlowAction(tenantId: string, telnum: string): Promise<InboundAction | null> {
   const db = useDb();
-  const [flow] = await db.select().from(schema.connectFlows)
-    .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.telnum, telnum), eq(schema.connectFlows.status, 'published'))).limit(1);
+  const digits = (v: string) => (v || '').replace(/\D/g, '');
+  const want = digits(telnum);
+  const pub = await db.select().from(schema.connectFlows)
+    .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.status, 'published')));
+  const flow = pub.find((fl) => { const h = digits(fl.telnum || ''); return h && want && (h === want || h.endsWith(want) || want.endsWith(h)); });
   if (!flow || !Array.isArray(flow.nodes) || !flow.nodes.length) return null;
   return await nodeToAction(tenantId, flow.nodes as any[], (flow.nodes as any[])[0]?.id);
 }
@@ -96,8 +99,11 @@ async function nodeToAction(tenantId: string, nodes: any[], nodeId: string | und
 // Public helper so webhooks can advance an IVR to the node a pressed digit maps to.
 export async function resolveFlowNode(tenantId: string, telnum: string, nodeId: string): Promise<InboundAction> {
   const db = useDb();
-  const [flow] = await db.select().from(schema.connectFlows)
-    .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.telnum, telnum), eq(schema.connectFlows.status, 'published'))).limit(1);
+  const digits = (v: string) => (v || '').replace(/\D/g, '');
+  const want = digits(telnum);
+  const pub = await db.select().from(schema.connectFlows)
+    .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.status, 'published')));
+  const flow = pub.find((fl) => { const h = digits(fl.telnum || ''); return h && want && (h === want || h.endsWith(want) || want.endsWith(h)); });
   if (!flow || !Array.isArray(flow.nodes)) return { action: 'reject' };
   return await nodeToAction(tenantId, flow.nodes as any[], nodeId);
 }

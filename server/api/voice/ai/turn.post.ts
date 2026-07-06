@@ -55,8 +55,16 @@ export default defineEventHandler(async (event) => {
   let flowInstructions = '';
   if (telnum) {
     try {
-      const [flow] = await useDb().select({ nodes: schema.connectFlows.nodes }).from(schema.connectFlows)
-        .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.telnum, telnum), eq(schema.connectFlows.status, 'published'))).limit(1);
+      // The DID the PBX passes may be stripped ("2085910061") while the flow's
+      // telnum is stored E.164 ("+23402085910061"). Match on normalized digits.
+      const digits = (v: string) => (v || '').replace(/\D/g, '');
+      const want = digits(telnum);
+      const published = await useDb().select({ nodes: schema.connectFlows.nodes, telnum: schema.connectFlows.telnum }).from(schema.connectFlows)
+        .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.status, 'published')));
+      const flow = published.find((fl) => {
+        const have = digits(fl.telnum || '');
+        return have && want && (have === want || have.endsWith(want) || want.endsWith(have));
+      });
       const nodes = (flow?.nodes as any[]) || [];
       const aiNode = nodes.find((n) => n.type === 'route_van' && n.config?.aiInstructions);
       if (aiNode?.config?.aiInstructions) {
