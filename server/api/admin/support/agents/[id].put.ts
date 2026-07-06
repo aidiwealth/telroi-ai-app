@@ -9,6 +9,7 @@ import { useDb, schema } from '~/server/db';
 const Body = z.object({
   name: z.string().min(1).optional(),
   greeting: z.string().nullable().optional(),
+  language: z.enum(['en-NG','yo-NG','ig-NG','ha-NG','sw-KE','am-ET','zu-ZA','af-ZA','en-US','en-GB','fr-FR','ar-XA','pt-PT','es-ES','de-DE','hi-IN','zh']).optional(),
   systemPrompt: z.string().nullable().optional(),
   tier: z.enum(['byok', 'managed']).optional(),
   sttConnId: z.string().uuid().nullable().optional(),

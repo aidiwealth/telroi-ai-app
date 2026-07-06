@@ -47,7 +47,7 @@ export default defineEventHandler((event) => {
       { name: 'Speech', description: 'Text-to-speech synthesis and speech-to-text transcription.' },
       { name: 'Calls', description: 'Originate and list voice calls.' },
       { name: 'Numbers', description: 'List the phone numbers provisioned to your workspace.' },
-      { name: 'AI Agents', description: 'List AI agents and Virtual AI Numbers, and read the knowledge documents an agent is trained on.' },
+      { name: 'AI Agents', description: 'List AI agents and Virtual AI Numbers, and read the knowledge documents an agent is trained on. Each AI agent has a language (English, Yoruba, Igbo, Hausa, French and more) set in the dashboard, which governs speech recognition and the voice it speaks.' },
       { name: 'Contacts', description: 'Create and sync CRM contacts.' },
       { name: 'Webhooks', description: 'Events Telroi POSTs to your endpoint (call.completed, voicemail.received, …). Subscribe in the dashboard or via Zapier; verify the X-Telroi-Signature HMAC.' }
     ],
@@ -194,7 +194,7 @@ export default defineEventHandler((event) => {
           responses: { 200: { description: 'A list of Virtual AI Numbers.', content: { 'application/json': { schema: { type: 'object', properties: { object: { const: 'list' }, data: { type: 'array', items: { type: 'object' } } } } } } } }
         },
         post: {
-          tags: ['AI Agents'], summary: 'Create a Virtual AI Number', operationId: 'createVan',
+          tags: ['AI Agents'], summary: 'Create a Virtual AI Number', operationId: 'createVan', description: 'Creates a Virtual AI Number and binds an AI agent to answer it. The agent\'s configured language (set in the dashboard) governs speech recognition and the spoken voice.',
           requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name', 'telnum'], properties: { name: { type: 'string', description: 'Display name for the Virtual AI Number.' }, telnum: { type: 'string', description: 'The phone number to attach, E.164.' }, provider: { type: 'string', enum: ['telroi', 'twilio', 'telnyx'], description: 'Carrier/provider for the number. Defaults to telroi.' }, agentId: { type: 'string', format: 'uuid', description: 'The AI agent to answer calls on this number.' }, escalateTo: { type: 'string', description: 'Optional escalation target (SIP user or department) if the AI hands off.' } } } } } },
           responses: { 200: { description: 'VAN created.', content: { 'application/json': { schema: { type: 'object' } } } } }
         }
