@@ -16,6 +16,8 @@ export default defineEventHandler(async (event) => {
   const status = p.CallStatus || p.callStatus;
   const recordingUrl = p.RecordingUrl || null;
   const durationStr = p.CallDuration || p.Duration;
+  const digits = p.Digits || p.digits || '';
+  const flowNode = p.flowNode || '';  // set via our Gather action= URL query
 
   // Verify signature (best-effort; skips if not configured).
   try {
@@ -47,7 +49,20 @@ export default defineEventHandler(async (event) => {
       const tenantId2 = await tenantForNumber(to);
       if (tenantId2) {
         const { resolveInboundAction } = await import('~/server/utils/inbound-routing');
-        const act = await resolveInboundAction(tenantId2, to);
+        // If Twilio is posting back a pressed digit for an IVR menu, advance the
+        // flow to the chosen option's node instead of re-resolving the entry.
+        let act;
+        if (flowNode && digits) {
+          const { resolveFlowNode } = await import('~/server/utils/inbound-routing');
+          const menu = await resolveFlowNode(tenantId2, to, flowNode);
+          const chosen = menu.ivr?.options?.find((o: any) => o.digit === String(digits));
+          act = chosen?.nextNodeId ? await resolveFlowNode(tenantId2, to, chosen.nextNodeId) : { action: 'reject' } as any;
+        } else if (flowNode) {
+          const { resolveFlowNode } = await import('~/server/utils/inbound-routing');
+          act = await resolveFlowNode(tenantId2, to, flowNode);
+        } else {
+          act = await resolveInboundAction(tenantId2, to);
+        }
         if (act.action === 'ai') {
           // AI answers via the media gateway; greet then connect the AI leg.
           twiml = `<Say voice="Polly.Joanna">${escapeXml(act.greeting || 'How can I help you?')}</Say><Pause length="60"/>`;
@@ -55,6 +70,18 @@ export default defineEventHandler(async (event) => {
           twiml = `<Dial>${escapeXml(act.dialTarget)}</Dial>`;
         } else if (act.action === 'dial_department' && act.dialTarget) {
           twiml = `${act.greeting ? `<Say voice="Polly.Joanna">${escapeXml(act.greeting)}</Say>` : ''}<Enqueue>${escapeXml(act.dialTarget)}</Enqueue>`;
+        } else if (act.action === 'ivr' && act.ivr) {
+          const base = `${useRuntimeConfig().public.appBaseUrl}/api/webhooks/twilio/voice`;
+          if (act.ivr.kind === 'menu') {
+            // Play the prompt inside a Gather; the digit re-posts with flowNode set to THIS menu.
+            const menuNodeId = flowNode || act.ivr.nodeId || '';
+            twiml = `<Gather numDigits="1" action="${escapeXml(base)}?flowNode=${encodeURIComponent(menuNodeId)}" method="POST"><Say voice="Polly.Joanna">${escapeXml(act.ivr.text)}</Say></Gather><Say voice="Polly.Joanna">We did not receive a selection. Goodbye.</Say><Hangup/>`;
+          } else if (act.ivr.kind === 'say') {
+            const next = act.ivr.nextNodeId ? `<Redirect method="POST">${escapeXml(base)}?flowNode=${encodeURIComponent(act.ivr.nextNodeId)}</Redirect>` : '';
+            twiml = `<Say voice="Polly.Joanna">${escapeXml(act.ivr.text)}</Say>${next}`;
+          } else if (act.ivr.kind === 'voicemail') {
+            twiml = `<Say voice="Polly.Joanna">${escapeXml(act.ivr.text || 'Please leave a message after the tone.')}</Say><Record maxLength="120"/><Hangup/>`;
+          }
         }
       }
     }

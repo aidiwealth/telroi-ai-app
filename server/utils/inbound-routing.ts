@@ -32,6 +32,7 @@ export async function resolveInboundRoute(tenantId: string, telnum: string): Pro
 // (TwiML for Twilio, Call Control commands for Telnyx, dialplan for the PBX).
 export interface IvrStep {
   kind: 'say' | 'menu' | 'voicemail';
+  nodeId?: string;                                             // the flow node this step is
   text: string;
   nextNodeId?: string | null;                                  // 'say': where to go after speaking
   options?: Array<{ digit: string; nextNodeId: string | null; label?: string }>; // 'menu'
@@ -69,11 +70,11 @@ async function nodeToAction(tenantId: string, nodes: any[], nodeId: string | und
   if (!node) return { action: 'reject' };
   switch (node.type) {
     case 'greeting': {
-      return { action: 'ivr', ivr: { kind: 'say', text: node.config?.text || '', nextNodeId: node.config?.next || nodes[nodes.indexOf(node) + 1]?.id || null } };
+      return { action: 'ivr', ivr: { nodeId: node.id, kind: 'say', text: node.config?.text || '', nextNodeId: node.config?.next || nodes[nodes.indexOf(node) + 1]?.id || null } };
     }
     case 'menu': {
       const options = (node.config?.options || []).map((o: any) => ({ digit: String(o.digit ?? o.key ?? ''), nextNodeId: o.target || o.next || null, label: o.label || '' }));
-      return { action: 'ivr', ivr: { kind: 'menu', text: node.config?.text || node.config?.prompt || 'Please choose an option.', options } };
+      return { action: 'ivr', ivr: { nodeId: node.id, kind: 'menu', text: node.config?.text || node.config?.prompt || 'Please choose an option.', options } };
     }
     case 'route_van': {
       let greeting = 'Hello, thanks for calling. How can I help you today?';
@@ -86,7 +87,7 @@ async function nodeToAction(tenantId: string, nodes: any[], nodeId: string | und
     }
     case 'route_user': return { action: 'dial_person', dialTarget: node.config?.target || null };
     case 'route_group': return { action: 'dial_department', dialTarget: node.config?.target || null };
-    case 'voicemail': return { action: 'ivr', ivr: { kind: 'voicemail', text: node.config?.text || '' } };
+    case 'voicemail': return { action: 'ivr', ivr: { nodeId: node.id, kind: 'voicemail', text: node.config?.text || '' } };
     case 'hangup': return { action: 'reject' };
     default: return { action: 'reject' };
   }
