@@ -18,9 +18,12 @@ export async function extractText(buffer: Buffer, fileType: KbFileType): Promise
     return buffer.toString('utf-8');
   }
   if (fileType === 'pdf') {
-    // pdf-parse v1: simple default-export function, no separate pdfjs worker file
-    // (bundles cleanly in the server output, unlike v2 which needs pdf.worker.mjs).
-    const pdfParse = (await import('pdf-parse')).default as (b: Buffer) => Promise<{ text: string }>;
+    // Import pdf-parse's inner lib directly, NOT the package index.js. The index
+    // has debug-on-import code (reads ./test/data/*.pdf when module.parent is
+    // undefined) that throws ENOENT in a bundled/ESM server. The lib module is the
+    // pure parser with no such side effect, and v1 bundles cleanly (no pdfjs worker).
+    const mod = await import('pdf-parse/lib/pdf-parse.js') as any;
+    const pdfParse = (mod.default || mod) as (b: Buffer) => Promise<{ text: string }>;
     const res = await pdfParse(buffer);
     return res?.text || '';
   }
