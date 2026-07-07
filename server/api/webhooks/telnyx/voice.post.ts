@@ -51,7 +51,9 @@ export default defineEventHandler(async (event) => {
           status: normalizeStatus('telnyx', eventType),
           raw: { eventType, to, from, route: routeAction }
         });
-        if (routeAction) return { ok: true, received: eventType, route: routeAction };
+        // NOTE: do NOT early-return here on routeAction — the call still needs to
+        // be answered + driven by the state machine below. Returning early on
+        // call.initiated left the call at 'ringing' forever (never answered).
 
         // ---- Call Control IVR state machine (issue commands back to Telnyx) ----
         if (direction === 'in' && callId) {
