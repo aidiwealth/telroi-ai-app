@@ -187,6 +187,9 @@ async function main() {
       if (Array.isArray(route.flowNodes) && route.flowNodes.length) {
         log(`  flow bound to DID — running IVR (${route.flowNodes.length} nodes)`);
         try { await channel.answer(); } catch { /* already answered */ }
+        // The IVR has picked up — log the call as answered so history + wait
+        // reflect it (the flow may then route on to AI/person/dept or hang up).
+        logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'answered', direction: 'in', raw: { did: dialedDid, callerName, ivr: true } });
         const { runFlow } = await import('./flow-run.ts');
         const term = await runFlow(client, channel, route.flowNodes, route.tenantId, route.routeAgentId || undefined, (m) => log(`  ${m}`));
         log(`  flow terminal: ${term.kind}${term.target ? ' -> ' + term.target : ''}`);
