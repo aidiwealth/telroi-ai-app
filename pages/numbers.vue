@@ -262,7 +262,9 @@ async function confirmAdjust() {
 }
 async function loadSubs() {
   try {
-    subs.value = (await api.get<any[]>('/api/numbers/subscriptions')).filter((x: any) => x.status === 'active' || x.status === 'cancelled');
+    // Numbers page shows only active numbers; released (cancelled) ones live under
+  // Channels where they can be reclaimed during the 7-day grace period.
+  subs.value = (await api.get<any[]>('/api/numbers/subscriptions')).filter((x: any) => x.status === 'active');
   } catch { subs.value = []; }
 }
 const editing = ref<any>(null);
