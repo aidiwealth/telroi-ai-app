@@ -119,6 +119,15 @@ const channel = ref(2.00);
 const startup = ref(10);
 const growth = ref(15);
 const ngn = ref(1600);
+
+// Managed AI pricing (display units: $/min for STT, $/1M for LLM+TTS, % markup).
+const savingAi = ref(false);
+const savedAi = ref(false);
+const aiSttPerMin = ref(0);
+const aiLlmInPerM = ref(0);
+const aiLlmOutPerM = ref(0);
+const aiTtsPerM = ref(0);
+const aiMarkup = ref(0);
 const bops = ref<any>(null);
 const running = ref(false);
 const runResult = ref<any>(null);
