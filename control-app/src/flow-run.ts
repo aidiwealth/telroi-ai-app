@@ -35,20 +35,25 @@ async function playMessage(client: Ari.Client, channel: Ari.Channel, text: strin
 }
 
 // Gather a single DTMF digit within a timeout. Returns the digit or null.
-async function gatherDigit(channel: Ari.Channel, timeoutMs: number, log: Logger): Promise<string | null> {
+// ari-client emits ChannelDtmfReceived on the CLIENT (with the channel in the
+// event payload), so we listen there and filter by channel id.
+async function gatherDigit(client: Ari.Client, channel: Ari.Channel, timeoutMs: number, log: Logger): Promise<string | null> {
   return await new Promise<string | null>((resolve) => {
     let done = false;
-    const onDtmf = (event: any) => {
+    const onDtmf = (event: any, evChannel: any) => {
       if (done) return;
+      const cid = evChannel?.id || event?.channel?.id;
+      if (cid && cid !== channel.id) return;  // not our channel
       done = true;
-      channel.removeListener('ChannelDtmfReceived', onDtmf);
+      client.removeListener('ChannelDtmfReceived', onDtmf);
+      log(`[flow] dtmf received: ${event?.digit}`);
       resolve(event?.digit ?? null);
     };
-    channel.on('ChannelDtmfReceived', onDtmf);
+    client.on('ChannelDtmfReceived', onDtmf);
     setTimeout(() => {
       if (done) return;
       done = true;
-      channel.removeListener('ChannelDtmfReceived', onDtmf);
+      client.removeListener('ChannelDtmfReceived', onDtmf);
       resolve(null);
     }, timeoutMs);
   });
@@ -92,7 +97,7 @@ export async function runFlow(
       let chosen: any = null;
       for (let attempt = 0; attempt < 2 && !chosen; attempt++) {
         await playMessage(client, channel, prompt, tenantId, agentIdHint, log);
-        const digit = await gatherDigit(channel, 6000, log);
+        const digit = await gatherDigit(client, channel, 6000, log);
         if (digit) {
           chosen = options.find((o) => String(o.digit ?? o.key ?? '') === String(digit));
           if (!chosen) log(`[flow] no option for digit ${digit}`);
