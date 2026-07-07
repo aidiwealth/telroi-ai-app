@@ -20,6 +20,7 @@ export interface CallLogInput {
   carrier?: string;           // ruach | kasooko | telroi ...
   startedAt?: Date;
   duration?: number;
+  wait?: number;
   user?: string;
   raw?: Record<string, unknown>;
 }
@@ -39,7 +40,7 @@ export function logCall(input: CallLogInput): void {
         startedAt: input.startedAt ?? new Date(),
         duration: input.duration ?? null,
         user: input.user ?? null,
-        wait: null,
+        wait: input.wait ?? null,
         raw: input.raw ?? {}
       }).onConflictDoUpdate({
         target: [schema.callEvents.tenantId, schema.callEvents.callid],
@@ -54,8 +55,10 @@ export function logCall(input: CallLogInput): void {
           // Ring-to-answer wait (seconds): when this update marks the call
           // 'answered', compute now - started_at (the ringing timestamp). Only
           // set it once (keep the first answered value); other updates preserve it.
-          wait: sql`case when excluded.status = 'answered' and ${schema.callEvents.wait} is null
-                         then greatest(0, round(extract(epoch from (now() - ${schema.callEvents.startedAt}))))::int
+          wait: sql`case
+                         when excluded.wait is not null then excluded.wait
+                         when excluded.status = 'answered' and ${schema.callEvents.wait} is null
+                              then greatest(0, round(extract(epoch from (now() - ${schema.callEvents.startedAt}))))::int
                          else ${schema.callEvents.wait} end`,
           // Merge raw rather than overwrite: status-update calls pass an empty
           // raw, and the inbound insert that carries {did, callerName} can race
