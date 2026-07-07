@@ -194,11 +194,6 @@ const pending = ref(true);
 const wallet = ref<any>({ currency: 'USD', balanceMinor: 0, plan: 'startup' });
 const ledger = ref<any[]>([]);
 
-function exportLast30() {
-  // Server-side streamed export (last 30 days, memory-safe for large ledgers).
-  // A direct navigation lets the browser handle the file download.
-  window.location.href = '/api/wallet/export';
-}
 const summary = ref<any>({ moneyInMinor: 0, moneyOutMinor: 0, avgInMinor: 0, avgOutMinor: 0 });
 const selected = ref<any>(null);
 const amountMajor = ref(50);
