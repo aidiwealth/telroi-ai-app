@@ -45,6 +45,50 @@ export default defineEventHandler(async (event) => {
           raw: { eventType, to, from, route: routeAction }
         });
         if (routeAction) return { ok: true, received: eventType, route: routeAction };
+
+        // ---- Call Control IVR state machine (issue commands back to Telnyx) ----
+        if (direction === 'in' && callId) {
+          const cc = await import('~/server/utils/telnyx-cc');
+          const { resolveInboundAction, resolveFlowNode } = await import('~/server/utils/inbound-routing');
+
+          // Advance the flow given an InboundAction: speak/gather for IVR, transfer/answer for terminals.
+          const drive = async (act: any) => {
+            if (!act) { await cc.telnyxHangup(callId); return; }
+            if (act.action === 'ivr' && act.ivr) {
+              if (act.ivr.kind === 'say') { await cc.telnyxSpeak(callId, act.ivr.text || '', act.ivr.nextNodeId || null); return; }
+              if (act.ivr.kind === 'menu') { await cc.telnyxGather(callId, act.ivr.text || 'Please choose an option.', act.ivr.nodeId || ''); return; }
+              if (act.ivr.kind === 'voicemail') { await cc.telnyxSpeak(callId, act.ivr.text || 'Please leave a message.', null); return; }
+            }
+            if (act.action === 'dial_person' || act.action === 'dial_department') {
+              if (act.dialTarget) { await cc.telnyxTransfer(callId, act.dialTarget); return; }
+            }
+            if (act.action === 'ai') {
+              // AI over Telnyx requires media streaming (separate adapter). For now,
+              // speak a brief message so the caller isn't dropped silently.
+              await cc.telnyxSpeak(callId, 'Connecting you now.', null); return;
+            }
+            await cc.telnyxHangup(callId);
+          };
+
+          if (eventType === 'call.initiated') { await cc.telnyxAnswer(callId); return { ok: true }; }
+          if (eventType === 'call.answered') { await drive(routeAction || await resolveInboundAction(tenantId, to)); return { ok: true }; }
+          if (eventType === 'call.speak.ended') {
+            const st = cc.decodeState(payload.client_state);
+            if (st.n) { await drive(await resolveFlowNode(tenantId, to, st.n)); } else { await cc.telnyxHangup(callId); }
+            return { ok: true };
+          }
+          if (eventType === 'call.gather.ended') {
+            const st = cc.decodeState(payload.client_state);
+            const digit = payload.digits || '';
+            if (st.n && digit) {
+              const menu = await resolveFlowNode(tenantId, to, st.n);
+              const chosen = menu.ivr?.options?.find((o: any) => o.digit === String(digit));
+              if (chosen?.nextNodeId) { await drive(await resolveFlowNode(tenantId, to, chosen.nextNodeId)); }
+              else { await cc.telnyxSpeak(callId, 'Sorry, that was not a valid option. Goodbye.', null); }
+            } else { await cc.telnyxHangup(callId); }
+            return { ok: true };
+          }
+        }
       }
     } catch (e) { console.error('[telnyx webhook] log failed', e); }
   }
