@@ -74,7 +74,13 @@
             <div class="ad-field"><label>API Key SID</label><input v-model="twVoice.apiKeySid" class="ad-input mono" placeholder="SK…" /></div>
             <div class="ad-field"><label>API Key Secret {{ cfg.twilioVoiceSet ? '· set' : '' }}</label><input v-model="twVoice.apiKeySecret" type="password" class="ad-input mono" :placeholder="cfg.twilioVoiceSet ? '••••••••' : 'secret'" /></div>
             <div class="ad-field"><label>TwiML App SID</label><input v-model="twVoice.twimlAppSid" class="ad-input mono" placeholder="AP…" /></div>
-            <div class="ad-field"><label>Caller ID (Twilio number)</label><input v-model="twVoice.callerId" class="ad-input mono" placeholder="+1…" /></div>
+            <div class="ad-field"><label>Caller ID (Twilio number)</label>
+              <select v-model="twVoice.callerId" class="ad-input">
+                <option value="">— Select a provisioned Twilio number —</option>
+                <option v-for="n in twilioNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }} · {{ n.region }}</option>
+              </select>
+              <span v-if="!twilioNumbers.length" class="ad-hint">No Twilio numbers yet. Buy one under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</span>
+            </div>
           </div>
         </div>
 
@@ -84,7 +90,13 @@
             <div class="ad-field"><label>SIP username</label><input v-model="tnVoice.sipUsername" class="ad-input mono" placeholder="user" /></div>
             <div class="ad-field"><label>SIP password {{ cfg.telnyxVoiceSet ? '· set' : '' }}</label><input v-model="tnVoice.sipPassword" type="password" class="ad-input mono" :placeholder="cfg.telnyxVoiceSet ? '••••••••' : 'password'" /></div>
             <div class="ad-field"><label>Connection ID</label><input v-model="tnVoice.connectionId" class="ad-input mono" placeholder="connection id" /></div>
-            <div class="ad-field"><label>Caller ID</label><input v-model="tnVoice.callerId" class="ad-input mono" placeholder="+…" /></div>
+            <div class="ad-field"><label>Caller ID</label>
+              <select v-model="tnVoice.callerId" class="ad-input">
+                <option value="">— Select a provisioned Telnyx number —</option>
+                <option v-for="n in telnyxNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }} · {{ n.region }}</option>
+              </select>
+              <span v-if="!telnyxNumbers.length" class="ad-hint">No Telnyx numbers yet. Buy one under <NuxtLink to="/admin/inventory" class="inline-link">Number inventory</NuxtLink>.</span>
+            </div>
           </div>
         </div>
       </div>
@@ -243,6 +255,14 @@ const twSid = ref(''); const twToken = ref('');
 const tnKey = ref(''); const tnConn = ref('');
 const twVoice = reactive({ apiKeySid: '', apiKeySecret: '', twimlAppSid: '', callerId: '' });
 const tnVoice = reactive({ sipUsername: '', sipPassword: '', connectionId: '', callerId: '' });
+
+// Provisioned numbers for the caller-ID pickers (selected from inventory, never typed).
+const invNumbers = ref<{ telnum: string; region: string; provider: string }[]>([]);
+const twilioNumbers = computed(() => invNumbers.value.filter((n) => n.provider === 'twilio'));
+const telnyxNumbers = computed(() => invNumbers.value.filter((n) => n.provider === 'telnyx'));
+async function loadNumbers() {
+  try { const r = await $fetch<any>('/api/admin/carrier/numbers'); invNumbers.value = r.numbers || []; } catch { /* */ }
+}
 const savingOther = ref(false);
 const savedOther = ref(false);
 
@@ -265,7 +285,7 @@ async function saveOther() {
   finally { savingOther.value = false; }
 }
 
-onMounted(() => { load(); loadCfg(); });
+onMounted(() => { load(); loadCfg(); loadNumbers(); });
 </script>
 
 <style scoped>
