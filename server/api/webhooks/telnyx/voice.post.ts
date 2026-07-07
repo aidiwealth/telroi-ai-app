@@ -27,6 +27,13 @@ export default defineEventHandler(async (event) => {
       // Attribute to the tenant owning the destination (inbound) or source (outbound).
       const numberToMatch = direction === 'in' ? to : from;
       const tenantId = await tenantForNumber(numberToMatch);
+      if (!tenantId) {
+        // The number isn't assigned to any tenant, so we can't attribute or log
+        // the call (call_events requires a tenant). Warn so this is visible
+        // instead of silently dropped — the usual cause is a bought-but-unassigned
+        // number. Assign it under Numbers to enable routing + logging.
+        console.warn(`[telnyx webhook] ${eventType} for unassigned number (to=${to} from=${from}) — not logged. Assign this number to a tenant to enable routing + call logs.`);
+      }
       if (tenantId) {
         // On an incoming call, resolve the UNIFIED route so the Call Control
         // issuer knows how to handle it (AI / person / department) — same model

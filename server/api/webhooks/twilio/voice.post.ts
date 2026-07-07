@@ -29,6 +29,12 @@ export default defineEventHandler(async (event) => {
   if (callSid && to) {
     try {
       const tenantId = await tenantForNumber(to);
+      if (!tenantId) {
+        // Number isn't assigned to a tenant, so the call can't be attributed or
+        // logged (call_events requires a tenant). Warn so it's visible instead of
+        // silently dropped — usual cause is a bought-but-unassigned number.
+        console.warn(`[twilio webhook] inbound for unassigned number (to=${to} from=${from}) — not logged. Assign this number to a tenant to enable routing + call logs.`);
+      }
       if (tenantId) {
         await upsertCallEvent({
           tenantId, callid: callSid, carrier: 'twilio', direction: 'in',
