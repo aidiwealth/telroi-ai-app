@@ -118,7 +118,7 @@
     <!-- Transactions -->
     <div class="wal-tx-head">
       <h2 class="wal-section-title">Transactions</h2>
-      <button v-if="ledger.length" class="btn btn-ghost btn-sm" @click="exportLast30">Export last 30 days</button>
+      <ExportButton v-if="ledger.length" url="/api/wallet/export" label="Export last 30 days" />
     </div>
     <div class="card wal-ledger">
       <div v-if="pending" class="loading-pad"><div v-for="i in 5" :key="i" class="skeleton skel-row" /></div>
@@ -195,25 +195,9 @@ const wallet = ref<any>({ currency: 'USD', balanceMinor: 0, plan: 'startup' });
 const ledger = ref<any[]>([]);
 
 function exportLast30() {
-  const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
-  const rows = ledger.value.filter((l: any) => new Date(l.createdAt).getTime() >= cutoff);
-  const esc = (v: any) => { const str = String(v ?? ''); return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str; };
-  const cur = wallet.value.currency || 'USD';
-  const header = ['Date', 'Description', 'Type', `Amount (${cur})`, `Balance (${cur})`, 'Sandbox', 'Reference'];
-  const lines = rows.map((l: any) => {
-    const amt = (l.kind === 'credit' ? '' : '-') + (Math.abs(l.amountMinor || 0) / 100).toFixed(2);
-    const bal = ((l.balanceAfterMinor || 0) / 100).toFixed(2);
-    return [fmtDate(l.createdAt), l.reason || '', l.kind || '', amt, bal, l.sandbox ? 'yes' : 'no', l.reference || ''].map(esc).join(',');
-  });
-  const csv = [header.join(','), ...lines].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `telroi-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  if (!rows.length) toast.ok('No transactions in the last 30 days'); else toast.ok(`Exported ${rows.length} transaction${rows.length > 1 ? 's' : ''}`);
+  // Server-side streamed export (last 30 days, memory-safe for large ledgers).
+  // A direct navigation lets the browser handle the file download.
+  window.location.href = '/api/wallet/export';
 }
 const summary = ref<any>({ moneyInMinor: 0, moneyOutMinor: 0, avgInMinor: 0, avgOutMinor: 0 });
 const selected = ref<any>(null);
