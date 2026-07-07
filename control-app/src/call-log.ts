@@ -45,7 +45,10 @@ export function logCall(input: CallLogInput): void {
         target: [schema.callEvents.tenantId, schema.callEvents.callid],
         set: {
           status: sql`excluded.status`,
-          duration: sql`coalesce(excluded.duration, ${schema.callEvents.duration})`,
+          duration: sql`coalesce(excluded.duration, ${schema.callEvents.duration},
+                          case when excluded.status = 'ended'
+                               then greatest(0, round(extract(epoch from (now() - ${schema.callEvents.startedAt}))))::int
+                               else null end)`,
           phone: sql`excluded.phone`,
           user: sql`coalesce(excluded.user, ${schema.callEvents.user})`,
           // Ring-to-answer wait (seconds): when this update marks the call
