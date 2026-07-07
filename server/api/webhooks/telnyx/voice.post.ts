@@ -24,9 +24,21 @@ export default defineEventHandler(async (event) => {
 
   if (callId && eventType) {
     try {
-      // Attribute to the tenant owning the destination (inbound) or source (outbound).
-      const numberToMatch = direction === 'in' ? to : from;
-      const tenantId = await tenantForNumber(numberToMatch);
+      // Attribute to whichever leg is one of OUR numbers. Telnyx flips the
+      // per-event `direction` (call.initiated=incoming, but call.answered/hangup
+      // often report outgoing), so keying off direction alone made later events
+      // match the external caller (unassigned) and skip logging — leaving calls
+      // stuck at 'ringing'. Resolve by trying `to` then `from`: our assigned
+      // number wins whichever field it's in, so the whole lifecycle attributes
+      // to the same tenant + row.
+      let tenantId = await tenantForNumber(to);
+      let matchedOurNumber = to;
+      if (!tenantId) { tenantId = await tenantForNumber(from); matchedOurNumber = from; }
+      // Stable direction: inbound when OUR number is the destination (`to`). This
+      // does NOT flip across events (unlike payload.direction), so the state
+      // machine + phone attribution stay correct for the whole call lifecycle.
+      const isInbound = matchedOurNumber === to;
+      const custPhone = isInbound ? from : to;
       if (!tenantId) {
         // The number isn't assigned to any tenant, so we can't attribute or log
         // the call (call_events requires a tenant). Warn so this is visible
@@ -39,15 +51,15 @@ export default defineEventHandler(async (event) => {
         // issuer knows how to handle it (AI / person / department) — same model
         // as every other carrier.
         let routeAction: any = undefined;
-        if (direction === 'in' && eventType === 'call.initiated' && to) {
+        if (isInbound && eventType === 'call.initiated' && to) {
           try {
             const { resolveInboundAction } = await import('~/server/utils/inbound-routing');
-            routeAction = await resolveInboundAction(tenantId, to);
+            routeAction = await resolveInboundAction(tenantId, matchedOurNumber);
           } catch { /* */ }
         }
         await upsertCallEvent({
-          tenantId, callid: callId, carrier: 'telnyx', direction,
-          phone: direction === 'in' ? from : to,
+          tenantId, callid: callId, carrier: 'telnyx', direction: isInbound ? 'in' : 'out',
+          phone: custPhone,
           status: normalizeStatus('telnyx', eventType),
           raw: { eventType, to, from, route: routeAction }
         });
@@ -56,7 +68,7 @@ export default defineEventHandler(async (event) => {
         // call.initiated left the call at 'ringing' forever (never answered).
 
         // ---- Call Control IVR state machine (issue commands back to Telnyx) ----
-        if (direction === 'in' && callId) {
+        if (isInbound && callId) {
           const cc = await import('~/server/utils/telnyx-cc');
           const { resolveInboundAction, resolveFlowNode } = await import('~/server/utils/inbound-routing');
 
@@ -80,19 +92,19 @@ export default defineEventHandler(async (event) => {
           };
 
           if (eventType === 'call.initiated') { await cc.telnyxAnswer(callId); return { ok: true }; }
-          if (eventType === 'call.answered') { await drive(routeAction || await resolveInboundAction(tenantId, to)); return { ok: true }; }
+          if (eventType === 'call.answered') { await drive(routeAction || await resolveInboundAction(tenantId, matchedOurNumber)); return { ok: true }; }
           if (eventType === 'call.speak.ended') {
             const st = cc.decodeState(payload.client_state);
-            if (st.n) { await drive(await resolveFlowNode(tenantId, to, st.n)); } else { await cc.telnyxHangup(callId); }
+            if (st.n) { await drive(await resolveFlowNode(tenantId, matchedOurNumber, st.n)); } else { await cc.telnyxHangup(callId); }
             return { ok: true };
           }
           if (eventType === 'call.gather.ended') {
             const st = cc.decodeState(payload.client_state);
             const digit = payload.digits || '';
             if (st.n && digit) {
-              const menu = await resolveFlowNode(tenantId, to, st.n);
+              const menu = await resolveFlowNode(tenantId, matchedOurNumber, st.n);
               const chosen = menu.ivr?.options?.find((o: any) => o.digit === String(digit));
-              if (chosen?.nextNodeId) { await drive(await resolveFlowNode(tenantId, to, chosen.nextNodeId)); }
+              if (chosen?.nextNodeId) { await drive(await resolveFlowNode(tenantId, matchedOurNumber, chosen.nextNodeId)); }
               else { await cc.telnyxSpeak(callId, 'Sorry, that was not a valid option. Goodbye.', null); }
             } else { await cc.telnyxHangup(callId); }
             return { ok: true };
