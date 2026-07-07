@@ -1,6 +1,6 @@
 // GET /api/plan -> the tenant's effective plan, trial state, and feature map.
 import { requireTenant } from '~/server/utils/api';
-import { entitlementsFor } from '~/server/utils/entitlements';
+import { entitlementsFor, aiActive } from '~/server/utils/entitlements';
 import { useDb, schema } from '~/server/db';
 import { eq } from 'drizzle-orm';
 export default defineEventHandler(async (event) => {
@@ -14,6 +14,7 @@ export default defineEventHandler(async (event) => {
     planSelected: t?.planSelected ?? false,
     trial: ent.trial,
     trialDays: t?.trialDays ?? 7,
-    features: ent.features
+    features: ent.features,
+    aiActive: (await aiActive(s.tenantId)).ok
   };
 });

@@ -9,6 +9,7 @@ interface PlanState {
   trial: { plan: string; endsAt: string; daysLeft: number } | null;
   trialDays: number;
   features: Record<string, boolean>;
+  aiActive?: boolean;
 }
 
 const state = ref<PlanState | null>(null);
@@ -29,6 +30,10 @@ export function usePlan() {
   function has(key: string): boolean {
     return !!state.value?.features?.[key];
   }
+  function aiOk(): boolean {
+    // AI is active when the workspace has an active subscription (server-computed).
+    return state.value?.aiActive !== false;
+  }
 
-  return { state, loading, load, has };
+  return { state, loading, load, has, aiOk };
 }
