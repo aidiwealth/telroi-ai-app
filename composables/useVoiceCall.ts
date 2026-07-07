@@ -71,7 +71,11 @@ export function useVoiceCall() {
         activeConn.on('error', (e: any) => { error.value = e?.message || 'Call error'; state.value = 'error'; });
       } else if (provider === 'telnyx') {
         await loadScript('https://unpkg.com/@telnyx/webrtc@2.22.0/lib/bundle.js');
-        const TelnyxRTC = (window as any).TelnyxRTC?.TelnyxRTC || (window as any).TelnyxRTC;
+        // The UMD bundle exposes the constructor as window.TelnyxWebRTC.TelnyxRTC
+        // (per Telnyx docs). Fall back through the other shapes just in case.
+        const w = window as any;
+        const TelnyxRTC = w.TelnyxWebRTC?.TelnyxRTC || w.TelnyxRTC?.TelnyxRTC || w.TelnyxWebRTC || w.TelnyxRTC;
+        if (typeof TelnyxRTC !== 'function') { throw new Error('Telnyx WebRTC SDK failed to load'); }
         telnyxClient = new TelnyxRTC({ login: tok.login, password: tok.password });
         telnyxClient.on('telnyx.ready', () => {
           activeConn = telnyxClient.newCall({ destinationNumber: opts.to, callerNumber: tok.callerId, audio: true, video: false });

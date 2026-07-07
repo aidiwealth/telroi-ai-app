@@ -161,7 +161,8 @@ const WIDGET_JS = String.raw`(function () {
           });
         } else if (voice.provider === 'telnyx') {
           loadJs('https://unpkg.com/@telnyx/webrtc@2.22.0/lib/bundle.js', function () {
-            var RTC = (window.TelnyxRTC && window.TelnyxRTC.TelnyxRTC) || window.TelnyxRTC;
+            var RTC = (window.TelnyxWebRTC && window.TelnyxWebRTC.TelnyxRTC) || (window.TelnyxRTC && window.TelnyxRTC.TelnyxRTC) || window.TelnyxWebRTC || window.TelnyxRTC;
+            if (typeof RTC !== 'function') { console.error('[telroi widget] Telnyx WebRTC SDK failed to load'); return; }
             var client = new RTC({ login: voice.login, password: voice.password });
             widgetCall = { provider: 'telnyx', client: client };
             client.on('telnyx.ready', function () { widgetCall.conn = client.newCall({ destinationNumber: to, callerNumber: voice.callerId, audio: true, video: false }); status.innerHTML = '<div style="font-size:14px;color:#333">Ringing…</div>'; });
