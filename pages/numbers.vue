@@ -57,7 +57,16 @@
             <td class="mono">{{ sub.telnum }}</td>
             <td>{{ sub.channels }}</td>
             <td class="mono muted">{{ money(sub.channels * channelMonthly) }}</td>
-            <td class="row-actions"><button class="btn btn-ghost btn-sm" @click="openAdjust(sub)">Adjust</button></td>
+            <td class="row-actions">
+              <template v-if="sub.status === 'active'">
+                <button class="btn btn-ghost btn-sm" @click="openAdjust(sub)">Adjust</button>
+                <button class="btn btn-ghost btn-sm num-release" @click="releaseNumber(sub)">Release</button>
+              </template>
+              <template v-else>
+                <span class="num-grace">Released · reserved until {{ sub.graceEndsAt ? new Date(sub.graceEndsAt).toLocaleDateString() : 'soon' }}</span>
+                <button class="btn btn-signal btn-sm" @click="reclaimNumber(sub)">Reclaim</button>
+              </template>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -223,6 +232,21 @@ const proratedEstimate = computed(() => {
   return +(channelMonthly.value * added * (daysLeft.value / 30)).toFixed(2);
 });
 function openAdjust(sub: any) { adjust.value = { sub, next: sub.channels }; }
+async function releaseNumber(sub: any) {
+  if (!confirm(`Release ${sub.telnum}? Billing stops now. It stays reserved to you for 7 days (you can reclaim it), then returns to the pool.`)) return;
+  try {
+    const r = await api.post<any>(`/api/numbers/${sub.id}/release`, {});
+    toast.ok(r.message || 'Number released');
+    await loadSubs();
+  } catch (e: any) { toast.err(e.message); }
+}
+async function reclaimNumber(sub: any) {
+  try {
+    const r = await api.post<any>(`/api/numbers/${sub.id}/reclaim`, {});
+    toast.ok(r.message || 'Number re-activated');
+    await loadSubs();
+  } catch (e: any) { toast.err(e.message); }
+}
 function closeAdjust() { adjust.value = { sub: null, next: 1 }; }
 async function confirmAdjust() {
   if (!adjust.value.sub || adjust.value.next === adjust.value.sub.channels) return;
@@ -238,7 +262,7 @@ async function confirmAdjust() {
 }
 async function loadSubs() {
   try {
-    subs.value = (await api.get<any[]>('/api/numbers/subscriptions')).filter((x: any) => x.status === 'active');
+    subs.value = (await api.get<any[]>('/api/numbers/subscriptions')).filter((x: any) => x.status === 'active' || x.status === 'cancelled');
   } catch { subs.value = []; }
 }
 const editing = ref<any>(null);
@@ -392,4 +416,6 @@ onMounted(async () => {
 .chan-quote-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 3px 0; }
 .chan-fineprint { font-size: 11.5px; margin-top: 12px; line-height: 1.5; }
 
+.num-release { color: var(--danger); }
+.num-grace { font-size: 12px; color: var(--ink-mute); margin-right: 8px; }
 </style>
