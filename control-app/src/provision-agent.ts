@@ -17,6 +17,7 @@ import { originateCall } from './originate.ts';
 import { logOutbound } from './call-log.ts';
 import { endpointStatus } from './endpoint-status.ts';
 
+import { getLines, latestSeq } from './log-buffer.ts';
 const SECRET = process.env.PROVISION_AGENT_SECRET || '';
 const PORT = parseInt(process.env.PROVISION_AGENT_PORT || '8090', 10);
 const BIND = process.env.PROVISION_AGENT_BIND || '127.0.0.1';
@@ -181,6 +182,14 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
       }
 
       // GET /health -> liveness (still requires auth)
+      // GET /logs?after=<seq> -> recent log lines from the in-memory ring buffer.
+      // Auth already enforced by authOk() above. No DB — just the live buffer.
+      if (req.method === 'GET' && (req.url || '').startsWith('/logs')) {
+        const u = new URL(req.url || '', 'http://127.0.0.1');
+        const after = Number(u.searchParams.get('after') || '0') || 0;
+        return send(res, 200, { ok: true, lines: getLines(after), latest: latestSeq() });
+      }
+
       if (req.method === 'GET' && req.url === '/health') {
         return send(res, 200, { ok: true, ari: !!ari });
       }

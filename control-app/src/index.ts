@@ -18,6 +18,7 @@ import Ari from 'ari-client';
 import { config } from './config.ts';
 import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveTenantEndpoints, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
 import { logCall } from './call-log.ts';
+import { installLogCapture } from './log-buffer.ts';
 import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridge.ts';
 import { startProvisionAgent } from './provision-agent.ts';
@@ -76,6 +77,7 @@ function log(...args: unknown[]) {
 }
 
 async function main() {
+  installLogCapture();  // capture all console output into the ring buffer for the admin live-log viewer
   // -- Start the routing cache first (blocks on initial load) --
   log('Loading routing cache from database...');
   let stopCache: () => void;
