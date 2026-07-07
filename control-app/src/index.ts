@@ -192,7 +192,7 @@ async function main() {
         log(`  flow terminal: ${term.kind}${term.target ? ' -> ' + term.target : ''}`);
         if (term.kind === 'hangup') {
           try { await playAndHangup(client, channel, 'sound:vm-goodbye'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
-          break;
+          return;
         }
         effRouteType = term.kind === 'ai' ? 'ai' : term.kind === 'department' ? 'department' : 'person';
         if (term.kind === 'ai') effAgentId = term.target || route.routeAgentId;
