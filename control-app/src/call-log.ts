@@ -39,6 +39,7 @@ export function logCall(input: CallLogInput): void {
         startedAt: input.startedAt ?? new Date(),
         duration: input.duration ?? null,
         user: input.user ?? null,
+        wait: null,
         raw: input.raw ?? {}
       }).onConflictDoUpdate({
         target: [schema.callEvents.tenantId, schema.callEvents.callid],
@@ -47,6 +48,12 @@ export function logCall(input: CallLogInput): void {
           duration: sql`coalesce(excluded.duration, ${schema.callEvents.duration})`,
           phone: sql`excluded.phone`,
           user: sql`coalesce(excluded.user, ${schema.callEvents.user})`,
+          // Ring-to-answer wait (seconds): when this update marks the call
+          // 'answered', compute now - started_at (the ringing timestamp). Only
+          // set it once (keep the first answered value); other updates preserve it.
+          wait: sql`case when excluded.status = 'answered' and ${schema.callEvents.wait} is null
+                         then greatest(0, round(extract(epoch from (now() - ${schema.callEvents.startedAt}))))::int
+                         else ${schema.callEvents.wait} end`,
           // Merge raw rather than overwrite: status-update calls pass an empty
           // raw, and the inbound insert that carries {did, callerName} can race
           // behind them. Concatenating keeps existing keys so the DID is never

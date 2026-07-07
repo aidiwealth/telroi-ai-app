@@ -80,7 +80,7 @@ export default defineEventHandler(async (event) => {
         diversion: (e.raw as any)?.did || undefined,
         user: e.user || undefined,
         start: (e.startedAt || e.createdAt)?.toISOString?.() || String(e.startedAt || e.createdAt),
-        wait: 0, duration: e.duration || 0,
+        wait: e.wait || 0, duration: e.duration || 0,
         failed: e.status === 'failed',
         reason: (e.raw as any)?.reason || undefined,
         local: true
