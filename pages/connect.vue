@@ -78,7 +78,19 @@
                 <input v-model="node.config.text" class="input cn-node-input" placeholder="Menu prompt (e.g. Press 1 for sales, 2 for support)" @blur="saveFlow" />
                 <div v-for="(opt, oi) in (node.config.options || [])" :key="oi" class="cn-menu-opt">
                   <input v-model="opt.digit" class="input cn-digit-input mono" placeholder="1" @blur="saveFlow" />
-                  <input v-model="opt.label" class="input cn-node-input" placeholder="e.g. Sales" @blur="saveFlow" />
+                  <input v-model="opt.label" class="input cn-node-input cn-opt-label" placeholder="Label (e.g. Sales)" @blur="saveFlow" />
+                  <select v-model="opt.routeKind" class="select cn-opt-kind" @change="opt.target = undefined; saveFlow()">
+                    <option :value="undefined" disabled>Route to…</option>
+                    <option value="ai">AI agent</option>
+                    <option value="group">Department</option>
+                    <option value="user">Person</option>
+                  </select>
+                  <select v-if="opt.routeKind" v-model="opt.target" class="select cn-opt-target" @change="saveFlow">
+                    <option :value="undefined" disabled>Choose…</option>
+                    <template v-if="opt.routeKind === 'ai'"><option v-for="a in agents" :key="a.id" :value="a.id">{{ a.name }}</option></template>
+                    <template v-if="opt.routeKind === 'group'"><option v-for="d in departments" :key="d.id" :value="d.id">{{ d.name }}</option></template>
+                    <template v-if="opt.routeKind === 'user'"><option v-for="m in members" :key="m.id" :value="m.id">{{ m.name || m.email }}</option></template>
+                  </select>
                 </div>
                 <button class="cn-add-opt" @click="addMenuOption(node)">+ Add option</button>
               </div>

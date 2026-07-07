@@ -99,10 +99,13 @@ export async function runFlow(
         }
       }
       if (chosen && chosen.target) {
-        // The option's target is a node id -> jump there.
+        // If the option specifies a routeKind, it's a direct terminal destination.
+        if (chosen.routeKind === 'ai') return { kind: 'ai', target: chosen.target };
+        if (chosen.routeKind === 'group') return { kind: 'department', target: chosen.target };
+        if (chosen.routeKind === 'user') return { kind: 'person', target: chosen.target };
+        // Otherwise the target may be another node id -> jump there.
         const tIdx = nodes.findIndex((n) => n.id === chosen.target);
         if (tIdx >= 0) { idx = tIdx; continue; }
-        // Or the option target is itself a terminal (agent/dept/person id) — infer.
         return { kind: 'ai', target: chosen.target };
       }
       // No valid selection after retries -> fall through to next node or hang up.
