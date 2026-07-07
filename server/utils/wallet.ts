@@ -143,6 +143,13 @@ export async function chargeNumberProvision(tenantId: string, telnum: string) {
   }
   const month = new Date().toISOString().slice(0, 7); // YYYY-MM
   const reference = `did_${telnum}_${month}`;
+  // Sandbox: record the simulated monthly charge (badged, not real) — consistent
+  // with number purchase, call minutes and managed AI. Never debit a sandbox wallet.
+  const { isSandbox } = await import('./sandbox');
+  if (await isSandbox(tenantId)) {
+    await sandboxLedgerEntry({ tenantId, amountMinor, reason: 'number_provision', reference: `sbx_${reference}`, meta: { telnum, kind: 'did_monthly' } });
+    return { ok: true, sandbox: true };
+  }
   try {
     await debit({ tenantId, amountMinor, reason: 'number_provision', reference, meta: { telnum, kind: 'did_monthly' } });
     return { ok: true };
