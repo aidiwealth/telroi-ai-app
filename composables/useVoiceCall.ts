@@ -86,6 +86,14 @@ export function useVoiceCall() {
           if (st === 'active') { state.value = 'in_call'; if (!startedAt.value) startedAt.value = Date.now(); }
           if (st === 'hangup' || st === 'destroy') endCall(opts.onEnd);
         });
+        // Errors fired during/after teardown are expected SDK noise once the call
+        // has ended — only surface an error if a call is actually in progress.
+        telnyxClient.on('telnyx.error', (e: any) => {
+          if (state.value === 'ended' || state.value === 'idle') return; // post-call teardown noise
+          console.error('[telnyx] error:', e);
+          error.value = e?.error?.message || e?.message || 'Call error';
+          state.value = 'error';
+        });
         telnyxClient.connect();
       } else if (provider === 'digidite' || provider === 'telroi' || provider === 'asterisk') {
         const SIP = await import('sip.js');
@@ -169,8 +177,16 @@ export function useVoiceCall() {
   function cleanup() {
     try { mediaStream?.getTracks().forEach((t) => t.stop()); } catch { /* */ }
     try { device?.destroy?.(); } catch { /* */ }
+    // Detach Telnyx listeners BEFORE disconnecting so teardown events don't fire
+    // handlers on a half-torn-down client (the source of the end-of-call console error).
+    try { telnyxClient?.off?.('telnyx.notification'); telnyxClient?.off?.('telnyx.ready'); telnyxClient?.off?.('telnyx.error'); } catch { /* */ }
     try { telnyxClient?.disconnect?.(); } catch { /* */ }
     try { sipUA?.stop?.(); } catch { /* */ }
+    // Detach + remove the remote audio element so it doesn't error/play a tone on teardown.
+    try {
+      const a = document.getElementById('telroi-remote-audio') as HTMLAudioElement | null;
+      if (a) { a.srcObject = null; a.remove(); }
+    } catch { /* */ }
     mediaStream = null; device = null; activeConn = null; telnyxClient = null; sipUA = null;
     muted.value = false;
   }
