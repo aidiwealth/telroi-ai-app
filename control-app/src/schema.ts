@@ -79,6 +79,14 @@ export const departmentMembers = pgTable('department_members', {
   canTakeCalls: boolean('can_take_calls').notNull().default(true)
 });
 
+export const connectFlows = pgTable('connect_flows', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  telnum: text('telnum'),
+  status: text('status').notNull().default('draft'),
+  nodes: jsonb('nodes').$type<any[]>().notNull().default([])
+});
+
 export const callEvents = pgTable('call_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull(),

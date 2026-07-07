@@ -25,6 +25,7 @@ export interface NumberRoute {
   telnum: string;
   status: string;                 // active | suspended | cancelled
   routeType: 'person' | 'department' | 'ai';
+  flowNodes?: any[] | null;       // published Connect flow bound to this DID (overrides routeType)
   routeTarget: string | null;     // person extension/user
   departmentId: string | null;
   routeAgentId: string | null;
@@ -134,6 +135,19 @@ export async function refreshCache(): Promise<void> {
       const num = normNum(b.telnum);
       if (num) blacklist.add(`${b.tenantId}|${num}`);
     }
+
+    // Published Connect flows — attach flow nodes to their DID so the bridge can
+    // run greeting/menu/route IVR. A published flow overrides the flat routeType.
+    try {
+      const flows = await db.select({ telnum: schema.connectFlows.telnum, nodes: schema.connectFlows.nodes, status: schema.connectFlows.status })
+        .from(schema.connectFlows).where(eq(schema.connectFlows.status, 'published'));
+      for (const fl of flows) {
+        if (!fl.telnum) continue;
+        const key = normNum(fl.telnum);
+        const route = numbers.get(key);
+        if (route && Array.isArray(fl.nodes) && fl.nodes.length) route.flowNodes = fl.nodes;
+      }
+    } catch (e) { log(`flow load skipped: ${(e as Error)?.message}`); }
 
     // ai_agents greetings — for AI-routed numbers.
     const agents = await db.select({

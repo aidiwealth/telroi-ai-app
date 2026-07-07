@@ -178,11 +178,33 @@ async function main() {
         raw: { did: dialedDid, callerName }
       });
 
-      // 4) Route per config
-      log(`  OK tenant=${route.tenantId} routeType=${route.routeType}`);
-      switch (route.routeType) {
+      // 3.5) Published Connect flow — run greeting/menu IVR, then let its terminal
+      //      decide the effective routing. A flow overrides the flat routeType.
+      let effRouteType = route.routeType;
+      let effAgentId = route.routeAgentId;
+      let effDeptId = route.departmentId;
+      let effTarget = route.routeTarget;
+      if (Array.isArray(route.flowNodes) && route.flowNodes.length) {
+        log(`  flow bound to DID — running IVR (${route.flowNodes.length} nodes)`);
+        try { await channel.answer(); } catch { /* already answered */ }
+        const { runFlow } = await import('./flow-run.ts');
+        const term = await runFlow(client, channel, route.flowNodes, route.tenantId, route.routeAgentId || undefined, (m) => log(`  ${m}`));
+        log(`  flow terminal: ${term.kind}${term.target ? ' -> ' + term.target : ''}`);
+        if (term.kind === 'hangup') {
+          try { await playAndHangup(client, channel, 'sound:vm-goodbye'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
+          break;
+        }
+        effRouteType = term.kind === 'ai' ? 'ai' : term.kind === 'department' ? 'department' : 'person';
+        if (term.kind === 'ai') effAgentId = term.target || route.routeAgentId;
+        if (term.kind === 'department') effDeptId = term.target || effDeptId;
+        if (term.kind === 'person') effTarget = term.target || effTarget;
+      }
+
+      // 4) Route per config (flow terminal overrides where applicable)
+      log(`  OK tenant=${route.tenantId} routeType=${effRouteType}`);
+      switch (effRouteType) {
         case 'ai': {
-          const agentId = route.routeAgentId;
+          const agentId = effAgentId;
           if (!agentId) {
             log(`     AI route but no agent configured — playing no-service`);
             logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
@@ -307,8 +329,8 @@ async function main() {
           break;
         }
         case 'department': {
-          const deptEndpoints = resolveDepartmentEndpoints(route.departmentId);
-          log(`     Department route -> ${route.departmentId} :: ${deptEndpoints.length} member endpoint(s)`);
+          const deptEndpoints = resolveDepartmentEndpoints(effDeptId);
+          log(`     Department route -> ${effDeptId} :: ${deptEndpoints.length} member endpoint(s)`);
           if (deptEndpoints.length === 0) {
             log(`     department has no reachable members — playing no-service`);
             logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
@@ -342,17 +364,17 @@ async function main() {
           // client's SIP username and bridge to PJSIP/<username>. If route_target
           // is empty or doesn't resolve, play no-service and hang up (no fallback
           // to any default endpoint).
-          const username = resolveEndpoint(route.routeTarget);
+          const username = resolveEndpoint(effTarget);
           if (!username) {
             // No resolvable destination endpoint. Do NOT bridge to a stray/fallback
             // endpoint — play a polite no-service message and hang up.
-            log(`     Person route -> ${route.routeTarget} did not resolve to an endpoint :: no destination, playing no-service`);
+            log(`     Person route -> ${effTarget} did not resolve to an endpoint :: no destination, playing no-service`);
             logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { reason: 'no_destination_endpoint' } });
             await playAndHangup(client, channel, 'sound:ss-noservice');
             break;
           }
           const endpoint = `PJSIP/${username}`;
-          log(`     Person route -> endpoint ${route.routeTarget} (${username}) :: bridging to ${endpoint}`);
+          log(`     Person route -> endpoint ${effTarget} (${username}) :: bridging to ${endpoint}`);
           try {
             await bridgeToEndpoint({
               client,
