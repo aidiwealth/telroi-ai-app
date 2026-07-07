@@ -141,7 +141,9 @@
 
 /* ============ Money formatting (superscript cents) ============ */
 .money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cents::before { content: '.'; }
 .money .cents { font-size: 0.72em; vertical-align: 0.32em; margin-left: 0.5px; }
+.money .cents::before { content: '.'; font-size: 1.25em; vertical-align: baseline; }
 .money.pos { color: #0a8a5c; }   /* money in  */
 .money.neg { color: var(--ink); } /* money out */
 .money.muted { color: var(--ink-mute); }
