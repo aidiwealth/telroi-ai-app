@@ -21,6 +21,16 @@ export default defineEventHandler(async (event) => {
     .where(and(eq(schema.aiAgents.id, agentId), eq(schema.aiAgents.tenantId, tenantId))).limit(1);
   if (!agent) throw createError({ statusCode: 404, statusMessage: 'agent not found' });
 
+  // AI subscription wall: don't run the AI brain for workspaces without an active
+  // subscription. Return a graceful spoken message + hang up instead of answering.
+  const { aiActive } = await import('~/server/utils/entitlements');
+  const gate = await aiActive(tenantId);
+  if (!gate.ok) {
+    const msg = 'This AI service is not active on this account. Please contact the business.';
+    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, msg, { language: agent.language }, agent.tier === 'managed').catch(() => null);
+    return { reply: msg, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history, action: 'hangup' };
+  }
+
   const history: ChatMessage[] = Array.isArray(body.history) ? body.history : [];
 
   if (first) {

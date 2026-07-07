@@ -88,6 +88,24 @@ export async function entitlementsFor(tenantId: string) {
   };
 }
 
+// AI subscription wall: AI features (VAN answering, agents) require an ACTIVE
+// subscription — the workspace must have selected a plan and be either on a paid
+// plan or an active trial (trial counts). This is the single source of truth for
+// AI gating, enforced server-side at every AI entry point and mirrored in the UI.
+export async function aiActive(tenantId: string): Promise<{ ok: boolean; reason?: string }> {
+  const db = useDb();
+  const [tenant] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  if (!tenant) return { ok: false, reason: 'no_workspace' };
+  if (!tenant.planSelected) return { ok: false, reason: 'no_plan' };
+  // Active = an unexpired trial, OR a real (non-trial) plan the workspace is on.
+  const active = trialActive(tenant) || !!tenant.planSelected;
+  if (!active) return { ok: false, reason: 'inactive' };
+  // Respect the feature catalog / per-client overrides for the AI (van) feature.
+  const has = await hasFeature(tenantId, 'van');
+  if (!has) return { ok: false, reason: 'not_entitled' };
+  return { ok: true };
+}
+
 // Convenience guard for API routes.
 export async function hasFeature(tenantId: string, key: string): Promise<boolean> {
   const e = await entitlementsFor(tenantId);

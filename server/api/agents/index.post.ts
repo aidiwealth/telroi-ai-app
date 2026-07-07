@@ -27,6 +27,9 @@ const DEFAULT_PROMPT = 'You are a warm, concise phone assistant. Keep every repl
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
+  const { aiActive } = await import('~/server/utils/entitlements');
+  const gate = await aiActive(s.tenantId);
+  if (!gate.ok) throw apiError('forbidden', 'AI features require an active subscription. Choose a plan to enable AI.', 403);
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'Agent name required');
   const db = useDb();
