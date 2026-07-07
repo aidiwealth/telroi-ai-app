@@ -40,12 +40,23 @@ export async function telnyxVoiceToken() {
   // Telnyx WebRTC clients can log in directly with the SIP credential
   // (username/password) OR a short-lived JWT. We return the credential login the
   // @telnyx/webrtc SDK accepts, plus connection metadata.
+  // Caller ID comes from the single support-number source of truth (Settings ->
+  // support number by region), NOT from a number hardcoded on the WebRTC card.
+  // This keeps admin WebRTC from tying itself to any one number — the dedicated
+  // support number determines the outbound caller ID. Falls back to the card's
+  // callerId only if no support number is configured.
+  let callerId = telnyx.callerId || '';
+  try {
+    const { supportNumberForCountry } = await import('./support-numbers');
+    const support = await supportNumberForCountry('INTL');
+    if (support) callerId = support;
+  } catch { /* fall back to card callerId */ }
   return {
     provider: 'telnyx',
     login: telnyx.sipUsername,
     password: telnyx.sipPassword,
     connectionId: telnyx.connectionId,
-    callerId: telnyx.callerId
+    callerId
   };
 }
 
