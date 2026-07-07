@@ -104,10 +104,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useAdminApi } from '~/composables/useAdminApi';
 definePageMeta({ layout: 'admin', middleware: 'superadmin' });
 useHead({ title: 'Pricing — Telroi Operator' });
 
 const pending = ref(true);
+const loadError = ref('');
+const adminApi = useAdminApi();
 const saving = ref(false);
 const saved = ref(false);
 const airtime = ref('0.0102');
@@ -120,11 +123,11 @@ const bops = ref<any>(null);
 const running = ref(false);
 const runResult = ref<any>(null);
 function fmtDate(s: string) { try { return new Date(s).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return s; } }
-async function loadBops() { try { bops.value = await $fetch<any>('/api/admin/billing/status'); } catch { /* */ } }
+async function loadBops() { try { bops.value = await adminApi.get<any>('/api/admin/billing/status'); } catch { /* */ } }
 async function runBilling() {
   running.value = true; runResult.value = null;
   try {
-    runResult.value = await $fetch<any>('/api/admin/billing/run', { method: 'POST' });
+    runResult.value = await adminApi.post<any>('/api/admin/billing/run');
     await loadBops();
   } catch (e: any) { alert(e?.data?.error?.message || 'Billing run failed'); }
   finally { running.value = false; }
@@ -133,7 +136,7 @@ async function runBilling() {
 async function load() {
   pending.value = true;
   try {
-    const { pricing } = await $fetch<any>('/api/admin/pricing');
+    const { pricing } = await adminApi.get<any>('/api/admin/pricing');
     if (pricing) {
       did.value = pricing.didMonthlyUsdMinor / 100;
       channel.value = pricing.channelMonthlyUsdMinor / 100;
@@ -146,37 +149,41 @@ async function load() {
       if (pricing.aiTtsPerCharNano != null) aiTtsPerM.value = Math.round((pricing.aiTtsPerCharNano / 1000) * 100) / 100;
       if (pricing.aiMarkupPct != null) aiMarkup.value = pricing.aiMarkupPct;
     }
-  } catch { await navigateTo('/admin/login'); }
+  } catch (e: any) {
+    // 401 is handled centrally by useAdminApi (redirects to login). Anything
+    // else (403, 500, network) surfaces here without logging the operator out.
+    loadError.value = e?.message || 'Could not load pricing.';
+  }
   finally { pending.value = false; }
   loadBops();
 }
 async function save() {
   saving.value = true; saved.value = false;
   try {
-    await $fetch('/api/admin/pricing', { method: 'POST', body: {
+    await adminApi.post('/api/admin/pricing', {
       didMonthlyUsdMinor: Math.round(did.value * 100),
       channelMonthlyUsdMinor: Math.round(channel.value * 100),
       planStartupUsdMinor: Math.round(startup.value * 100),
       planGrowthUsdMinor: Math.round(growth.value * 100),
       ngnPerUsd: Math.round(ngn.value)
-    } });
+    });
     saved.value = true;
-  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  } catch (e: any) { alert(e?.message || 'Save failed'); }
   finally { saving.value = false; }
 }
 
 async function saveAi() {
   savingAi.value = true; savedAi.value = false;
   try {
-    await $fetch('/api/admin/pricing', { method: 'POST', body: {
+    await adminApi.post('/api/admin/pricing', {
       aiSttPerSecNano: Math.round((aiSttPerMin.value / 60) * 1e9),
       aiLlmInPerTokNano: Math.round(aiLlmInPerM.value * 1000),
       aiLlmOutPerTokNano: Math.round(aiLlmOutPerM.value * 1000),
       aiTtsPerCharNano: Math.round(aiTtsPerM.value * 1000),
       aiMarkupPct: Math.round(aiMarkup.value)
-    } });
+    });
     savedAi.value = true;
-  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  } catch (e: any) { alert(e?.message || 'Save failed'); }
   finally { savingAi.value = false; }
 }
 onMounted(load);
