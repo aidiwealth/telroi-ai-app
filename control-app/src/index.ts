@@ -195,8 +195,14 @@ async function main() {
         log(`  flow terminal: ${term.kind}${term.target ? ' -> ' + term.target : ''}`);
         if (term.kind === 'hangup') {
           try { await playAndHangup(client, channel, 'sound:vm-goodbye'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
+          logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ended', direction: 'in' });
           return;
         }
+        // If the flow routes onward, mark ended when the caller channel leaves Stasis
+        // (safety net so flow calls never linger as 'answered').
+        channel.once('StasisEnd', () => {
+          logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ended', direction: 'in' });
+        });
         effRouteType = term.kind === 'ai' ? 'ai' : term.kind === 'department' ? 'department' : 'person';
         if (term.kind === 'ai') effAgentId = term.target || route.routeAgentId;
         if (term.kind === 'department') effDeptId = term.target || effDeptId;
