@@ -7,6 +7,7 @@ import { useDb, schema } from '~/server/db';
 
 const Body = z.object({
   name: z.string().min(1).optional(),
+  telnum: z.string().min(3).optional(),
   agentId: z.string().uuid().nullable().optional(),
   languages: z.array(z.string()).optional(),
   escalateMode: z.enum(['none','endpoint','phone','ring_all']).optional(),
@@ -25,6 +26,29 @@ export default defineEventHandler(async (event) => {
   if (!Object.keys(patch).length) throw apiError('invalid', 'Nothing to update');
 
   const db = useDb();
+
+  // If the number is being changed, the tenant must own the NEW number, and we
+  // clear the OLD number's AI route so it doesn't keep answering as this VAN.
+  if (patch.telnum) {
+    const [owned] = await db.select().from(schema.numberSubscriptions)
+      .where(and(eq(schema.numberSubscriptions.telnum, patch.telnum as string), eq(schema.numberSubscriptions.tenantId, s.tenantId)))
+      .limit(1);
+    if (!owned) throw apiError('not_owned', 'You must own this number before assigning it. Buy it on the Numbers page first.', 400);
+    const [prev] = await db.select({ telnum: schema.vans.telnum }).from(schema.vans)
+      .where(and(eq(schema.vans.id, id), eq(schema.vans.tenantId, s.tenantId))).limit(1);
+    if (prev && prev.telnum && prev.telnum !== patch.telnum) {
+      const norm0 = (x: string) => { let d = String(x||'').replace(/[^0-9]/g,''); if (d.startsWith('234')) d=d.slice(3); if (d.startsWith('0')) d=d.slice(1); return d; };
+      const oldTarget = norm0(prev.telnum);
+      const allSubs = await db.select({ id: schema.numberSubscriptions.id, telnum: schema.numberSubscriptions.telnum, routeAgentId: schema.numberSubscriptions.routeAgentId })
+        .from(schema.numberSubscriptions).where(eq(schema.numberSubscriptions.tenantId, s.tenantId));
+      const oldMatch = allSubs.find((x: any) => norm0(x.telnum) === oldTarget);
+      if (oldMatch) {
+        await db.update(schema.numberSubscriptions)
+          .set({ routeType: 'person', routeAgentId: null, routeTarget: null })
+          .where(eq(schema.numberSubscriptions.id, oldMatch.id));
+      }
+    }
+  }
   const [row] = await db.update(schema.vans).set(patch)
     .where(and(eq(schema.vans.id, id), eq(schema.vans.tenantId, s.tenantId))).returning();
   if (!row) throw apiError('not_found', 'VAN not found', 404);
