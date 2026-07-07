@@ -11,10 +11,10 @@
         <div class="fg-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
-        <h2 class="fg-title">{{ title }} is a <em>Growth</em> feature</h2>
+        <h2 class="fg-title">{{ gateTitle }}</h2>
         <p class="fg-lede">{{ blurb }}</p>
         <div class="fg-actions">
-          <NuxtLink to="/settings?tab=plan" class="btn btn-signal">Upgrade to Growth</NuxtLink>
+          <NuxtLink to="/settings?tab=plan" class="btn btn-signal">{{ ctaLabel }}</NuxtLink>
           <span class="fg-trial" v-if="trialDays">or start a {{ trialDays }}-day free trial</span>
         </div>
       </div>
@@ -25,17 +25,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 
-const props = defineProps<{ feature: string; title: string; blurb?: string; bypass?: boolean }>();
+const props = defineProps<{ feature?: string; title: string; blurb?: string; bypass?: boolean; aiGate?: boolean }>();
 
-const { state, has, load } = usePlan();
+const { state, has, load, aiOk } = usePlan();
 const ready = ref(false);
 
 onMounted(async () => { if (props.bypass) { ready.value = true; return; } await load(); ready.value = true; });
 
 // Until loaded, assume allowed (avoid a flash of the lock for entitled users).
 // `bypass` is for internal workspaces (e.g. admin support) that are always entitled.
-const allowed = computed(() => props.bypass || !ready.value || has(props.feature));
+const allowed = computed(() => props.bypass || !ready.value || (props.aiGate ? aiOk() : has(props.feature || '')));
 const trialDays = computed(() => state.value?.trialDays || 0);
+const gateTitle = computed(() => props.aiGate ? `${props.title} needs an active plan` : `${props.title} is a Growth feature`);
+const ctaLabel = computed(() => props.aiGate ? 'Choose a plan' : 'Upgrade to Growth');
 const blurb = computed(() => props.blurb || 'Upgrade to the Growth plan to unlock this, along with the full Telroi One suite — CRM, desktop dialer, team messenger and more.');
 </script>
 
