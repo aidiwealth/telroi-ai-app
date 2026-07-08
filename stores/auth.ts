@@ -23,8 +23,8 @@ export const useAuthStore = defineStore('auth', {
       try {
         const data = await $fetch<{ user: MeUser | null; tenant: MeTenant | null }>('/api/auth/me');
         // Normalize to plain-prototype objects (see plugins/auth.ts).
-        this.user = data.user ? { ...data.user } : null;
-        this.tenant = data.tenant ? { ...data.tenant } : null;
+        this.user = data.user ? JSON.parse(JSON.stringify(data.user)) : null;
+        this.tenant = data.tenant ? JSON.parse(JSON.stringify(data.tenant)) : null;
       } catch {
         this.user = null;
         this.tenant = null;

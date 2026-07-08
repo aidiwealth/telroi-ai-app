@@ -13,8 +13,13 @@ export default defineNuxtPlugin(async () => {
     const data = await $fetch<{ user: any; tenant: any }>('/api/auth/me', headers ? { headers } : {});
     // Plain-prototype copies: a null-prototype object crashes Pinia's
     // shouldHydrate during SSR payload serialization (notably on the error page).
-    auth.user = data.user ? { ...data.user } : null;
-    auth.tenant = data.tenant ? { ...data.tenant } : null;
+    // Deep plain-prototype copies. A shallow spread leaves nested null-prototype
+    // objects, which crash Pinia's shouldHydrate ('hasOwnProperty is not a
+    // function') during SSR payload serialization — notably when rendering the
+    // 404/error page for scanner probes like /admin/.env. JSON round-trip
+    // guarantees every level has Object.prototype.
+    auth.user = data.user ? JSON.parse(JSON.stringify(data.user)) : null;
+    auth.tenant = data.tenant ? JSON.parse(JSON.stringify(data.tenant)) : null;
   } catch {
     auth.user = null;
     auth.tenant = null;
