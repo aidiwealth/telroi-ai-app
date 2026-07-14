@@ -1157,3 +1157,17 @@ export const copilotConversations = pgTable('copilot_conversations', {
 }, (t) => ({
   tenantUserIdx: index('copilot_conv_tenant_user_idx').on(t.tenantId, t.userId)
 }));
+
+// Platform-admin copilot conversations. Admins live in a separate table (not
+// `users`) and have no tenant, so these are scoped by admin_email rather than
+// reusing the tenant/user-scoped copilot_conversations table.
+export const adminCopilotConversations = pgTable('admin_copilot_conversations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  adminEmail: text('admin_email').notNull(),
+  title: text('title').notNull().default('New conversation'),
+  messages: jsonb('messages').$type<Array<{ role: string; content: string }>>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  adminEmailIdx: index('admin_copilot_conv_email_idx').on(t.adminEmail)
+}));
