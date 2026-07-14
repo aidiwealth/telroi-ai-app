@@ -44,7 +44,7 @@ export const telnyxAnswer = (callId: string) => cmd(callId, 'answer', {});
 export const telnyxStreamingStart = (
   callId: string,
   streamUrl: string,
-  meta?: { agentId?: string; tenantId?: string; telnum?: string }
+  meta?: { agentId?: string; tenantId?: string; telnum?: string; escalateTo?: string | null; escalateAfter?: number }
 ) =>
   cmd(callId, 'streaming_start', {
     stream_url: streamUrl,

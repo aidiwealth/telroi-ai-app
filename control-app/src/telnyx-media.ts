@@ -51,7 +51,27 @@ function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[telnyx-media]', ...args);
 }
 
-interface Meta { agentId?: string; tenantId?: string; telnum?: string }
+interface Meta { agentId?: string; tenantId?: string; telnum?: string; escalateTo?: string | null; escalateAfter?: number }
+
+// Hand the call off to a human. The AI has already spoken the "connecting you"
+// line by this point, so we just issue the Call Control transfer. Note Telnyx can
+// only dial a PSTN number or SIP URI — an internal dashboard-agent endpoint needs
+// the SIP-handoff path instead (not wired yet).
+async function telnyxTransfer(callControlId: string, to: string): Promise<boolean> {
+  // Goes through the web app: it holds the Telnyx credentials (encrypted platform
+  // settings), so the PBX box never needs a copy of the API key.
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/voice/ai/telnyx-transfer`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
+      body: JSON.stringify({ callId: callControlId, to })
+    });
+    const j = await res.json().catch(() => ({})) as any;
+    if (!res.ok || !j?.ok) { log(`transfer -> ${to} failed:`, j?.error || `HTTP ${res.status}`); return false; }
+    log(`transfer -> ${to} OK`);
+    return true;
+  } catch (e) { log('transfer error:', (e as Error).message); return false; }
+}
 
 async function callTurn(payload: Record<string, unknown>) {
   try {
@@ -147,6 +167,17 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
         log(`TRANSCRIPT/REPLY: reply="${String(t.reply || '').slice(0, 120)}" audio=${t.audioBase64 ? 'yes' : 'no'} action=${t.action || 'continue'}`);
         if (Array.isArray(t.history)) history = t.history;
         await speak(t.audioBase64, t.audioContentType, 'REPLY');
+        if (t.action === 'transfer') {
+          const target = t.transferTo || meta.escalateTo || null;
+          if (!target) {
+            log('transfer requested but no target configured (VAN escalate_to is empty) — staying with the AI');
+          } else {
+            // Let the "connecting you" line finish before the call moves.
+            const waited = Date.now();
+            while (playing && Date.now() - waited < 12000) await new Promise((r) => setTimeout(r, 100));
+            if (callId) await telnyxTransfer(callId, target);
+          }
+        }
       }
       busy = false;
     }
