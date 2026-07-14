@@ -22,6 +22,9 @@ export default defineEventHandler(async (event) => {
   const to = payload.to;
   const from = payload.from;
 
+  // Temporary: see exactly what Telnyx sends around a transfer, since the AI leg
+  // is staying at 'ringing' instead of completing.
+  console.log(`[telnyx evt] ${eventType} callId=${String(callId).slice(0, 20)} to=${to} from=${from} dir=${payload.direction}`);
   if (callId && eventType) {
     try {
       // Attribute to whichever leg is one of OUR numbers. Telnyx flips the
@@ -31,18 +34,22 @@ export default defineEventHandler(async (event) => {
       // stuck at 'ringing'. Resolve by trying `to` then `from`: our assigned
       // number wins whichever field it's in, so the whole lifecycle attributes
       // to the same tenant + row.
+      // The escalation handoff leg (a transfer to sip:esc-...@our-pbx) is internal
+      // plumbing: the customer's own AI call is already logged, and Asterisk owns
+      // the agent side from here. Logging it too would show customers a bogus
+      // "outbound call to sip:esc-..." row and leak how routing works — so drop
+      // these events before they reach attribution or the state machine.
+      if (/(^|[:@])esc-/i.test(String(to || '')) || /^sip:/i.test(String(to || ''))) {
+        return { ok: true, received: eventType, skipped: 'escalation-leg' };
+      }
+
       let tenantId = await tenantForNumber(to);
       let matchedOurNumber = to;
       if (!tenantId) { tenantId = await tenantForNumber(from); matchedOurNumber = from; }
       // Stable direction: inbound when OUR number is the destination (`to`). This
       // does NOT flip across events (unlike payload.direction), so the state
       // machine + phone attribution stay correct for the whole call lifecycle.
-      // A transfer to our own PBX creates a second, outbound leg whose `to` is the
-      // sip:esc-... URI. Telnyx rejects `answer` on outbound legs (422) and the
-      // failure tears the call down mid-ring — so the state machine must ignore
-      // this leg entirely and let Asterisk own it from here.
-      const isEscalationLeg = /(^|[:@])esc-|sip:/i.test(String(to || ''));
-      const isInbound = matchedOurNumber === to && !isEscalationLeg;
+      const isInbound = matchedOurNumber === to;
       const custPhone = isInbound ? from : to;
       if (!tenantId) {
         // The number isn't assigned to any tenant, so we can't attribute or log
