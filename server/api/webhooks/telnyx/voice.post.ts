@@ -37,7 +37,12 @@ export default defineEventHandler(async (event) => {
       // Stable direction: inbound when OUR number is the destination (`to`). This
       // does NOT flip across events (unlike payload.direction), so the state
       // machine + phone attribution stay correct for the whole call lifecycle.
-      const isInbound = matchedOurNumber === to;
+      // A transfer to our own PBX creates a second, outbound leg whose `to` is the
+      // sip:esc-... URI. Telnyx rejects `answer` on outbound legs (422) and the
+      // failure tears the call down mid-ring — so the state machine must ignore
+      // this leg entirely and let Asterisk own it from here.
+      const isEscalationLeg = /(^|[:@])esc-|sip:/i.test(String(to || ''));
+      const isInbound = matchedOurNumber === to && !isEscalationLeg;
       const custPhone = isInbound ? from : to;
       if (!tenantId) {
         // The number isn't assigned to any tenant, so we can't attribute or log
