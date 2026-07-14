@@ -84,9 +84,19 @@ export default defineEventHandler(async (event) => {
               if (act.dialTarget) { await cc.telnyxTransfer(callId, act.dialTarget); return; }
             }
             if (act.action === 'ai') {
-              // AI over Telnyx requires media streaming (separate adapter). For now,
-              // speak a brief message so the caller isn't dropped silently.
-              await cc.telnyxSpeak(callId, 'Connecting you now.', null); return;
+              // AI over Telnyx runs through the media adapter on the control-app:
+              // Telnyx forks the call audio to our WebSocket, which buffers the
+              // caller's speech, drives the AI brain (/api/voice/ai/turn), and
+              // streams the reply back. Kick off streaming; the adapter takes over
+              // from here (greeting, turns, hangup).
+              const streamUrl = process.env.TELNYX_MEDIA_WS_URL || 'wss://sip.telroi.ai:8443/telnyx-media';
+              try {
+                await cc.telnyxStreamingStart(callId, streamUrl);
+              } catch (e: any) {
+                console.error('[telnyx] streaming_start failed:', e?.message || e);
+                await cc.telnyxSpeak(callId, 'Sorry, we could not connect you right now.', null);
+              }
+              return;
             }
             await cc.telnyxHangup(callId);
           };
