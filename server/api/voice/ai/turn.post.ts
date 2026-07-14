@@ -87,7 +87,18 @@ export default defineEventHandler(async (event) => {
   // Voice-specific brevity: this is a PHONE call, not chat. Long replies feel
   // sluggish (10s+ of TTS per turn) and callers can't skim audio. Applies to every
   // agent on the voice path; agents keep their own persona/knowledge otherwise.
-  const voiceStyle = '\n\nYou are speaking on a phone call. Keep every reply to 1-2 short sentences (aim under 25 words). Give the single most useful answer, then stop — do not list options unless asked. No markdown, emoji, or formatting: this is read aloud. If the caller needs detail, offer it and let them ask.';
+  const voiceStyle = [
+    '',
+    '',
+    'CRITICAL — YOU ARE ON A PHONE CALL. Spoken replies, not written ones:',
+    '- HARD LIMIT: 30 words maximum per reply. Shorter is better. One sentence is ideal.',
+    '- Answer ONLY what was asked. Do not add context, options, or follow-ups they did not request.',
+    '- Never list more than 2 items. If there are more, say "a few options" and let them ask.',
+    '- No markdown, bullets, emoji, or symbols — every character is read aloud.',
+    '- Prices/numbers: say them simply and once.',
+    '- End your turn. Do not ask multiple questions or stack a question onto a long answer.',
+    'A caller cannot skim audio. Long replies waste their time and feel robotic. Be brief.'
+  ].join('\n');
   const groundedPrompt = (agent.systemPrompt || '') + flowInstructions + kbContext + voiceStyle;
   const _llmT0 = Date.now();
   const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, groundedPrompt, nextHistory);

@@ -14,6 +14,28 @@ import { muLawToPcm16, pcm16ToWav, pcm16Energy } from './audio-mulaw.ts';
 import { ttsToMuLaw, streamMuLaw } from './audio-out.ts';
 
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
+
+// Short acknowledgements played the instant the caller stops talking, masking the
+// ~3s STT+LLM+TTS gap. Humans do this ("mm-hm", "let me see") — without it the
+// line goes dead and callers think the AI didn't hear them. Rendered once at
+// startup from a local tone-free source so playing one costs nothing.
+const FILLER_PHRASES = ['Mm-hm.', 'One moment.', 'Sure, let me check.'];
+
+// Render a short line in the agent's own voice via the TTS-only endpoint, and
+// return it as ready-to-stream mu-law. Used to pre-warm per-call fillers.
+async function renderFiller(tenantId: string, agentId: string, text: string): Promise<Buffer | null> {
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/voice/ai/whisper-tts`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
+      body: JSON.stringify({ tenantId, agentId, text })
+    });
+    if (!res.ok) return null;
+    const j = await res.json() as any;
+    if (!j?.audioBase64) return null;
+    return await ttsToMuLaw(j.audioBase64, j.audioContentType || 'audio/wav');
+  } catch { return null; }
+}
 const INTERNAL_SECRET = process.env.PROVISION_AGENT_SECRET || '';
 
 // VAD tuning (mean |amplitude| of PCM16 per 20ms frame).
@@ -70,6 +92,7 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     let idleSamples: number[] = []; // rolling sample of non-speech energy (noise floor)
     let playback: { cancel: () => void } | null = null;
     let playing = false;
+    let fillers: Buffer[] = []; // pre-rendered acknowledgements in this agent's voice
 
     const sendMedia = (b64: string) => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: 'media', media: { payload: b64 } }));
@@ -81,6 +104,10 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
       if (!b64) return;
       const mu = await ttsToMuLaw(b64, contentType || 'audio/wav');
       if (!mu) { log(`${label}: mu-law convert failed`); return; }
+      // If a filler is still speaking, let it finish rather than chopping a word —
+      // fillers are ~1s and the brain takes ~3s, so this rarely waits at all.
+      const waitStart = Date.now();
+      while (playing && Date.now() - waitStart < 1500) await new Promise((r) => setTimeout(r, 50));
       playback?.cancel();
       playing = true;
       log(`${label}: playing ${(mu.length / 8000).toFixed(2)}s (${Math.ceil(mu.length / 160)} frames)`);
@@ -92,6 +119,13 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     async function finishTurn() {
       if (busy || speechFrames < MIN_SPEECH_FRAMES) { resetTurn(); return; }
       busy = true;
+      // Acknowledge immediately so the line doesn't go dead while we think.
+      if (fillers.length) {
+        const f = fillers[Math.floor(Math.random() * fillers.length)];
+        playback?.cancel();
+        playing = true;
+        playback = streamMuLaw(f, sendMedia, () => { playing = false; });
+      }
       const pcm = Buffer.concat(buf);
       const peak = peakEnergy; const avg = sumEnergy / Math.max(1, energyCount);
       resetTurn();
@@ -127,6 +161,10 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
             log(`GREETING: "${String(g.reply || '').slice(0, 120)}" audio=${g.audioBase64 ? 'yes' : 'no'}`);
             if (Array.isArray(g.history)) history = g.history;
             await speak(g.audioBase64, g.audioContentType, 'GREETING');
+            // Warm the fillers while the greeting plays — ready before turn 1.
+            Promise.all(FILLER_PHRASES.map((p) => renderFiller(meta.tenantId!, meta.agentId!, p)))
+              .then((rs) => { fillers = rs.filter((x): x is Buffer => !!x); log(`fillers ready: ${fillers.length}/${FILLER_PHRASES.length}`); })
+              .catch(() => {});
           }
         } else {
           log('WARN: no agent/tenant in client_state — cannot drive the brain');
