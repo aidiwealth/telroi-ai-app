@@ -51,7 +51,7 @@ function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[telnyx-media]', ...args);
 }
 
-interface Meta { agentId?: string; tenantId?: string; telnum?: string; escalateTo?: string | null; escalateAfter?: number }
+interface Meta { agentId?: string; tenantId?: string; telnum?: string; escalateTo?: string | null; escalateAfter?: number; escalateMode?: string | null }
 
 // Hand the call off to a human. The AI has already spoken the "connecting you"
 // line by this point, so we just issue the Call Control transfer. Note Telnyx can
@@ -136,7 +136,24 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
       playback = streamMuLaw(mu, sendMedia, () => { playing = false; log(`${label}: playback done`); });
     }
 
-    const resetTurn = () => { speaking = false; quietRun = 0; speechFrames = 0; buf = []; peakEnergy = 0; sumEnergy = 0; energyCount = 0; };
+    // Where a human handoff should go. A phone target is dialed by Telnyx directly.
+    // ring_all/endpoint mean "ring the dashboard agents" — those are WebRTC endpoints
+    // registered to OUR Asterisk, which Telnyx can't see, so we send the call back
+    // to our PBX over SIP (esc- prefix tells Stasis it's an escalation, not a new
+    // inbound call to re-answer with the AI).
+    const PBX_SIP_HOST = process.env.PBX_SIP_HOST || 'sip.telroi.ai';
+    function escalationTarget(): string | null {
+      const mode = meta.escalateMode || 'none';
+      if (mode === 'phone') return meta.escalateTo || null;
+      if (mode === 'ring_all' || mode === 'endpoint') {
+        const did = (meta.telnum || '').replace(/[^0-9+]/g, '');
+        if (!did) return null;
+        return `sip:esc-${did}@${PBX_SIP_HOST}`;
+      }
+      return null;
+    }
+
+    const resetTurn = () = { speaking = false; quietRun = 0; speechFrames = 0; buf = []; peakEnergy = 0; sumEnergy = 0; energyCount = 0; };
 
     async function finishTurn() {
       if (busy || speechFrames < MIN_SPEECH_FRAMES) { resetTurn(); return; }
@@ -168,9 +185,9 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
         if (Array.isArray(t.history)) history = t.history;
         await speak(t.audioBase64, t.audioContentType, 'REPLY');
         if (t.action === 'transfer') {
-          const target = t.transferTo || meta.escalateTo || null;
+          const target = escalationTarget();
           if (!target) {
-            log('transfer requested but no target configured (VAN escalate_to is empty) — staying with the AI');
+            log(`transfer requested but no target for mode=${meta.escalateMode || 'none'} — staying with the AI`);
           } else {
             // Let the "connecting you" line finish before the call moves.
             const waited = Date.now();

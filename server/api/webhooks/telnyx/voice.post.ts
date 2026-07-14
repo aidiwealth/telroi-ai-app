@@ -95,7 +95,8 @@ export default defineEventHandler(async (event) => {
                   agentId: act.agentId, tenantId, telnum: matchedOurNumber,
                   // The adapter needs the escalation config to hand off to a human:
                   // without it, the AI says "connecting you" and nothing happens.
-                  escalateTo: act.escalateTo || null, escalateAfter: act.escalateAfter || 0
+                  escalateTo: act.escalateTo || null, escalateAfter: act.escalateAfter || 0,
+                  escalateMode: (act as any).escalateMode || null
                 });
               } catch (e: any) {
                 console.error('[telnyx] streaming_start failed:', e?.message || e);

@@ -9,7 +9,7 @@ import { useDb, schema } from '../db';
 export type InboundRoute =
   | { type: 'person'; target: string | null; telnum: string; provider: string }
   | { type: 'department'; departmentId: string | null; telnum: string; provider: string }
-  | { type: 'ai'; agentId: string | null; escalateTo: string | null; escalateAfter: number; telnum: string; provider: string }
+  | { type: 'ai'; agentId: string | null; escalateMode: string | null; escalateTo: string | null; escalateAfter: number; telnum: string; provider: string }
   | { type: 'none'; telnum: string; provider: string };
 
 export async function resolveInboundRoute(tenantId: string, telnum: string): Promise<InboundRoute> {
@@ -19,7 +19,7 @@ export async function resolveInboundRoute(tenantId: string, telnum: string): Pro
   if (!sub) return { type: 'none', telnum, provider: 'telroi' };
   const provider = sub.provider;
   if (sub.routeType === 'ai') {
-    return { type: 'ai', agentId: sub.routeAgentId || null, escalateTo: sub.routeEscalateTo || null, escalateAfter: sub.routeEscalateAfter || 0, telnum, provider };
+    return { type: 'ai', agentId: sub.routeAgentId || null, escalateMode: sub.routeEscalateMode || 'none', escalateTo: sub.routeEscalateTo || null, escalateAfter: sub.routeEscalateAfter || 0, telnum, provider };
   }
   if (sub.routeType === 'department') {
     return { type: 'department', departmentId: sub.departmentId || null, telnum, provider };
@@ -45,6 +45,7 @@ export interface InboundAction {
   dialTarget?: string | null; // person extension / department ring target
   escalateTo?: string | null;
   escalateAfter?: number;
+  escalateMode?: string | null; // none | phone | endpoint | ring_all
 }
 
 // Resolve the route AND enrich it for execution (loads the agent greeting, the
@@ -121,7 +122,7 @@ export async function resolveInboundAction(tenantId: string, telnum: string): Pr
         .where(eq(schema.aiAgents.id, route.agentId)).limit(1);
       if (agent?.greeting) greeting = agent.greeting;
     }
-    return { action: 'ai', greeting, agentId: route.agentId, escalateTo: route.escalateTo, escalateAfter: route.escalateAfter };
+    return { action: 'ai', greeting, agentId: route.agentId, escalateTo: route.escalateTo, escalateAfter: route.escalateAfter, escalateMode: route.escalateMode };
   }
   if (route.type === 'department') {
     let target: string | null = null;
