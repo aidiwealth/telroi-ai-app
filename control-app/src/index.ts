@@ -122,12 +122,20 @@ async function main() {
     if (event.args?.[0] === 'dialed' || event.args?.[0] === 'agent') {
       return;
     }
-    const dialedDid = event.args?.[0] || channel.dialplan?.exten || '';
+    let dialedDid = event.args?.[0] || channel.dialplan?.exten || '';
     const callerNum = channel.caller?.number || '';
     const callerName = channel.caller?.name || '';
     const chId = channel.id;
 
-    log(`[call ${chId}] from "${callerName}" <${callerNum}> -> DID ${dialedDid}`);
+    // Escalation handoff from a carrier that can't reach our agents directly.
+    // A Telnyx-hosted AI call has no ARI channel, so when it needs a human the
+    // media adapter transfers it back to us as sip:esc-<DID>@sip.telroi.ai. The
+    // esc- prefix says "ring this DID's agents" — without it we'd look the DID up
+    // and hand the caller straight back to the AI they just escaped from.
+    const isEscalation = dialedDid.startsWith('esc-');
+    if (isEscalation) dialedDid = dialedDid.slice(4);
+
+    log(`[call ${chId}] from "${callerName}" <${callerNum}> -> DID ${dialedDid}${isEscalation ? ' (ESCALATION -> agents)' : ''}`);
 
     try {
       await channel.answer();
@@ -212,6 +220,37 @@ async function main() {
         if (term.kind === 'ai') effAgentId = term.target || route.routeAgentId;
         if (term.kind === 'department') effDeptId = term.target || effDeptId;
         if (term.kind === 'person') effTarget = term.target || effTarget;
+      }
+
+      // 3.5) Escalation handoff: skip routing entirely and ring the tenant's
+      // agents. The caller already spoke to the AI (over another carrier) and
+      // asked for a human, so re-running the route would loop them back to it.
+      if (isEscalation) {
+        const allUsers = resolveTenantEndpoints(route.tenantId);
+        const liveUsers = await filterLiveEndpoints(client, allUsers, log);
+        const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
+        log(`  [esc ${chId}] ringing agents — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
+        if (!endpoints.length) {
+          logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
+          const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
+          try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
+          return;
+        }
+        let escRes: { answered: boolean } = { answered: false };
+        try {
+          escRes = await bridgeToDepartment({
+            client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
+            onStatus: (status, details) => logStatus(details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined)(status, details)
+          });
+        } catch (err) {
+          log(`  [esc ${chId}] bridge failed: ${(err as Error)?.message}`);
+        }
+        if (!escRes.answered) {
+          log(`  [esc ${chId}] not answered — playing unavailable message`);
+          const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
+          try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
+        }
+        return;
       }
 
       // 4) Route per config (flow terminal overrides where applicable)
