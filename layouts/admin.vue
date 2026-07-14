@@ -20,7 +20,7 @@
         <div class="shell-inner"><slot /></div>
       </div>
     </div>
-    <CopilotDock />
+    <CopilotDock api-base="/api/copilot/admin" />
     <AdminTasks />
     <IdleLogout mode="admin" />
     <TourGuide />
