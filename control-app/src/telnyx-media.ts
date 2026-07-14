@@ -20,6 +20,8 @@ const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
 // line goes dead and callers think the AI didn't hear them. Rendered once at
 // startup from a local tone-free source so playing one costs nothing.
 const FILLER_PHRASES = ['Mm-hm.', 'One moment.', 'Sure, let me check.'];
+// Only fill if the brain hasn't answered within this long — fast turns stay clean.
+const FILLER_DELAY_MS = 1200;
 
 // Render a short line in the agent's own voice via the TTS-only endpoint, and
 // return it as ready-to-stream mu-law. Used to pre-warm per-call fillers.
@@ -119,13 +121,18 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     async function finishTurn() {
       if (busy || speechFrames < MIN_SPEECH_FRAMES) { resetTurn(); return; }
       busy = true;
-      // Acknowledge immediately so the line doesn't go dead while we think.
-      if (fillers.length) {
+      // Only fill if the brain is actually being slow. Firing on every turn makes
+      // the AI sound like it's stalling constantly; a human only fills a real
+      // pause. If the reply lands inside FILLER_DELAY_MS, the caller never hears one.
+      let replied = false;
+      const fillerTimer = setTimeout(() => {
+        if (replied || !fillers.length) return;
         const f = fillers[Math.floor(Math.random() * fillers.length)];
         playback?.cancel();
         playing = true;
+        log('filler: covering slow turn');
         playback = streamMuLaw(f, sendMedia, () => { playing = false; });
-      }
+      }, FILLER_DELAY_MS);
       const pcm = Buffer.concat(buf);
       const peak = peakEnergy; const avg = sumEnergy / Math.max(1, energyCount);
       resetTurn();
@@ -135,6 +142,7 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
         agentId: meta.agentId, tenantId: meta.tenantId, telnum: meta.telnum,
         callId, history, audioBase64: wav.toString('base64'), audioContentType: 'audio/wav'
       });
+      replied = true; clearTimeout(fillerTimer);
       if (t) {
         log(`TRANSCRIPT/REPLY: reply="${String(t.reply || '').slice(0, 120)}" audio=${t.audioBase64 ? 'yes' : 'no'} action=${t.action || 'continue'}`);
         if (Array.isArray(t.history)) history = t.history;
