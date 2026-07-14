@@ -11,6 +11,7 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import type http from 'node:http';
 import { muLawToPcm16, pcm16ToWav, pcm16Energy } from './audio-mulaw.ts';
+import { ttsToMuLaw, streamMuLaw } from './audio-out.ts';
 
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
 const INTERNAL_SECRET = process.env.PROVISION_AGENT_SECRET || '';
@@ -67,6 +68,24 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     let busy = false; // don't start a new turn while one is in flight
     let peakEnergy = 0, sumEnergy = 0, energyCount = 0;
     let idleSamples: number[] = []; // rolling sample of non-speech energy (noise floor)
+    let playback: { cancel: () => void } | null = null;
+    let playing = false;
+
+    const sendMedia = (b64: string) => {
+      if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: 'media', media: { payload: b64 } }));
+    };
+
+    // Convert the brain's TTS to mu-law and stream it to the caller. Cancels any
+    // in-flight playback first so a new reply supersedes the old one.
+    async function speak(b64: string | null, contentType: string | null, label: string) {
+      if (!b64) return;
+      const mu = await ttsToMuLaw(b64, contentType || 'audio/wav');
+      if (!mu) { log(`${label}: mu-law convert failed`); return; }
+      playback?.cancel();
+      playing = true;
+      log(`${label}: playing ${(mu.length / 8000).toFixed(2)}s (${Math.ceil(mu.length / 160)} frames)`);
+      playback = streamMuLaw(mu, sendMedia, () => { playing = false; log(`${label}: playback done`); });
+    }
 
     const resetTurn = () => { speaking = false; quietRun = 0; speechFrames = 0; buf = []; peakEnergy = 0; sumEnergy = 0; energyCount = 0; };
 
@@ -85,7 +104,7 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
       if (t) {
         log(`TRANSCRIPT/REPLY: reply="${String(t.reply || '').slice(0, 120)}" audio=${t.audioBase64 ? 'yes' : 'no'} action=${t.action || 'continue'}`);
         if (Array.isArray(t.history)) history = t.history;
-        // STAGE 3 will stream t.audioBase64 back to the caller here.
+        await speak(t.audioBase64, t.audioContentType, 'REPLY');
       }
       busy = false;
     }
@@ -107,6 +126,7 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
           if (g) {
             log(`GREETING: "${String(g.reply || '').slice(0, 120)}" audio=${g.audioBase64 ? 'yes' : 'no'}`);
             if (Array.isArray(g.history)) history = g.history;
+            await speak(g.audioBase64, g.audioContentType, 'GREETING');
           }
         } else {
           log('WARN: no agent/tenant in client_state — cannot drive the brain');
@@ -119,6 +139,10 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
         const b64 = msg.media?.payload; if (!b64) return;
         const pcm = muLawToPcm16(Buffer.from(b64, 'base64'));
         const energy = pcm16Energy(pcm);
+
+        // While our own audio is playing, skip capture — otherwise the AI hears
+        // itself (inbound_track shouldn't echo, but this also avoids turn overlap).
+        if (playing) return;
 
         if (!speaking) {
           // Sample the ambient noise floor so we can tune SPEECH_ON from real data.
@@ -139,12 +163,13 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
       }
 
       if (msg.event === 'stop') {
+        playback?.cancel(); playing = false;
         log('STOP call:', callId, 'frames:', frames);
         return;
       }
     });
 
-    ws.on('close', () => log('closed — frames:', frames));
+    ws.on('close', () => { playback?.cancel(); log('closed — frames:', frames); });
     ws.on('error', (e) => log('ws error:', (e as Error).message));
   });
 
