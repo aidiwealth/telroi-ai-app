@@ -37,6 +37,17 @@ export function decodeState(cs: string | null | undefined): { n: string | null }
 }
 
 export const telnyxAnswer = (callId: string) => cmd(callId, 'answer', {});
+
+// Start bidirectional media streaming to our control-app WebSocket. Telnyx forks
+// the call's audio to stream_url and accepts audio back on the same socket. PCMU
+// (mu-law 8kHz, Telnyx default) both directions for the AI media adapter.
+export const telnyxStreamingStart = (callId: string, streamUrl: string) =>
+  cmd(callId, 'streaming_start', {
+    stream_url: streamUrl,
+    stream_track: 'inbound_track',
+    stream_bidirectional_mode: 'rtp',
+    stream_bidirectional_codec: 'PCMU'
+  });
 export const telnyxHangup = (callId: string) => cmd(callId, 'hangup', {});
 
 // Speak text, then Telnyx fires call.speak.ended (carrying client_state so we advance).

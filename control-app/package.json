@@ -2,7 +2,7 @@
   "name": "telroi-control-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Telroi ARI control app — the call brain. Connects to Asterisk ARI, handles inbound calls hitting Stasis(telroi), and routes them (blacklist -> CRM -> AI/person/department) using Telroi's shared routing logic.",
+  "description": "Telroi ARI control app \u2014 the call brain. Connects to Asterisk ARI, handles inbound calls hitting Stasis(telroi), and routes them (blacklist -> CRM -> AI/person/department) using Telroi's shared routing logic.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -16,6 +16,10 @@
     "ari-client": "^2.2.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.36.0",
-    "postgres": "^3.4.0"
+    "postgres": "^3.4.0",
+    "ws": "^8.21.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.12"
   }
 }

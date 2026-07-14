@@ -22,6 +22,7 @@ import { installLogCapture } from './log-buffer.ts';
 import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridge.ts';
 import { startProvisionAgent } from './provision-agent.ts';
+import { attachTelnyxMedia } from './telnyx-media.ts';
 
 // Filter a list of PJSIP usernames to only those currently REGISTERED (online),
 // so ring_all doesn't waste originate attempts on stale/disconnected endpoints
@@ -109,7 +110,9 @@ async function main() {
 
   // -- Start the provisioning agent now that ARI is up; pass the client so the
   //    /originate endpoint can place outbound calls. (No-op if no secret set.) --
-  startProvisionAgent(client);
+  const agentServer = startProvisionAgent(client);
+  // Attach the Telnyx AI media WebSocket to the same HTTP server (shares :8090).
+  if (agentServer) { try { attachTelnyxMedia(agentServer); } catch (e) { log('telnyx-media attach failed:', (e as Error).message); } }
 
   // -- Handle each call entering Stasis --
   client.on('StasisStart', async (event, channel) => {
