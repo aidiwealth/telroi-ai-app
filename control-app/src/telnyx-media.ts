@@ -115,6 +115,10 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     let playback: { cancel: () => void } | null = null;
     let playing = false;
     let fillers: Buffer[] = []; // pre-rendered acknowledgements in this agent's voice
+    // Once the call is handed to a human, the AI is done: Telnyx keeps the media
+    // stream open for a moment, and without this latch the adapter kept
+    // transcribing the agent's conversation and even re-issuing transfers.
+    let handedOff = false;
 
     const sendMedia = (b64: string) => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: 'media', media: { payload: b64 } }));
@@ -156,7 +160,7 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     const resetTurn = () => { speaking = false; quietRun = 0; speechFrames = 0; buf = []; peakEnergy = 0; sumEnergy = 0; energyCount = 0; };
 
     async function finishTurn() {
-      if (busy || speechFrames < MIN_SPEECH_FRAMES) { resetTurn(); return; }
+      if (handedOff || busy || speechFrames < MIN_SPEECH_FRAMES) { resetTurn(); return; }
       busy = true;
       // Only fill if the brain is actually being slow. Firing on every turn makes
       // the AI sound like it's stalling constantly; a human only fills a real
@@ -192,7 +196,11 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
             // Let the "connecting you" line finish before the call moves.
             const waited = Date.now();
             while (playing && Date.now() - waited < 12000) await new Promise((r) => setTimeout(r, 100));
-            if (callId) await telnyxTransfer(callId, target);
+            if (callId && await telnyxTransfer(callId, target)) {
+              handedOff = true;
+              playback?.cancel(); playing = false;
+              log('handed off to a human — AI stopping');
+            }
           }
         }
       }
@@ -230,6 +238,7 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
 
       if (msg.event === 'media') {
         frames++;
+        if (handedOff) return; // the human owns this call now
         const b64 = msg.media?.payload; if (!b64) return;
         const pcm = muLawToPcm16(Buffer.from(b64, 'base64'));
         const energy = pcm16Energy(pcm);
