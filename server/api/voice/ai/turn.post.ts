@@ -42,7 +42,9 @@ export default defineEventHandler(async (event) => {
   let userText = '';
   if (body.audioBase64) {
     const audio = Buffer.from(body.audioBase64, 'base64');
+    const _sttT0 = Date.now();
     userText = (await sttTranscribe(tenantId, agent.sttConnId, audio, body.audioContentType || 'audio/wav', agent.tier === 'managed', agent.language)).trim();
+    console.log(`[turn:timing] stt=${Date.now() - _sttT0}ms`);
     console.log(`[turn] stt=${agent.sttConnId ? 'byok' : 'managed'} userText="${userText.slice(0,100)}" (${userText.length} chars)`);
   }
 
@@ -82,8 +84,14 @@ export default defineEventHandler(async (event) => {
       }
     } catch { /* flow instructions are optional */ }
   }
-  const groundedPrompt = (agent.systemPrompt || '') + flowInstructions + kbContext;
+  // Voice-specific brevity: this is a PHONE call, not chat. Long replies feel
+  // sluggish (10s+ of TTS per turn) and callers can't skim audio. Applies to every
+  // agent on the voice path; agents keep their own persona/knowledge otherwise.
+  const voiceStyle = '\n\nYou are speaking on a phone call. Keep every reply to 1-2 short sentences (aim under 25 words). Give the single most useful answer, then stop — do not list options unless asked. No markdown, emoji, or formatting: this is read aloud. If the caller needs detail, offer it and let them ask.';
+  const groundedPrompt = (agent.systemPrompt || '') + flowInstructions + kbContext + voiceStyle;
+  const _llmT0 = Date.now();
   const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, groundedPrompt, nextHistory);
+  console.log(`[turn:timing] llm=${Date.now() - _llmT0}ms replyChars=${(reply || '').length}`);
   if (!reply) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
 
   let action: 'continue' | 'hangup' | 'transfer' = 'continue';
@@ -100,7 +108,9 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  const _ttsT0 = Date.now();
   const tts = await ttsSynthesize(tenantId, agent.ttsConnId, clean, { language: agent.language }, agent.tier === 'managed');
+  console.log(`[turn:timing] tts=${Date.now() - _ttsT0}ms chars=${clean.length} audioBytes=${tts?.audio?.length || 0}`);
 
   const sttSeconds = body.audioBase64 ? Math.round(Buffer.from(body.audioBase64, 'base64').length / 16000) : 0;
   void recordAiUsage({

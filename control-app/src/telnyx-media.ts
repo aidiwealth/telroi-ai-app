@@ -19,7 +19,7 @@ const INTERNAL_SECRET = process.env.PROVISION_AGENT_SECRET || '';
 // VAD tuning (mean |amplitude| of PCM16 per 20ms frame).
 const SPEECH_ON = 700;      // above this = speech
 const SPEECH_OFF = 400;     // below this = quiet
-const SILENCE_FRAMES = 40;  // ~800ms of quiet ends the turn
+const SILENCE_FRAMES = 25;  // ~500ms of quiet ends the turn (tuned for phone pace)
 const MIN_SPEECH_FRAMES = 10; // ignore blips under ~200ms
 const MAX_TURN_FRAMES = 750;  // ~15s hard cap per turn
 
