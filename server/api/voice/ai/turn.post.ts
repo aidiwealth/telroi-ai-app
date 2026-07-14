@@ -101,7 +101,10 @@ export default defineEventHandler(async (event) => {
   ].join('\n');
   const groundedPrompt = (agent.systemPrompt || '') + flowInstructions + kbContext + voiceStyle;
   const _llmT0 = Date.now();
-  const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, groundedPrompt, nextHistory);
+  // Hard cap for voice: prompt rules alone weren't holding (replies still ran
+  // 180+ chars / 12s of speech). ~80 tokens is roughly 60 words — enough for a
+  // complete phone answer, impossible to monologue past.
+  const { text: reply, inputTokens, outputTokens } = await llmReplyWithUsage(llm, groundedPrompt, nextHistory, 80);
   console.log(`[turn:timing] llm=${Date.now() - _llmT0}ms replyChars=${(reply || '').length}`);
   if (!reply) return { reply: null, audioBase64: null, audioContentType: null, history: nextHistory, action: 'transfer', transferTo: (agent.fallback as any)?.transferTo || null };
 

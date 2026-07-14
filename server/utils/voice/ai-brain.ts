@@ -347,14 +347,14 @@ export function applyScopeGating(systemPrompt: string): string {
 (If a caller asks something with clearly no connection to this business — like general trivia, math, or coding — gently steer back to how you can help them with the business. Otherwise, always engage naturally and helpfully. Keep replies short and spoken-friendly.)`;
 }
 
-export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, history: ChatMessage[]): Promise<{ text: string | null; inputTokens: number; outputTokens: number }> {
+export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, history: ChatMessage[], maxTokens?: number): Promise<{ text: string | null; inputTokens: number; outputTokens: number }> {
   const sys = applyScopeGating(systemPrompt);
   try {
     if (llm.provider === 'anthropic') {
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': llm.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: llm.model, max_tokens: 300, system: sys, messages: history.map((m) => ({ role: m.role, content: m.content })) })
+        body: JSON.stringify({ model: llm.model, max_tokens: maxTokens || 300, system: sys, messages: history.map((m) => ({ role: m.role, content: m.content })) })
       });
       if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
       const d: any = await res.json();
@@ -389,7 +389,7 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
     // models that force reasoning, but the higher budget still covers us).
     const chatBody: any = {
       model: llm.model,
-      max_tokens: isGrok ? 1500 : 300,
+      max_tokens: isGrok ? 1500 : (maxTokens || 300),
       messages: [{ role: 'system', content: sys }, ...history.map((m) => ({ role: m.role, content: m.content }))]
     };
     if (isGrok) chatBody.reasoning_effort = 'none';
