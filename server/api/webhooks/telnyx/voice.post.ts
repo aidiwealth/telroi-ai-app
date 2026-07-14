@@ -91,7 +91,7 @@ export default defineEventHandler(async (event) => {
               // from here (greeting, turns, hangup).
               const streamUrl = process.env.TELNYX_MEDIA_WS_URL || 'wss://sip.telroi.ai:8443/telnyx-media';
               try {
-                await cc.telnyxStreamingStart(callId, streamUrl);
+                await cc.telnyxStreamingStart(callId, streamUrl, { agentId: act.agentId, tenantId, telnum: matchedOurNumber });
               } catch (e: any) {
                 console.error('[telnyx] streaming_start failed:', e?.message || e);
                 await cc.telnyxSpeak(callId, 'Sorry, we could not connect you right now.', null);

@@ -41,12 +41,20 @@ export const telnyxAnswer = (callId: string) => cmd(callId, 'answer', {});
 // Start bidirectional media streaming to our control-app WebSocket. Telnyx forks
 // the call's audio to stream_url and accepts audio back on the same socket. PCMU
 // (mu-law 8kHz, Telnyx default) both directions for the AI media adapter.
-export const telnyxStreamingStart = (callId: string, streamUrl: string) =>
+export const telnyxStreamingStart = (
+  callId: string,
+  streamUrl: string,
+  meta?: { agentId?: string; tenantId?: string; telnum?: string }
+) =>
   cmd(callId, 'streaming_start', {
     stream_url: streamUrl,
     stream_track: 'inbound_track',
     stream_bidirectional_mode: 'rtp',
-    stream_bidirectional_codec: 'PCMU'
+    stream_bidirectional_codec: 'PCMU',
+    // Telnyx echoes client_state back in the WS `start` event, which is how the
+    // media adapter learns which agent/tenant this call belongs to (the socket
+    // itself only carries the call_control_id).
+    ...(meta ? { client_state: Buffer.from(JSON.stringify(meta)).toString('base64') } : {})
   });
 export const telnyxHangup = (callId: string) => cmd(callId, 'hangup', {});
 
