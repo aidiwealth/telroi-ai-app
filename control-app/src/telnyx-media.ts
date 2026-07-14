@@ -65,16 +65,19 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     let speechFrames = 0;
     let buf: Buffer[] = [];
     let busy = false; // don't start a new turn while one is in flight
+    let peakEnergy = 0, sumEnergy = 0, energyCount = 0;
+    let idleSamples: number[] = []; // rolling sample of non-speech energy (noise floor)
 
-    const resetTurn = () => { speaking = false; quietRun = 0; speechFrames = 0; buf = []; };
+    const resetTurn = () => { speaking = false; quietRun = 0; speechFrames = 0; buf = []; peakEnergy = 0; sumEnergy = 0; energyCount = 0; };
 
     async function finishTurn() {
       if (busy || speechFrames < MIN_SPEECH_FRAMES) { resetTurn(); return; }
       busy = true;
       const pcm = Buffer.concat(buf);
+      const peak = peakEnergy; const avg = sumEnergy / Math.max(1, energyCount);
       resetTurn();
       const wav = pcm16ToWav(pcm, 8000);
-      log(`turn: ${(pcm.length / 2 / 8000).toFixed(2)}s of speech -> STT`);
+      log(`turn: ${(pcm.length / 2 / 8000).toFixed(2)}s speech, energy avg=${avg.toFixed(0)} peak=${peak.toFixed(0)} -> STT`);
       const t = await callTurn({
         agentId: meta.agentId, tenantId: meta.tenantId, telnum: meta.telnum,
         callId, history, audioBase64: wav.toString('base64'), audioContentType: 'audio/wav'
@@ -118,10 +121,18 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
         const energy = pcm16Energy(pcm);
 
         if (!speaking) {
-          if (energy > SPEECH_ON) { speaking = true; speechFrames = 1; quietRun = 0; buf = [pcm]; }
+          // Sample the ambient noise floor so we can tune SPEECH_ON from real data.
+          idleSamples.push(energy);
+          if (idleSamples.length >= 250) { // ~5s
+            const sorted = [...idleSamples].sort((a, b) => a - b);
+            log(`noise floor: p50=${sorted[125].toFixed(0)} p90=${sorted[225].toFixed(0)} max=${sorted[249].toFixed(0)} (SPEECH_ON=${SPEECH_ON})`);
+            idleSamples = [];
+          }
+          if (energy > SPEECH_ON) { speaking = true; speechFrames = 1; quietRun = 0; buf = [pcm]; peakEnergy = energy; sumEnergy = energy; energyCount = 1; }
           return;
         }
         buf.push(pcm); speechFrames++;
+        if (energy > peakEnergy) peakEnergy = energy; sumEnergy += energy; energyCount++;
         if (energy < SPEECH_OFF) quietRun++; else quietRun = 0;
         if (quietRun >= SILENCE_FRAMES || speechFrames >= MAX_TURN_FRAMES) await finishTurn();
         return;
