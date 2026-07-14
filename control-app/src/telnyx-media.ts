@@ -153,7 +153,7 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
       return null;
     }
 
-    const resetTurn = () = { speaking = false; quietRun = 0; speechFrames = 0; buf = []; peakEnergy = 0; sumEnergy = 0; energyCount = 0; };
+    const resetTurn = () => { speaking = false; quietRun = 0; speechFrames = 0; buf = []; peakEnergy = 0; sumEnergy = 0; energyCount = 0; };
 
     async function finishTurn() {
       if (busy || speechFrames < MIN_SPEECH_FRAMES) { resetTurn(); return; }
