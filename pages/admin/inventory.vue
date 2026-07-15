@@ -27,6 +27,9 @@
               <button v-if="r.provisionStatus !== 'provisioned'" class="btn btn-ghost btn-sm" :disabled="provisioning === r.id" @click="provision(r.id)">
                 {{ provisioning === r.id ? '…' : 'Provision' }}
               </button>
+              <button v-if="!r.provisionRef && r.status === 'available'" class="btn btn-ghost btn-sm" :disabled="editing === r.id" @click="editNumber(r)">
+                {{ editing === r.id ? '…' : 'Edit' }}
+              </button>
               <button v-if="r.status === 'available'" class="btn btn-ghost btn-sm" @click="remove(r.id)">Remove</button>
             </td>
           </tr>
@@ -174,6 +177,25 @@ async function add() {
   } catch (e: any) { toast.err(e?.data?.error?.message || 'Add failed'); }
   finally { adding.value = false; }
 }
+// Correct a mistyped number. Only offered for hand-added, unsold rows — the
+// server enforces the same rules, since an API-bought number's digits point at a
+// real carrier purchase and a sold one is somebody's live inbound line.
+const editing = ref<string | null>(null);
+async function editNumber(r: any) {
+  const next = window.prompt(`Correct this number (currently ${r.telnum}):`, r.telnum);
+  if (!next || next.trim() === r.telnum) return;
+  editing.value = r.id;
+  try {
+    await $fetch(`/api/admin/inventory/${r.id}`, { method: 'PATCH', body: { telnum: next.trim() } });
+    await load();
+    toast.ok('Number updated.');
+  } catch (e: any) {
+    toast.err(e?.data?.message || e?.message || 'Could not update the number.');
+  } finally {
+    editing.value = null;
+  }
+}
+
 async function provision(id: string) {
   provisioning.value = id;
   try {
