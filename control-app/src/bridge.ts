@@ -124,6 +124,11 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<{ answered:
     }
     try { if (callee) await callee.hangup(); } catch { /* gone */ }
     try { await bridge.destroy(); } catch { /* gone */ }
+    // Same as the department path: destroying the bridge leaves the caller's
+    // channel (and the carrier leg behind it) up, stranding them on a dead line
+    // after the agent hangs up. Only once answered — no-answer paths still need
+    // the caller alive for the unavailable message.
+    if (wasAnswered) { try { await caller.hangup(); } catch { /* already gone */ } }
     try { client.removeListener('StasisStart', onCalleeStasisStart as never); } catch { /* ignore */ }
     resolveDone();
   };
@@ -265,6 +270,12 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
     }
     for (const ch of callees) { try { await ch.hangup(); } catch { /* gone */ } }
     try { await bridge.destroy(); } catch { /* gone */ }
+    // If the agent hung up, the caller is still on the line with nobody there —
+    // their channel (and the carrier leg behind it) stays up until they give up
+    // and hang up themselves. Destroying the bridge doesn't end their call, so
+    // do it explicitly. Only when the call was answered: on no-answer paths the
+    // caller is deliberately kept alive to hear the unavailable message.
+    if (wasAnswered) { try { await opts.caller.hangup(); } catch { /* already gone */ } }
     try { client.removeListener('StasisStart', onMemberStasisStart as never); } catch { /* ignore */ }
     resolveDeptDone();
   };
