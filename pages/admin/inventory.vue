@@ -27,9 +27,7 @@
               <button v-if="r.provisionStatus !== 'provisioned'" class="btn btn-ghost btn-sm" :disabled="provisioning === r.id" @click="provision(r.id)">
                 {{ provisioning === r.id ? '…' : 'Provision' }}
               </button>
-              <button v-if="!r.provisionRef && r.status === 'available'" class="btn btn-ghost btn-sm" :disabled="editing === r.id" @click="editNumber(r)">
-                {{ editing === r.id ? '…' : 'Edit' }}
-              </button>
+              <button v-if="!r.provisionRef && r.status === 'available'" class="btn btn-ghost btn-sm" @click="editNumber(r)">Edit</button>
               <button v-if="r.status === 'available'" class="btn btn-ghost btn-sm" @click="remove(r.id)">Remove</button>
             </td>
           </tr>
@@ -87,6 +85,27 @@
           </div>
           <button class="btn btn-signal btn-block" :disabled="adding || !draft.numbers.trim()" @click="add">
             {{ adding ? 'Adding…' : 'Add to inventory' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Correct a mistyped number (hand-added, unsold rows only) -->
+    <div v-if="editRow" class="ad-modal-overlay" @click.self="editRow = null">
+      <div class="ad-modal" style="max-width:420px">
+        <div class="ad-modal-head"><h3>Edit number</h3><button class="ad-x" @click="editRow = null">✕</button></div>
+        <p class="ad-none" style="margin:8px 0 14px">
+          Fix a number that was typed incorrectly. The region is re-detected from the new digits and must still suit the carrier.
+        </p>
+        <div class="ad-field">
+          <label>Number</label>
+          <input v-model="editTelnum" class="ad-input mono" placeholder="+2348012345678" @keyup.enter="saveEdit" />
+        </div>
+        <p class="ad-hint" style="margin:6px 0 16px">Currently <span class="mono">{{ editRow.telnum }}</span> · {{ provLabel(editRow.provider) }}</p>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost" @click="editRow = null">Cancel</button>
+          <button class="btn btn-signal" :disabled="savingEdit || !editTelnum.trim() || editTelnum.trim() === editRow.telnum" @click="saveEdit">
+            {{ savingEdit ? 'Saving…' : 'Save' }}
           </button>
         </div>
       </div>
@@ -180,19 +199,24 @@ async function add() {
 // Correct a mistyped number. Only offered for hand-added, unsold rows — the
 // server enforces the same rules, since an API-bought number's digits point at a
 // real carrier purchase and a sold one is somebody's live inbound line.
-const editing = ref<string | null>(null);
-async function editNumber(r: any) {
-  const next = window.prompt(`Correct this number (currently ${r.telnum}):`, r.telnum);
-  if (!next || next.trim() === r.telnum) return;
-  editing.value = r.id;
+const editRow = ref<any | null>(null);
+const editTelnum = ref('');
+const savingEdit = ref(false);
+function editNumber(r: any) { editRow.value = r; editTelnum.value = r.telnum; }
+async function saveEdit() {
+  const r = editRow.value; if (!r) return;
+  const next = editTelnum.value.trim();
+  if (!next || next === r.telnum) return;
+  savingEdit.value = true;
   try {
-    await $fetch(`/api/admin/inventory/${r.id}`, { method: 'PATCH', body: { telnum: next.trim() } });
+    await $fetch(`/api/admin/inventory/${r.id}`, { method: 'PATCH', body: { telnum: next } });
+    editRow.value = null;
     await load();
     toast.ok('Number updated.');
   } catch (e: any) {
     toast.err(e?.data?.message || e?.message || 'Could not update the number.');
   } finally {
-    editing.value = null;
+    savingEdit.value = false;
   }
 }
 
