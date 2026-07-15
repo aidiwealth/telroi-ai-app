@@ -23,6 +23,7 @@ import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridge.ts';
 import { startProvisionAgent } from './provision-agent.ts';
 import { attachTelnyxMedia } from './telnyx-media.ts';
+import { startScheduler } from './scheduler.ts';
 
 // Filter a list of PJSIP usernames to only those currently REGISTERED (online),
 // so ring_all doesn't waste originate attempts on stale/disconnected endpoints
@@ -113,6 +114,7 @@ async function main() {
   const agentServer = startProvisionAgent(client);
   // Attach the Telnyx AI media WebSocket to the same HTTP server (shares :8090).
   if (agentServer) { try { attachTelnyxMedia(agentServer); } catch (e) { log('telnyx-media attach failed:', (e as Error).message); } }
+  try { startScheduler(); } catch (e) { log('scheduler failed to start:', (e as Error).message); }
 
   // -- Handle each call entering Stasis --
   client.on('StasisStart', async (event, channel) => {

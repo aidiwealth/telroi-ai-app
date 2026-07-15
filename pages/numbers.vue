@@ -262,9 +262,11 @@ async function confirmAdjust() {
 }
 async function loadSubs() {
   try {
-    // Numbers page shows only active numbers; released (cancelled) ones live under
-  // Channels where they can be reclaimed during the 7-day grace period.
-  subs.value = (await api.get<any[]>('/api/numbers/subscriptions')).filter((x: any) => x.status === 'active');
+    // Channels lists every subscription, including released ones — that row is
+  // where a client reclaims a number during its grace period. (Filtering this to
+  // active-only hid the Reclaim button; the Numbers list above reads `numbers`,
+  // not `subs`, so it was never the thing showing released numbers anyway.)
+  subs.value = await api.get<any[]>('/api/numbers/subscriptions');
   } catch { subs.value = []; }
 }
 const editing = ref<any>(null);
