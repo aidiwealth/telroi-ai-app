@@ -185,11 +185,19 @@ async function main() {
       //    (answered / ended / no-answer / failed) is upserted by the bridge's
       //    onStatus callback as the call progresses. We record the dialed DID in
       //    raw so the history can show which number was called.
-      logCall({
-        tenantId: route.tenantId, callid: chId, phone: callerNum,
-        status: 'ringing', direction: 'in',
-        raw: { did: dialedDid, callerName }
-      });
+      // An escalation handoff isn't its own call — the customer's AI call is
+      // already logged by the carrier webhook, and this leg's "caller" is our own
+      // DID, which would show up as a bogus inbound-from-ourselves row that never
+      // completes. Skip it. (Merging the agent's talk time into the original
+      // call's record is the better answer, but needs the carrier call id
+      // threaded through the handoff — worth doing properly later.)
+      if (!isEscalation) {
+        logCall({
+          tenantId: route.tenantId, callid: chId, phone: callerNum,
+          status: 'ringing', direction: 'in',
+          raw: { did: dialedDid, callerName }
+        });
+      }
 
       // 3.5) Published Connect flow — run greeting/menu IVR, then let its terminal
       //      decide the effective routing. A flow overrides the flat routeType.
@@ -231,7 +239,8 @@ async function main() {
         const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
         log(`  [esc ${chId}] ringing agents — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
         if (!endpoints.length) {
-          logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
+          // No row to update — this leg isn't logged (see above), so don't create
+          // an orphan 'missed' row for it.
           const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", route.tenantId, route.routeAgentId || undefined).catch(() => null);
           try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
           return;
@@ -239,8 +248,8 @@ async function main() {
         let escRes: { answered: boolean } = { answered: false };
         try {
           escRes = await bridgeToDepartment({
-            client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
-            onStatus: (status, details) => logStatus(details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined)(status, details)
+            client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40
+            // No onStatus: this leg has no call row to update.
           });
         } catch (err) {
           log(`  [esc ${chId}] bridge failed: ${(err as Error)?.message}`);
