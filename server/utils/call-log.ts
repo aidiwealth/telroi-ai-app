@@ -27,7 +27,15 @@ export async function upsertCallEvent(input: CallEventInput) {
       .limit(1);
     if (existing) {
       const patch: any = {};
-      if (input.status) patch.status = input.status;
+      // Status only moves forward. Carrier events can arrive out of order (or in
+      // the same second), and a stale 'ringing'/'answered' landing after the
+      // hangup would leave a finished call looking live in the dashboard.
+      const RANK: Record<string, number> = { ringing: 1, answered: 2, completed: 3, busy: 3, 'no-answer': 3, failed: 3, blacklisted: 3, missed: 3, ended: 3 };
+      if (input.status) {
+        const cur = RANK[String(existing.status || '')] ?? 0;
+        const next = RANK[input.status] ?? 0;
+        if (next >= cur) patch.status = input.status;
+      }
       if (input.duration != null) patch.duration = input.duration;
       if (input.recordingUrl) patch.recordingUrl = input.recordingUrl;
       if (input.phone) patch.phone = input.phone;
@@ -94,6 +102,13 @@ export function normalizeStatus(carrier: string, raw: string): string {
     if (v.includes('initiated')) return 'ringing';
     if (v.includes('answered')) return 'answered';
     if (v.includes('hangup')) return 'completed';
+    // Telnyx sends plenty of non-lifecycle events (call.bridged, streaming.*,
+    // speak.*, gather.*). They used to fall through and get written as the
+    // status verbatim — so a bridged-then-hung-up call could end up stuck on
+    // 'call.bridged', or have 'completed' clobbered by a late 'streaming.stopped'
+    // arriving in the same second. Anything that isn't a lifecycle transition
+    // leaves the status alone.
+    return '';
   }
   return raw || 'ringing';
 }
