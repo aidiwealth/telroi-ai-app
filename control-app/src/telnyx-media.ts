@@ -21,7 +21,7 @@ const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
 // startup from a local tone-free source so playing one costs nothing.
 const FILLER_PHRASES = ['Mm-hm.', 'One moment.', 'Sure, let me check.'];
 // Only fill if the brain hasn't answered within this long — fast turns stay clean.
-const FILLER_DELAY_MS = 1200;
+const FILLER_DELAY_MS = 2500;
 
 // Render a short line in the agent's own voice via the TTS-only endpoint, and
 // return it as ready-to-stream mu-law. Used to pre-warm per-call fillers.
