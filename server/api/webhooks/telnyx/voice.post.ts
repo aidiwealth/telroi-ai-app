@@ -22,9 +22,6 @@ export default defineEventHandler(async (event) => {
   const to = payload.to;
   const from = payload.from;
 
-  // Temporary: see exactly what Telnyx sends around a transfer, since the AI leg
-  // is staying at 'ringing' instead of completing.
-  console.log(`[telnyx evt] ${eventType} callId=${String(callId).slice(0, 20)} to=${to} from=${from} dir=${payload.direction}`);
   if (callId && eventType) {
     try {
       // Attribute to whichever leg is one of OUR numbers. Telnyx flips the
