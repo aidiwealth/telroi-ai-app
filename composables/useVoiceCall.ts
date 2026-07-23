@@ -112,7 +112,12 @@ export function useVoiceCall() {
           authorizationUsername: tok.sipUsername, authorizationPassword: tok.sipPassword
         });
         await sipUA.start();
-        const dialNumber = (tok.dialPrefix || '') + opts.to.trim();
+        // The trunk prefix (81 Ruach, 82 Kasooko, 83 Sotel) is followed by digits
+        // only — the dialplan patterns are _81234XXXXXXXXXX and _810XXXXXXXXXX, so
+        // a leading + from an E.164 number matches nothing and Asterisk 404s.
+        const prefix = tok.dialPrefix || '';
+        const dest = opts.to.trim();
+        const dialNumber = prefix ? prefix + dest.replace(/[^0-9]/g, '') : dest;
         const target = SIP.UserAgent.makeURI(`sip:${dialNumber}@${sipDomain}`);
         if (!target) {
           throw new Error(`Could not dial ${opts.to} — the number or dialing setup looks invalid. Try a different format (e.g. 0803... or 234...).`);
