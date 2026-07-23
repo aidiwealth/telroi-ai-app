@@ -9,8 +9,8 @@
         <div>
           <h1 class="ad-title">{{ data.tenant.name }}</h1>
           <p class="ad-sub mono">{{ data.tenant.domain }}
-            <span v-if="!data.tenant.requiresProvisioning" class="ad-tag on">Live</span>
-            <span v-else-if="!data.tenant.provisioned" class="ad-tag warn">not provisioned</span>
+            <span v-if="!data.tenant.sandbox" class="ad-tag on">Live</span>
+            <span v-else class="ad-tag warn">Sandbox</span>
             <span v-else class="ad-tag on">live on Digitide</span>
             <span class="ad-tag" :class="data.tenant.sandbox ? 'sandbox' : 'mode-live'">{{ data.tenant.sandbox ? 'Sandbox mode' : 'Live mode' }}</span>
           </p>
@@ -110,7 +110,7 @@
             </table>
             <p class="ad-hint">Recent calls (last 7 days) from this client's voice service.</p>
           </template>
-          <p v-else class="ad-none">Voice activity unavailable — the client isn't provisioned yet, or the voice service can't be reached.</p>
+          <p v-else class="ad-none">No voice activity yet, or the voice service can't be reached.</p>
         </section>
 
         <!-- AI + Connect -->
@@ -151,8 +151,8 @@
           </div>
 
           <div class="ad-adv-sip" style="margin-top:16px;border-top:1px solid var(--rule);padding-top:14px">
-            <h4 style="margin:0 0 4px;font-size:14px">Digidite SIP account (per client)</h4>
-            <p class="ad-none" style="margin-bottom:10px">Client-specific Digidite SIP account, set manually from the Digidite portal. Needed only when this client uses Telroi (Digidite) for calls.</p>
+            <h4 style="margin:0 0 4px;font-size:14px">Manual SIP account (per client)</h4>
+            <p class="ad-none" style="margin-bottom:10px">An extra SIP account for this client, entered by hand. Listed alongside their own endpoints in SIP settings; it can't route numbers on its own.</p>
             <div class="ad-field"><label>Host / Domain / Registrar</label>
               <input v-model="digSipHost" class="ad-input mono" placeholder="e.g. client.example.io" />
             </div>
@@ -166,11 +166,6 @@
             <span v-if="digSipMsg" class="ad-hint" style="margin-left:8px">{{ digSipMsg }}</span>
           </div>
         </section>
-      </div>
-
-      <div v-if="data.tenant.requiresProvisioning && !data.tenant.provisioned" class="ad-provision-note">
-        <p>This workspace isn't provisioned on the Digidite PBX yet. Provisioning normally happens automatically at signup — if it didn't, the Operator/Digidite API may not have been configured at the time.</p>
-        <button class="btn btn-signal btn-sm" :disabled="provisioning" @click="provisionNow">{{ provisioning ? 'Provisioning…' : 'Provision now' }}</button>
       </div>
 
       <!-- Tab: Teams & Roles -->
@@ -607,7 +602,6 @@ const planForm = ref({ plan: 'startup', trialDays: 7 });
 const planBusy = ref(false);
 const gatewayForm = ref('default');
 const gatewayBusy = ref(false);
-const provisioning = ref(false);
 const showCall = ref(false);
 const callPhone = ref('');
 const calling = ref(false);
@@ -701,14 +695,6 @@ async function setVanStatus(v: any, status: string) {
     data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
   } catch (e: any) { alert(e?.data?.error?.message || e?.data?.message || 'Could not update AI number'); }
   finally { vanBusy.value = null; }
-}
-async function provisionNow() {
-  provisioning.value = true;
-  try {
-    await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}/provision`, { method: 'POST' });
-    data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
-  } catch (e: any) { alert(e?.data?.error?.message || e?.data?.message || 'Provisioning failed'); }
-  finally { provisioning.value = false; }
 }
 const ent = ref<{ plan: string; features: Record<string, boolean> }>({ plan: 'startup', features: {} });
 const featureList = ref<{ key: string; label: string }[]>([]);
