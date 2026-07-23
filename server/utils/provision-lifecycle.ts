@@ -1,15 +1,14 @@
 // server/utils/provision-lifecycle.ts
 // Local-first provisioning. Resources live in OUR DB at zero vendor cost until
-// go-live; then we provision the COUNTRY's vendor lazily:
-//   Nigeria          -> Digidite PBX (deferred entirely; account/team at go-live,
-//                       seats/numbers on first use)
-//   everywhere else  -> carrier (Twilio/Telnyx) provisioned by admin; numbers
-//                       may be provisioned early by admin, else on first use.
-// Billing: NO wallet debits while 'local'. Real vendor charges begin only when a
+// go-live. Every workspace is carrier-backed the same way: Telroi holds the
+// master carrier accounts (Ruach and Kasooko for Nigeria, Telnyx and Twilio
+// elsewhere) behind our own PBX, so there is no per-tenant vendor account to
+// create. Numbers are marked active per-number — early by an admin, or on first
+// use.
+// Billing: NO wallet debits while 'local'. Real charges begin only when a
 // resource is actually provisioned. Every push is recorded in provisioningEvents.
 import { eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
-import { isNigeria } from './countries';
 import { logEvent } from './logs';
 
 async function recordEvent(tenantId: string, resource: string, vendor: string, status: string, detail?: string, resourceRef?: string) {
@@ -52,20 +51,19 @@ export async function ensureNumberProvisioned(tenantId: string, subscriptionId: 
   if (t.sandboxMode || t.provisionState === 'local') return { ok: false, reason: 'tenant_local' };
   if (sub.provisionState === 'provisioned') return { ok: true };
 
-  const nigeria = isNigeria(t.country);
   try {
     await db.update(schema.numberSubscriptions).set({ provisionState: 'provisioning' }).where(eq(schema.numberSubscriptions.id, subscriptionId));
-    // Numbers are ALREADY purchased + provisioned on their carrier/PBX out-of-band
-    // (Twilio/Telnyx in their consoles; Digidite on the PBX). We do NOT call any
-    // carrier API here — going "live" for a number just means marking it active
-    // for this tenant and beginning billing. Webhooks are registered manually in
-    // the carrier console (or once, globally), not per-number.
-    const ref = `${nigeria ? 'digidite' : (sub.provider || 'carrier')}:${sub.telnum}`;
+    // Numbers are ALREADY purchased and configured on their carrier out-of-band
+    // (in the carrier's console, or by an admin buying through the inventory
+    // page). We do NOT call any carrier API here — going "live" for a number just
+    // means marking it active for this tenant and beginning billing. Webhooks are
+    // registered once, globally, rather than per-number.
+    const ref = `${sub.provider || 'carrier'}:${sub.telnum}`;
 
     await db.update(schema.numberSubscriptions)
       .set({ provisionState: 'provisioned', provisionRef: ref, provisionedAt: new Date() })
       .where(eq(schema.numberSubscriptions.id, subscriptionId));
-    await recordEvent(tenantId, 'number', nigeria ? 'digidite' : (sub.provider || 'carrier'), 'provisioned', ref, sub.telnum);
+    await recordEvent(tenantId, 'number', sub.provider || 'carrier', 'provisioned', ref, sub.telnum);
 
     // Begin billing: charge the monthly DID fee now that the number is active.
     try {
@@ -76,7 +74,7 @@ export async function ensureNumberProvisioned(tenantId: string, subscriptionId: 
     return { ok: true };
   } catch (e: any) {
     await db.update(schema.numberSubscriptions).set({ provisionState: 'local' }).where(eq(schema.numberSubscriptions.id, subscriptionId));
-    await recordEvent(tenantId, 'number', nigeria ? 'digidite' : (sub.provider || 'carrier'), 'failed', e?.message, sub.telnum);
+    await recordEvent(tenantId, 'number', sub.provider || 'carrier', 'failed', e?.message, sub.telnum);
     return { ok: false, reason: e?.message };
   }
 }
