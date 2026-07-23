@@ -161,6 +161,13 @@ const dialerOpen = ref(false);
 const env = ref<'live' | 'sandbox'>('sandbox');
 const envBusy = ref(false);
 const sbx = ref<any | null>(null);
+
+// Other parts of the app (e.g. hitting a sandbox limit) can ask us to open the
+// go-live flow rather than duplicating it.
+onMounted(() => {
+  if (!import.meta.client) return;
+  window.addEventListener('telroi-open-go-live', () => { void onEnvClick(); });
+});
 onMounted(() => {
   if (import.meta.client) {
     const saved = localStorage.getItem('telroi_env');

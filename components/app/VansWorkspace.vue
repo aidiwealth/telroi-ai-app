@@ -54,6 +54,11 @@
             <button class="modal-x" @click="form = null">✕</button>
           </div>
 
+          <div v-if="limitNote" class="van-limit">
+            <p class="van-limit-text">{{ limitNote }}</p>
+            <button class="btn btn-signal btn-sm" @click="goLiveFromLimit">Go live →</button>
+          </div>
+
           <div class="field-float">
             <input v-model="form.name" class="input" placeholder=" " id="van-name" />
             <label for="van-name">Name</label>
@@ -188,8 +193,22 @@ async function save() {
     }
     form.value = null;
     await load();
-  } catch (e: any) { toast.err(e.message); }
+  } catch (e: any) {
+    // Reaching the sandbox limit isn't a failure — it's the trial working as
+    // intended. Say what happens next instead of colouring it red.
+    const code = e?.data?.error?.code || e?.data?.code;
+    if (code === 'sandbox_limit') { limitNote.value = e.message; }
+    else { toast.err(e.message); }
+  }
   finally { saving.value = false; }
+}
+
+// Shown in place of an error when the workspace has used its sandbox allowance.
+const limitNote = ref('');
+function goLiveFromLimit() {
+  limitNote.value = '';
+  // The topbar owns the go-live flow; ask it to open rather than duplicating it.
+  window.dispatchEvent(new CustomEvent('telroi-open-go-live'));
 }
 
 async function setStatus(v: Van, status: string) {
@@ -232,6 +251,8 @@ onMounted(load);
 .drawer-overlay { position: fixed; inset: 0; z-index: 150; background: rgba(10,10,11,0.28); display: flex; justify-content: flex-end; }
 .drawer { width: 440px; max-width: 92vw; background: var(--paper); height: 100%; padding: 28px; overflow-y: auto; box-shadow: var(--shadow-pop); }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.van-limit { border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; }
+.van-limit-text { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; margin: 0 0 12px; }
 .drawer-sub { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); }
 .modal-x { color: var(--ink-mute); }
 .skel-row { height: 80px; }
