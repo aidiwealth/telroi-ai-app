@@ -271,16 +271,17 @@ export async function sendNumberActivatedEmail(to: string, opts: { workspace: st
 // ── Compliance approved: the client's submitted documents passed review.
 export async function sendComplianceApprovedEmail(to: string, opts: { workspace: string }) {
   const appBase = (useRuntimeConfig().public as any).appBaseUrl || 'https://app.telroi.ai';
-  const subject = 'Your Telroi compliance documents are approved';
-  const text = `Your compliance documents for ${opts.workspace} have been reviewed and approved. Your account is fully verified.\n\n${appBase}/`;
+  const subject = 'Approved — you can now take your workspace live';
+  const text = `Your compliance documents for ${opts.workspace} have been reviewed and approved.\n\nOne step left: choose your plan to take the workspace live. Until then it stays in sandbox, with limited test calls and no charges.\n\n${appBase}/settings`;
   const html = shell(`
-    ${h1('You&rsquo;re verified')}
-    ${para(`The documents you submitted for <strong>${opts.workspace}</strong> have been reviewed and <strong>approved</strong>. Your account is fully verified — there's nothing more you need to do here.`)}
+    ${h1('You&rsquo;re approved')}
+    ${para(`The documents you submitted for <strong>${opts.workspace}</strong> have been reviewed and <strong>approved</strong>.`)}
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr><td style="background:rgba(0,210,138,0.10);border:1px solid rgba(0,210,138,0.3);border-radius:12px;padding:13px 20px;">
       <span style="font-size:13.5px;font-weight:600;color:#0a8a5c;">✓ Compliance approved</span>
     </td></tr></table>
-    ${button('Go to your dashboard →', appBase + '/')}
-  `, { preheader: `Your documents for ${opts.workspace} are approved.` });
+    ${para(`One step left: <strong>choose your plan</strong> to take the workspace live. Until you do, it stays in sandbox — limited test calls, and nothing is charged.`)}
+    ${button('Choose your plan →', appBase + '/settings')}
+  `, { preheader: `${opts.workspace} is approved — choose a plan to go live.` });
   await sendVia({ to, subject, html, text });
 }
 
