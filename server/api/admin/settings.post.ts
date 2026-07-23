@@ -42,6 +42,9 @@ const Body = z.object({
   otpChannel: z.enum(['resend', 'termii']).optional(),
   supportTelnum: z.string().optional(),
   supportNumbersByRegion: z.object({ NG: z.string().optional(), INTL: z.string().optional() }).partial().optional(),
+  // Sandbox allowances for new workspaces; a tenant row can override either.
+  sandboxCallCap: z.coerce.number().int().min(0).optional(),
+  sandboxAgentCap: z.coerce.number().int().min(0).optional(),
   captchaEnabled: z.boolean().optional(),
   captchaProvider: z.enum(['turnstile', 'recaptcha']).optional(),
   captchaSiteKey: z.string().optional(),
@@ -134,6 +137,8 @@ export default defineEventHandler(async (event) => {
   if (d.paymentMode) patch.paymentMode = d.paymentMode;
   if (d.otpChannel) patch.otpChannel = d.otpChannel;
   if (d.supportTelnum !== undefined) patch.supportTelnum = d.supportTelnum || null;
+  if (d.sandboxCallCap !== undefined) patch.sandboxCallCap = d.sandboxCallCap;
+  if (d.sandboxAgentCap !== undefined) patch.sandboxAgentCap = d.sandboxAgentCap;
   if (d.supportNumbersByRegion !== undefined) {
     patch.supportNumbersByRegion = d.supportNumbersByRegion;
     // Keep the legacy single field in sync with the NG number for back-compat.

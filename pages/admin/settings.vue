@@ -192,6 +192,28 @@
       </div>
       <div class="set-card-body">
         <AdminFeatureSettings />
+
+        <!-- Sandbox limits: how much a new workspace can do before going live.
+             Not a per-feature toggle, so it sits alongside rather than inside
+             the feature editor. Individual clients can be given more on their
+             own page. -->
+        <div class="sbx-limits">
+          <h3 class="sbx-title">Sandbox limits</h3>
+          <p class="sbx-sub">What a new workspace can do before it goes live. Raise either for a specific client on their page.</p>
+          <div class="sbx-row">
+            <div class="ad-field">
+              <label>Test calls</label>
+              <input v-model.number="sandboxCallCap" type="number" min="0" class="ad-input" />
+            </div>
+            <div class="ad-field">
+              <label>Live AI agents</label>
+              <input v-model.number="sandboxAgentCap" type="number" min="0" class="ad-input" />
+            </div>
+            <button class="btn btn-signal" :disabled="savingSandbox" @click="saveSandbox">
+              {{ savingSandbox ? 'Saving…' : 'Save limits' }}
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -546,6 +568,30 @@ function resetEmailField() {
   emEdit.subject = ''; emEdit.heading = ''; emEdit.intro = ''; emEdit.body = '';
   saveEmail();
 }
+// Sandbox limits — platform defaults for new workspaces. Per-client overrides
+// live on the client's own page.
+const sandboxCallCap = ref(20);
+const sandboxAgentCap = ref(1);
+const savingSandbox = ref(false);
+async function loadSandboxLimits() {
+  try {
+    const r = await $fetch<any>('/api/admin/settings');
+    if (r?.sandboxCallCap != null) sandboxCallCap.value = r.sandboxCallCap;
+    if (r?.sandboxAgentCap != null) sandboxAgentCap.value = r.sandboxAgentCap;
+  } catch { /* keep defaults */ }
+}
+async function saveSandbox() {
+  savingSandbox.value = true;
+  try {
+    await $fetch('/api/admin/settings', {
+      method: 'POST',
+      body: { sandboxCallCap: sandboxCallCap.value, sandboxAgentCap: sandboxAgentCap.value }
+    });
+  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  finally { savingSandbox.value = false; }
+}
+onMounted(() => { void loadSandboxLimits(); });
+
 async function saveSocial() {
   emSaving.value = true; emSocialSaved.value = false;
   try {
