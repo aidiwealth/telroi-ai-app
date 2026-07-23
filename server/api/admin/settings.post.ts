@@ -136,6 +136,8 @@ export default defineEventHandler(async (event) => {
   // so saving one field never wipes the others.
   if (d.paymentMode) patch.paymentMode = d.paymentMode;
   if (d.otpChannel) patch.otpChannel = d.otpChannel;
+  // Numbers the support workspace should own once the settings are saved.
+  let supportNumbersToBind: string[] = [];
   if (d.supportTelnum !== undefined) patch.supportTelnum = d.supportTelnum || null;
   if (d.sandboxCallCap !== undefined) patch.sandboxCallCap = d.sandboxCallCap;
   if (d.sandboxAgentCap !== undefined) patch.sandboxAgentCap = d.sandboxAgentCap;
@@ -143,6 +145,11 @@ export default defineEventHandler(async (event) => {
     patch.supportNumbersByRegion = d.supportNumbersByRegion;
     // Keep the legacy single field in sync with the NG number for back-compat.
     if (d.supportNumbersByRegion.NG !== undefined) patch.supportTelnum = d.supportNumbersByRegion.NG || null;
+    // A support number is only a label until the support workspace actually owns
+    // it — routing, call logs and AI numbers all key off a subscription. Give it
+    // one, routed to ring whichever support agents are online.
+    supportNumbersToBind = [d.supportNumbersByRegion.NG, d.supportNumbersByRegion.INTL]
+      .filter((x): x is string => !!x && x.trim().length > 2);
   }
   if (d.captchaEnabled !== undefined) patch.captchaEnabled = d.captchaEnabled;
   if (d.captchaProvider) patch.captchaProvider = d.captchaProvider;
@@ -179,6 +186,38 @@ export default defineEventHandler(async (event) => {
   const [existing] = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
   if (existing) {
     await db.update(schema.platformSettings).set(patch).where(eq(schema.platformSettings.id, 'singleton'));
+  }
+
+  // Give the support workspace real subscriptions for its numbers. Without one a
+  // support number is just a label: inbound calls have no tenant to attribute to,
+  // so they can't ring anyone, can't be logged, and can't carry an AI number.
+  // Routed ring_all so every support agent who is online hears it.
+  if (supportNumbersToBind.length) {
+    try {
+      const { ensureSupportWorkspace } = await import('~/server/utils/support');
+      const ws = await ensureSupportWorkspace();
+      for (const telnum of supportNumbersToBind) {
+        const [existing] = await db.select({ id: schema.numberSubscriptions.id })
+          .from(schema.numberSubscriptions)
+          .where(and(eq(schema.numberSubscriptions.tenantId, ws.tenantId), eq(schema.numberSubscriptions.telnum, telnum)))
+          .limit(1);
+        if (existing) {
+          await db.update(schema.numberSubscriptions)
+            .set({ status: 'active', routeType: 'ring_all' })
+            .where(eq(schema.numberSubscriptions.id, existing.id));
+        } else {
+          const [inv] = await db.select({ provider: schema.numberInventory.provider, region: schema.numberInventory.region })
+            .from(schema.numberInventory).where(eq(schema.numberInventory.telnum, telnum)).limit(1);
+          await db.insert(schema.numberSubscriptions).values({
+            tenantId: ws.tenantId, telnum, status: 'active', routeType: 'ring_all',
+            provider: inv?.provider || 'telroi', region: inv?.region || null,
+            provisionState: 'provisioned', provisionedAt: new Date()
+          });
+        }
+      }
+    } catch (e: any) {
+      console.error('[settings] could not bind support numbers:', e?.message || e);
+    }
   } else {
     await db.insert(schema.platformSettings).values({ id: 'singleton', ...patch });
   }
