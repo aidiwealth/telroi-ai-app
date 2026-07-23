@@ -9,9 +9,6 @@
         <div>
           <h1 class="ad-title">{{ data.tenant.name }}</h1>
           <p class="ad-sub mono">{{ data.tenant.domain }}
-            <span v-if="!data.tenant.sandbox" class="ad-tag on">Live</span>
-            <span v-else class="ad-tag warn">Sandbox</span>
-            <span v-else class="ad-tag on">live on Digitide</span>
             <span class="ad-tag" :class="data.tenant.sandbox ? 'sandbox' : 'mode-live'">{{ data.tenant.sandbox ? 'Sandbox mode' : 'Live mode' }}</span>
           </p>
         </div>
