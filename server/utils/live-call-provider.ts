@@ -1,8 +1,9 @@
 // server/utils/live-call-provider.ts
 // Resolves which voice provider powers a Live Call, and builds the dial intent
 // the media bridge will execute. Selection rules:
-//   1. Admin override (callProvider setting): digidite | telnyx | twilio
-//   2. 'auto' (default): Nigeria -> digidite, everywhere else -> telnyx
+//   1. Admin override (callProvider setting): telroi (our PBX) | telnyx | twilio
+//   2. 'auto' (default): the from-number's own carrier, else our PBX for Nigeria
+//      and Telnyx elsewhere
 // The resolved provider + creds-availability + dial params are returned and
 // recorded on the call. The actual audio bridge runs on live infra.
 import { eq, and, desc } from 'drizzle-orm';
@@ -11,7 +12,7 @@ import { masterCarrierCreds } from './platform';
 import { provisionAgentConfigured } from './provision-agent';
 import { isNigeria } from './countries';
 
-export type VoiceProvider = 'digidite' | 'telnyx' | 'twilio' | 'asterisk';
+export type VoiceProvider = 'telroi' | 'telnyx' | 'twilio';
 
 export interface DialIntent {
   provider: VoiceProvider;
@@ -55,7 +56,7 @@ async function resolveFromNumber(tenantId: string, teamId?: string | null): Prom
 
 export async function resolveLiveCallProvider(opts: {
   tenantId: string;
-  configuredProvider?: string;   // from live_call settings (auto|digidite|telnyx|twilio)
+  configuredProvider?: string;   // from live_call settings (auto|telroi|telnyx|twilio)
   visitorCountry?: string | null;
   teamId?: string | null;
   toRoute?: any;
@@ -71,16 +72,17 @@ export async function resolveLiveCallProvider(opts: {
   const cfg = (opts.configuredProvider || 'auto').toLowerCase();
   const ng = isNigeria(opts.visitorCountry);
 
-  if (cfg === 'asterisk') {
-    // Admin explicitly chose Asterisk (global).
-    provider = 'asterisk'; reason = 'admin override (asterisk)';
-  } else if (cfg === 'digidite' || cfg === 'telnyx' || cfg === 'twilio') {
+  // 'asterisk', 'pbx' and the legacy 'digidite' all mean the same thing now: our
+  // own PBX. Normalize them rather than carrying three names for one system.
+  if (cfg === 'asterisk' || cfg === 'pbx' || cfg === 'digidite') {
+    provider = 'telroi'; reason = `admin override (${cfg})`;
+  } else if (cfg === 'telnyx' || cfg === 'twilio') {
     provider = cfg as VoiceProvider; reason = `admin override (${cfg})`;
   } else {
-    // auto: Nigeria -> Digidite; non-NG -> Telnyx.
-    // If the from-number's own provider is known, prefer that (number already on it).
+    // auto: prefer the from-number's own carrier; else our PBX for Nigeria
+    // (Ruach/Kasooko trunks) and Telnyx elsewhere.
     if (from.provider) { provider = from.provider; reason = `number's carrier (${from.provider})`; }
-    else if (ng) { provider = 'digidite'; reason = 'auto: Nigeria -> Digidite'; }
+    else if (ng) { provider = 'telroi'; reason = 'auto: Nigeria -> our PBX'; }
     else { provider = 'telnyx'; reason = 'auto: non-Nigeria -> Telnyx'; }
   }
 
