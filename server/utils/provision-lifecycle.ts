@@ -9,7 +9,7 @@
 // resource is actually provisioned. Every push is recorded in provisioningEvents.
 import { eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
-import { voiceVendorForCountry, isNigeria } from './countries';
+import { isNigeria } from './countries';
 import { logEvent } from './logs';
 
 async function recordEvent(tenantId: string, resource: string, vendor: string, status: string, detail?: string, resourceRef?: string) {
@@ -26,36 +26,14 @@ export async function provisionOnGoLive(tenantId: string): Promise<{ ok: boolean
   const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
   if (!t) return { ok: false, vendor: 'none', reason: 'tenant_not_found' };
 
-  const vendor = voiceVendorForCountry(t.country);
-
   // Mark provisioning in progress.
   await db.update(schema.tenants).set({ provisionState: 'provisioning', wentLiveAt: t.wentLiveAt || new Date() }).where(eq(schema.tenants.id, tenantId));
 
-  if (vendor === 'digidite') {
-    // Nigeria: create the Digidite account/team now (this is the costly step we
-    // deferred until go-live). Seats/numbers remain lazy.
-    try {
-      const { provisionTenant } = await import('./provisioning');
-      const r = await provisionTenant(tenantId);
-      if (r.ok) {
-        await db.update(schema.tenants).set({ provisionState: 'provisioned' }).where(eq(schema.tenants.id, tenantId));
-        await recordEvent(tenantId, 'tenant_account', 'digidite', 'provisioned', r.domain);
-        await logEvent({ tenantId, kind: 'system', action: 'provision.golive', summary: `Digidite account provisioned (${r.domain})` });
-        return { ok: true, vendor: 'digidite' };
-      }
-      await db.update(schema.tenants).set({ provisionState: 'local' }).where(eq(schema.tenants.id, tenantId));
-      await recordEvent(tenantId, 'tenant_account', 'digidite', 'failed', r.reason);
-      return { ok: false, vendor: 'digidite', reason: r.reason };
-    } catch (e: any) {
-      await db.update(schema.tenants).set({ provisionState: 'local' }).where(eq(schema.tenants.id, tenantId));
-      await recordEvent(tenantId, 'tenant_account', 'digidite', 'failed', e?.message);
-      return { ok: false, vendor: 'digidite', reason: e?.message };
-    }
-  }
-
-  // Non-Nigeria: carrier model. The carrier "account" is Telroi's master account
-  // (no per-tenant account to create) — numbers are provisioned per-number,
-  // lazily on first use (or early by admin). So go-live just marks ready.
+  // Every workspace is carrier-backed: Telroi holds the master carrier accounts
+  // (Ruach and Kasooko for Nigeria, Telnyx and Twilio elsewhere) and numbers are
+  // provisioned per-number, lazily on first use or early by an admin. There is no
+  // per-tenant vendor account to create, so going live just marks the workspace
+  // ready.
   await db.update(schema.tenants).set({ provisionState: 'provisioned' }).where(eq(schema.tenants.id, tenantId));
   await recordEvent(tenantId, 'tenant_account', 'carrier', 'provisioned', 'carrier master account — numbers provisioned per-use');
   await logEvent({ tenantId, kind: 'system', action: 'provision.golive', summary: 'Carrier-backed workspace marked live' });
