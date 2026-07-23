@@ -89,6 +89,19 @@
       <div class="modal card cmp-modal">
         <div class="card-head"><span class="card-title">Activate live mode</span><button class="modal-x" @click="showCompliance = false">✕</button></div>
         <div class="card-pad">
+          <div v-if="sbx" class="cmp-quota">
+            <div class="cmp-quota-row">
+              <span>Test calls</span>
+              <strong :class="{ spent: sbx.callsExhausted }">{{ sbx.callsUsed }} / {{ sbx.callCap }}</strong>
+            </div>
+            <div class="cmp-quota-row">
+              <span>AI numbers</span>
+              <strong :class="{ spent: sbx.agentsExhausted }">{{ sbx.agentsUsed }} / {{ sbx.agentCap }}</strong>
+            </div>
+            <p v-if="sbx.callsExhausted || sbx.agentsExhausted" class="cmp-quota-note">
+              You've used your sandbox allowance. Going live removes these limits and starts real billing.
+            </p>
+          </div>
           <p class="cmp-lede" v-if="complianceStatus === 'pending'">Your documents are under review. You'll be able to switch to live once approved.</p>
           <template v-else>
             <p class="cmp-lede">Going live requires business verification. Upload your documents to request live access.</p>
@@ -147,6 +160,7 @@ const wsOpen = ref(false);
 const dialerOpen = ref(false);
 const env = ref<'live' | 'sandbox'>('sandbox');
 const envBusy = ref(false);
+const sbx = ref<any | null>(null);
 onMounted(() => {
   if (import.meta.client) {
     const saved = localStorage.getItem('telroi_env');
@@ -223,6 +237,9 @@ async function onEnvClick() {
   try {
     const r = await $fetch<{ compliance: any }>('/api/compliance');
     complianceStatus.value = r.compliance?.status || null;
+    // Where they stand on the sandbox allowance — makes the reason to go live
+    // concrete rather than abstract.
+    try { sbx.value = (await $fetch<any>('/api/go-live'))?.sandbox || null; } catch { sbx.value = null; }
     if (r.compliance?.status === 'approved') { await setEnv('live'); return; }
     // Not approved — open the gate.
     showCompliance.value = true;
@@ -344,6 +361,11 @@ const vClickOutside = {
 .modal { width: 100%; max-width: 460px; background: var(--paper); }
 .modal-x { color: var(--ink-mute); }
 .cmp-lede { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 18px; line-height: 1.5; }
+.cmp-quota { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; }
+.cmp-quota-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--ink-soft); padding: 3px 0; }
+.cmp-quota-row strong { font-size: 13.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cmp-quota-row strong.spent { color: var(--danger, #d1435b); }
+.cmp-quota-note { font-size: 12px; color: var(--ink-soft); margin: 8px 0 0; line-height: 1.5; }
 .cmp-file-label { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .cmp-req { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--danger); background: rgba(192,57,43,0.08); padding: 1px 6px; border-radius: 999px; font-weight: 600; }
 .cmp-opt { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-mute); background: var(--paper-3); padding: 1px 6px; border-radius: 999px; font-weight: 500; }
