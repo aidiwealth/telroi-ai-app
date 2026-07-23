@@ -4,10 +4,30 @@
     <div class="signin-card card">
       <!-- Step: email -->
       <template v-if="phase === 'email'">
-        <div class="kicker">Welcome</div>
-        <p class="signin-lede">Enter your email and we'll send you a magic link and a one-time code. No password needed.</p>
+        <div class="mode-switch" role="tablist">
+          <button type="button" class="mode-tab" :class="{ on: mode === 'signin' }" role="tab" :aria-selected="mode === 'signin'" @click="switchMode('signin')">Sign in</button>
+          <button type="button" class="mode-tab" :class="{ on: mode === 'signup' }" role="tab" :aria-selected="mode === 'signup'" @click="switchMode('signup')">Create account</button>
+        </div>
 
-        <form @submit.prevent="requestLink">
+        <div class="kicker">{{ mode === 'signin' ? 'Welcome back' : 'Get started' }}</div>
+        <p class="signin-lede">
+          {{ mode === 'signin'
+            ? "Enter the email you signed up with and we'll send a magic link and a one-time code. No password needed."
+            : "Enter your work email and we'll send a magic link and a one-time code to set up your workspace. No password needed." }}
+        </p>
+
+        <!-- Signing in with an address that has no account: say so, and offer the
+             one action that helps rather than a generic failure. -->
+        <div v-if="noAccount" class="no-account">
+          <p class="no-account-title">No account with that email</p>
+          <p class="no-account-body">We couldn't find <strong>{{ email }}</strong>. Create an account with it, or try a different address.</p>
+          <button type="button" class="btn btn-signal btn-block" @click="switchMode('signup'); requestLink()">
+            Create an account with this email →
+          </button>
+          <button type="button" class="no-account-alt" @click="noAccount = false">Use a different email</button>
+        </div>
+
+        <form v-else @submit.prevent="requestLink">
           <div class="field-float" :class="{ 'is-error': error }">
             <input id="email" v-model="email" type="email" class="input" placeholder=" " required autofocus />
             <label for="email">Work email</label>
@@ -15,7 +35,7 @@
           </div>
           <div v-show="cap.enabled.value" id="captcha-widget" class="captcha-widget"></div>
           <button class="btn btn-signal btn-block" :disabled="busy">
-            {{ busy ? 'Sending…' : 'Continue' }} <span v-if="!busy" class="arrow">→</span>
+            {{ busy ? 'Sending…' : (mode === 'signin' ? 'Sign in' : 'Create account') }} <span v-if="!busy" class="arrow">→</span>
           </button>
         </form>
       </template>
@@ -75,6 +95,14 @@ const otp = ref<string[]>(['', '', '', '', '', '']);
 const otpEls = ref<HTMLInputElement[]>([]);
 const busy = ref(false);
 const error = ref('');
+// Sign in and sign up share this form: same fields, different expectations.
+// Signing in asserts the account already exists, so an unknown address stops
+// here rather than mailing a code that would quietly create one.
+const mode = ref<'signin' | 'signup'>('signin');
+const noAccount = ref(false);
+function switchMode(next: 'signin' | 'signup') {
+  mode.value = next; error.value = ''; noAccount.value = false;
+}
 const cooldown = ref(0);
 
 // Surface magic-link errors passed back via query
@@ -93,13 +121,18 @@ async function requestLink() {
   if (cap.enabled.value && !cap.token.value) { error.value = 'Please complete the verification challenge.'; return; }
   busy.value = true;
   try {
-    await api.post('/api/auth/request', { email: email.value, captchaToken: cap.token.value || undefined });
+    await api.post('/api/auth/request', { email: email.value, captchaToken: cap.token.value || undefined, intent: mode.value });
     phase.value = 'code';
     startCooldown();
     await nextTick();
     otpEls.value[0]?.focus();
   } catch (e: any) {
-    error.value = e.message;
+    // Not an error to apologise for — they just don't have an account yet.
+    if (e?.data?.error?.code === 'no_account' || e?.data?.code === 'no_account') {
+      noAccount.value = true;
+    } else {
+      error.value = e.message;
+    }
     if (cap.enabled.value) cap.reset();
   } finally {
     busy.value = false;
@@ -149,6 +182,14 @@ function reset() {
 .signin-logo { height: 30px; display: block; margin: 0 auto 26px; }
 .signin-card { padding: 36px 36px 32px; width: 100%; }
 .signin-card h1 { font-size: 30px; line-height: 1.1; margin-bottom: 12px; }
+.mode-switch { display: flex; gap: 4px; background: var(--surface-2, rgba(0,0,0,0.04)); border-radius: 10px; padding: 4px; margin-bottom: 22px; }
+.mode-tab { flex: 1; border: 0; background: transparent; border-radius: 7px; padding: 8px 10px; font-size: 13.5px; font-weight: 500; color: var(--ink-soft); cursor: pointer; transition: background .15s, color .15s; }
+.mode-tab.on { background: var(--surface, #fff); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+.no-account { border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.no-account-title { font-size: 15px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
+.no-account-body { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; margin: 0 0 16px; }
+.no-account-alt { display: block; width: 100%; margin-top: 10px; border: 0; background: none; font-size: 13px; color: var(--ink-soft); cursor: pointer; padding: 6px; }
+.no-account-alt:hover { color: var(--ink); }
 .signin-lede { color: var(--ink-soft); font-size: 14.5px; line-height: 1.55; margin-bottom: 26px; }
 .signin-lede strong { color: var(--ink); font-weight: 500; }
 
