@@ -21,6 +21,10 @@ export const planEnum = pgEnum('plan', ['startup', 'growth', 'custom']);
    at the platform level, encrypted — never duplicated per tenant. */
 export const platformSettings = pgTable('platform_settings', {
   id: text('id').primaryKey().default('singleton'), // enforce one row
+  // Sandbox limits every new workspace gets. A tenant can override these on its
+  // own row; null there means "use whatever is set here".
+  sandboxCallCap: integer('sandbox_call_cap').notNull().default(20),
+  sandboxAgentCap: integer('sandbox_agent_cap').notNull().default(1),
   operatorDomain: text('operator_domain'),           // the single Digidite account domain (provisioning + NG carrier)
   operatorApiKeyEnc: text('operator_api_key_enc'),   // AES-256-GCM
   operatorUsername: text('operator_username'),        // Digidite operator login (Basic auth)
@@ -211,6 +215,9 @@ export const tenants = pgTable('tenants', {
   // simulated (no real charges, no external calls) so the client can safely
   // explore. Server-enforced — the dashboard toggle writes here.
   sandboxMode: boolean('sandbox_mode').notNull().default(true),
+  // Null = inherit the platform default. Set per-client to extend a trial.
+  sandboxCallCap: integer('sandbox_call_cap'),
+  sandboxAgentCap: integer('sandbox_agent_cap'),
   // Internal Telroi workspaces (e.g. the support/CS calling workspace) are NOT
   // customers — excluded from the admin client list, counts and plan filters.
   isInternal: boolean('is_internal').notNull().default(false),
