@@ -159,7 +159,7 @@
             <div class="ad-field"><label>Password {{ digSipPwSet ? '· set, leave blank to keep' : '' }}</label>
               <input v-model="digSipPassword" class="ad-input mono" type="password" :placeholder="digSipPwSet ? '••••••••' : 'SIP password'" />
             </div>
-            <button class="btn btn-signal btn-sm" :disabled="savingDigSip" @click="saveDigiditeSip">{{ savingDigSip ? 'Saving…' : 'Save SIP account' }}</button>
+            <button class="btn btn-signal btn-sm" :disabled="savingDigSip" @click="saveSipAccount">{{ savingDigSip ? 'Saving…' : 'Save SIP account' }}</button>
             <span v-if="digSipMsg" class="ad-hint" style="margin-left:8px">{{ digSipMsg }}</span>
           </div>
         </section>
@@ -653,19 +653,19 @@ async function saveSipVendors(clear: boolean) {
   } catch (e: any) { alert(e?.data?.error?.message || 'Could not save'); }
   finally { savingSip.value = false; }
 }
-async function loadDigiditeSip() {
+async function loadSipAccount() {
   try {
-    const r = await $fetch<any>(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}/digidite-sip`);
+    const r = await $fetch<any>(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}/sip-account`);
     digSipHost.value = r.host || ''; digSipAuthId.value = r.authId || ''; digSipPwSet.value = !!r.passwordSet;
   } catch { /* */ }
 }
-async function saveDigiditeSip() {
+async function saveSipAccount() {
   savingDigSip.value = true; digSipMsg.value = '';
   try {
-    await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}/digidite-sip`, {
+    await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}/sip-account`, {
       method: 'POST', body: { host: digSipHost.value, authId: digSipAuthId.value, password: digSipPassword.value }
     });
-    digSipPassword.value = ''; digSipMsg.value = '✓ Saved'; await loadDigiditeSip();
+    digSipPassword.value = ''; digSipMsg.value = '✓ Saved'; await loadSipAccount();
   } catch (e: any) { digSipMsg.value = e?.data?.error?.message || 'Could not save'; }
   finally { savingDigSip.value = false; }
 }

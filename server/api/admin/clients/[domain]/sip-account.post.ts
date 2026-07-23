@@ -1,5 +1,5 @@
-// POST /api/admin/clients/:domain/digidite-sip { host, authId, password }
-// Sets the client-specific Digidite SIP account. Superadmin only. Blank password
+// POST /api/admin/clients/:domain/sip-account { host, authId, password }
+// Sets the client-specific manual SIP account. Superadmin only. Blank password
 // keeps the existing one. Stored encrypted as JSON {host, authId, password}.
 import { z } from 'zod';
 import { eq, or } from 'drizzle-orm';
@@ -32,6 +32,6 @@ export default defineEventHandler(async (event) => {
     password: p.data.password ? p.data.password : (existing.password ?? '')
   };
   await db.update(schema.tenants).set({ tenantDigiditeSipEnc: encrypt(JSON.stringify(next)) }).where(eq(schema.tenants.id, tenant.id));
-  await logEvent({ tenantId: tenant.id, kind: 'system', action: 'admin.digidite_sip', summary: `${admin.email} updated Digidite SIP account` });
+  await logEvent({ tenantId: tenant.id, kind: 'system', action: 'admin.sip_account', summary: `${admin.email} updated manual SIP account` });
   return { ok: true };
 });

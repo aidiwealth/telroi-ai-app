@@ -1,4 +1,4 @@
-// GET /api/admin/clients/:domain/digidite-sip -> client-specific Digidite SIP
+// GET /api/admin/clients/:domain/sip-account -> the client's manually-entered SIP
 // account (host + auth id; password never returned, only whether it's set).
 import { eq, or } from 'drizzle-orm';
 import { requirePlatformAdmin } from '~/server/utils/platform';
