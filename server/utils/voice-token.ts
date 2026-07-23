@@ -34,23 +34,25 @@ export async function twilioVoiceToken(identity: string) {
 // ── Telnyx WebRTC: on-demand JWT via Telnyx API using the SIP connection ──
 // Telnyx issues a telephony credential token from a programmable credential.
 // We create/refresh a token from the connection's credential via their API.
-export async function telnyxVoiceToken() {
+export async function telnyxVoiceToken(preferredCallerId?: string | null) {
   const { telnyx } = await voiceCredentials();
   if (!telnyx) throw new Error('Telnyx Voice not configured');
   // Telnyx WebRTC clients can log in directly with the SIP credential
   // (username/password) OR a short-lived JWT. We return the credential login the
   // @telnyx/webrtc SDK accepts, plus connection metadata.
-  // Caller ID comes from the single support-number source of truth (Settings ->
-  // support number by region), NOT from a number hardcoded on the WebRTC card.
-  // This keeps admin WebRTC from tying itself to any one number — the dedicated
-  // support number determines the outbound caller ID. Falls back to the card's
-  // callerId only if no support number is configured.
-  let callerId = telnyx.callerId || '';
-  try {
-    const { supportNumberForCountry } = await import('./support-numbers');
-    const support = await supportNumberForCountry('INTL');
-    if (support) callerId = support;
-  } catch { /* fall back to card callerId */ }
+  // Caller ID: whoever is placing the call decides. The client dialer passes the
+  // number the user picked, and that wins — they chose it. Admin support passes
+  // nothing, so it falls back to the dedicated support number (Settings ->
+  // support number by region) rather than pinning itself to whatever sits on the
+  // WebRTC card.
+  let callerId = preferredCallerId || telnyx.callerId || '';
+  if (!preferredCallerId) {
+    try {
+      const { supportNumberForCountry } = await import('./support-numbers');
+      const support = await supportNumberForCountry('INTL');
+      if (support) callerId = support;
+    } catch { /* fall back to card callerId */ }
+  }
   return {
     provider: 'telnyx',
     login: telnyx.sipUsername,
@@ -89,9 +91,9 @@ export async function asteriskVoiceToken(identity: string) {
 }
 
 
-export async function voiceTokenFor(provider: string, identity: string) {
+export async function voiceTokenFor(provider: string, identity: string, preferredCallerId?: string | null) {
   if (provider === 'twilio') return await twilioVoiceToken(identity);
-  if (provider === 'telnyx') return await telnyxVoiceToken();
+  if (provider === 'telnyx') return await telnyxVoiceToken(preferredCallerId);
   if (provider === 'telroi' || provider === 'asterisk') return await asteriskVoiceToken(identity);
   throw new Error(`Unknown voice provider: ${provider}`);
 }

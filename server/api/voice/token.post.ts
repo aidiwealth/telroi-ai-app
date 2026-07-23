@@ -37,7 +37,8 @@ export default defineEventHandler(async (event) => {
   } catch { /* no prefix -> default routing */ }
 
   try {
-    const tok = await voiceTokenFor(dial.provider, `tenant_${s.tenantId}_${s.userId}`);
+    // The number the dialer selected is the caller ID — the user picked it.
+    const tok = await voiceTokenFor(dial.provider, `tenant_${s.tenantId}_${s.userId}`, dial.fromNumber);
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready, dialPrefix };
   } catch (e: any) {
     throw apiError('voice_not_configured', e?.message || 'Voice provider not configured', 503);
