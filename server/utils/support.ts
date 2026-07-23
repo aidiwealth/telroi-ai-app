@@ -6,7 +6,6 @@
 import { eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 import { platformSettings } from './platform';
-import { provisionTenant } from './provisioning';
 import { getOrCreateWallet } from './wallet';
 
 export interface SupportWorkspace {
@@ -65,9 +64,13 @@ export async function ensureSupportWorkspace(): Promise<SupportWorkspace> {
     .set({ supportTenantId: tenant.id })
     .where(eq(schema.platformSettings.id, 'singleton'));
 
-  // Best-effort provision so support can place calls immediately.
-  try { await provisionTenant(tenant.id); } catch { /* operator may be unconfigured; retry later */ }
+  // Mark it ready so support can place calls immediately. There is no external
+  // account to create — every workspace runs on our own PBX behind the master
+  // carrier accounts — so this is just the state flag.
+  await db.update(schema.tenants)
+    .set({ provisionState: 'provisioned', wentLiveAt: tenant.wentLiveAt || new Date() })
+    .where(eq(schema.tenants.id, tenant.id));
 
   const [fresh] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenant.id)).limit(1);
-  return { tenantId: tenant.id, telnum: settings?.supportTelnum || null, provisioned: !!(fresh?.telroiDomain && fresh?.telroiApiKeyEnc) };
+  return { tenantId: tenant.id, telnum: settings?.supportTelnum || null, provisioned: fresh?.provisionState === 'provisioned' };
 }
