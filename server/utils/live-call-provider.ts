@@ -23,7 +23,7 @@ export interface DialIntent {
 
 // Map our schema's provider naming: 'telroi' is our own Asterisk PBX.
 function normalize(p: string): VoiceProvider {
-  if (p === 'telroi' || p === 'digidite' || p === 'pbx' || p === 'asterisk' || p === 'ruach' || p === 'sotel' || p === 'kasooko') return 'telroi';
+  if (p === 'telroi' || p === 'pbx' || p === 'asterisk' || p === 'ruach' || p === 'sotel' || p === 'kasooko') return 'telroi';
   if (p === 'telnyx') return 'telnyx';
   if (p === 'twilio') return 'twilio';
   return 'telnyx';
@@ -88,10 +88,12 @@ export async function resolveLiveCallProvider(opts: {
   let ready = false;
   try {
     const creds = await masterCarrierCreds();
-    if (provider === 'digidite') ready = !!creds?.telroiPbx;
+    // normalize() only ever yields telroi | telnyx | twilio. The old chain tested
+    // 'digidite' and 'asterisk' — neither of which it can return — so a call on
+    // our own PBX matched nothing and was always reported as not ready.
+    if (provider === 'telroi') { const c = await voiceCredentials(); ready = !!c?.asterisk?.sipGateway; }
     else if (provider === 'telnyx') ready = !!creds?.telnyx;
     else if (provider === 'twilio') ready = !!creds?.twilio;
-    else if (provider === 'asterisk') { const c = await voiceCredentials(); ready = !!c?.asterisk?.sipGateway; }
   } catch { ready = false; }
 
   return { provider, ready, fromNumber: from.telnum, toRoute: opts.toRoute || null, reason };

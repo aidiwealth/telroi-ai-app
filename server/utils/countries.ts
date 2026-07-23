@@ -36,12 +36,6 @@ export function currencyForCountry(country?: string | null): 'NGN' | 'USD' {
   return countryProfile(country).currency;
 }
 
-// Which voice vendor powers a given country. Nigeria runs on Digidite (the PBX);
-// everywhere else uses a carrier (Twilio/Telnyx) provisioned by an admin. This
-// drives the provision-on-go-live routing: NG -> digidite, others -> carrier.
-export function voiceVendorForCountry(country?: string | null): 'digidite' | 'carrier' {
-  return countryProfile(country).region === 'NG' ? 'digidite' : 'carrier';
-}
 export function isNigeria(country?: string | null): boolean {
   return countryProfile(country).region === 'NG';
 }
