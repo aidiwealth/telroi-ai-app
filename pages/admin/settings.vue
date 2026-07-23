@@ -304,7 +304,7 @@
           <div class="ad-field"><label>Telnyx public key (signature verification){{ wh.secretsSet.telnyx ? ' — set' : '' }}</label><input v-model="wh.telnyxSecret" class="ad-input mono" :placeholder="wh.secretsSet.telnyx ? '•••••• (leave blank to keep)' : 'base64 public key'" /></div>
         </div>
         <div class="wh-row">
-          <div class="wh-head"><span class="wh-name">PBX (Digidite)</span><label class="wh-toggle"><input type="checkbox" v-model="wh.enabled.pbx" /> Enabled</label></div>
+          <div class="wh-head"><span class="wh-name">PBX</span><label class="wh-toggle"><input type="checkbox" v-model="wh.enabled.pbx" /> Enabled</label></div>
           <div class="wh-url"><input class="ad-input mono" :value="wh.urls.pbx" readonly /><button class="btn btn-ghost btn-sm" @click="copy(wh.urls.pbx)">Copy</button></div>
           <div class="ad-field"><label>Shared secret (sent as X-Telroi-Pbx-Secret){{ wh.secretsSet.pbx ? ' — set' : '' }}</label><input v-model="wh.pbxSecret" class="ad-input mono" :placeholder="wh.secretsSet.pbx ? '•••••• (leave blank to keep)' : 'a long random string'" /></div>
         </div>
