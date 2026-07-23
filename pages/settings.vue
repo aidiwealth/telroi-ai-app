@@ -276,7 +276,7 @@ const appBase = useRuntimeConfig().public.appBaseUrl;
 const tabs = [
   { id: 'plan', label: 'Plan' },
   { id: 'billing', label: 'Billing' },
-  { id: 'workspace', label: 'Workspace' },
+  { id: 'workspace', label: 'Workspace & account' },
   { id: 'webhooks', label: 'Webhooks' },
   { id: 'team', label: 'Members' },
   { id: 'compliance', label: 'Compliance' }
