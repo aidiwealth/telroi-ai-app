@@ -69,6 +69,8 @@ export default defineEventHandler(async (event) => {
   const __payload = {
     tenant: { id: tid, name: tenant.name, slug: tenant.slug, domain: `${tenant.slug}.telroi.ai`, provisioned: tenant.provisionState === 'provisioned', createdAt: tenant.createdAt,
       plan: tenant.plan, trialPlan: tenant.trialPlan, trialEndsAt: tenant.trialEndsAt, trialDays: tenant.trialDays,
+      // null means this client inherits the platform sandbox defaults.
+      sandboxCallCap: tenant.sandboxCallCap, sandboxAgentCap: tenant.sandboxAgentCap,
       paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null, requiresProvisioning: requiresProvisioning(tenant.country) },
     wallet: wallet ? { balanceMinor: wallet.balanceMinor, currency: wallet.currency, plan: wallet.plan } : null,
     numbers: subs.map((n) => ({ id: n.id, telnum: n.telnum, region: n.region, provider: n.provider, channels: n.channels, status: n.status, departmentId: n.departmentId })),

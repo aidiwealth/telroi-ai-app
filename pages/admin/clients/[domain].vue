@@ -306,6 +306,19 @@
           <button class="btn btn-ghost btn-sm" :disabled="planBusy" @click="startTrial">Start {{ planForm.trialDays }}-day trial</button>
         </div>
         <p class="ad-none" v-if="data.tenant.trialEndsAt" style="margin-top:10px">Trial active until {{ fmtDate(data.tenant.trialEndsAt) }} ({{ data.tenant.trialPlan }}).</p>
+
+        <!-- Sandbox allowances. Blank inherits the platform default, so an
+             operator can extend one client's trial without moving everyone's. -->
+        <div class="ad-adjust-row" style="margin-top:14px">
+          <label class="ad-ovr"><span>Sandbox test calls</span>
+            <input v-model="capForm.calls" class="ad-ctl" type="number" min="0" placeholder="platform default" />
+          </label>
+          <label class="ad-ovr"><span>Sandbox AI numbers</span>
+            <input v-model="capForm.agents" class="ad-ctl" type="number" min="0" placeholder="platform default" />
+          </label>
+          <button class="btn btn-signal btn-sm" :disabled="capBusy" @click="saveCaps">{{ capBusy ? '…' : 'Set limits' }}</button>
+        </div>
+        <p class="ad-none" style="margin-top:8px">Leave blank to use the platform defaults from Settings → Telroi One. Limits only apply while the workspace is in sandbox.</p>
       </section>
 
       <!-- Payment gateway override -->
@@ -737,6 +750,30 @@ async function loadPlan() {
     featureList.value = cat.features.map((f: any) => ({ key: f.key, label: f.label }));
   } catch { /* */ }
 }
+// Sandbox allowances for this one client. An empty field clears the override, so
+// they go back to whatever the platform default is rather than being pinned to a
+// number that was right once.
+const capForm = ref<{ calls: string | number; agents: string | number }>({ calls: '', agents: '' });
+const capBusy = ref(false);
+async function saveCaps() {
+  const tid = data.value?.tenant?.id;
+  capBusy.value = true;
+  try {
+    const toVal = (v: string | number) => (v === '' || v === null ? null : Number(v));
+    await $fetch(`/api/admin/plan/${tid}`, {
+      method: 'POST',
+      body: { sandboxCallCap: toVal(capForm.value.calls), sandboxAgentCap: toVal(capForm.value.agents) }
+    });
+    data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
+    syncCapForm();
+  } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }
+  finally { capBusy.value = false; }
+}
+function syncCapForm() {
+  capForm.value.calls = data.value?.tenant?.sandboxCallCap ?? '';
+  capForm.value.agents = data.value?.tenant?.sandboxAgentCap ?? '';
+}
+
 async function savePlan() {
   const tid = data.value?.tenant?.id;
   planBusy.value = true;
@@ -823,6 +860,7 @@ onMounted(async () => {
   try {
     data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
     countryEdit.value = data.value?.tenant?.country || '';
+    syncCapForm();
     await loadWallet();
     await loadPlan();
     await loadSipVendors();

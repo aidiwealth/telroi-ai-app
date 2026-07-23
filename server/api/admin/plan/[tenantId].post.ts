@@ -10,7 +10,11 @@ const Body = z.object({
   trialDays: z.number().int().refine((n) => [7, 14, 30].includes(n), 'trialDays must be 7, 14 or 30').optional(),
   startTrial: z.boolean().optional(),  // (re)start a growth trial of trialDays length
   // Per-client payment gateway override. 'default' clears it (use platform default).
-  paymentProvider: z.enum(['default', 'stripe', 'paystack', 'monnify']).optional()
+  paymentProvider: z.enum(['default', 'stripe', 'paystack', 'monnify']).optional(),
+  // Sandbox allowances for this client. null clears the override so they inherit
+  // the platform default set under Settings -> Telroi One.
+  sandboxCallCap: z.number().int().min(0).nullable().optional(),
+  sandboxAgentCap: z.number().int().min(0).nullable().optional()
 });
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
@@ -23,6 +27,8 @@ export default defineEventHandler(async (event) => {
   if (!t) throw apiError('not_found', 'Workspace not found', 404);
 
   const patch: any = {};
+  if (p.data.sandboxCallCap !== undefined) patch.sandboxCallCap = p.data.sandboxCallCap;
+  if (p.data.sandboxAgentCap !== undefined) patch.sandboxAgentCap = p.data.sandboxAgentCap;
   if (p.data.trialDays) patch.trialDays = p.data.trialDays;
   if (p.data.plan) { patch.plan = p.data.plan; patch.trialPlan = null; patch.trialEndsAt = null; }
   if (p.data.startTrial) {
