@@ -6,9 +6,14 @@
 // numbers. Limits come from platform_settings, and a tenant row can override
 // either to extend a specific trial without changing everyone's.
 //
-// Usage is counted from call_events rather than a counter column — a counter
-// drifts the moment a write fails or someone edits the DB by hand, and this gates
-// billing, so it needs to be right rather than fast.
+// Usage is counted live rather than from a counter column — a counter drifts the
+// moment a write fails or someone edits the DB by hand, and this gates billing.
+//
+// What counts as a test call: AI-handled conversations, either direction. That's
+// the thing being trialled and the thing that costs us money (STT/LLM/TTS).
+// Calls answered by a human or an IVR stay unlimited — a prospect shouldn't have
+// their trial consumed by customers ringing in, and blocking those would make the
+// product look broken rather than limited.
 import { and, count, eq, isNull, sql } from 'drizzle-orm';
 import { useDb, schema } from '~/server/db';
 
@@ -51,9 +56,10 @@ export async function sandboxStatus(tenantId: string): Promise<SandboxStatus> {
     };
   }
 
-  const [calls] = await db.select({ n: count() })
-    .from(schema.callEvents)
-    .where(eq(schema.callEvents.tenantId, tenantId));
+  // Distinct call ids, not rows — the brain writes a usage row per turn.
+  const [calls] = await db.select({ n: sql<number>`count(distinct ${schema.aiUsage.callId})::int` })
+    .from(schema.aiUsage)
+    .where(eq(schema.aiUsage.tenantId, tenantId));
 
   const [agents] = await db.select({ n: count() })
     .from(schema.vans)

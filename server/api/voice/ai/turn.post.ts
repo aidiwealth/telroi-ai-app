@@ -31,6 +31,20 @@ export default defineEventHandler(async (event) => {
     return { reply: msg, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history, action: 'hangup' };
   }
 
+  // Sandbox workspaces get a fixed number of AI conversations to prove the product
+  // works. Checked only on the first turn: a call either starts or it doesn't, so
+  // nobody gets cut off mid-sentence when the cap lands during a conversation.
+  if (first) {
+    const { sandboxStatus } = await import('~/server/utils/sandbox-limits');
+    const sbx = await sandboxStatus(tenantId).catch(() => null);
+    if (sbx?.sandbox && sbx.callsExhausted) {
+      const msg = 'This number is still in trial mode and has used all of its test calls. Please try again later.';
+      const tts = await ttsSynthesize(tenantId, agent.ttsConnId, msg, { language: agent.language }, agent.tier === 'managed').catch(() => null);
+      console.warn(`[turn] sandbox call cap reached for tenant ${tenantId} (${sbx.callsUsed}/${sbx.callCap})`);
+      return { reply: msg, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [], action: 'hangup' };
+    }
+  }
+
   const history: ChatMessage[] = Array.isArray(body.history) ? body.history : [];
 
   if (first) {

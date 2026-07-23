@@ -15,6 +15,16 @@ const Body = z.object({
 });
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
+  // Sandbox workspaces get a limited number of live AI agents — enough to prove
+  // the product works, not enough to run on. Checked before the entitlement gate
+  // so the caller gets the more useful of the two messages.
+  const { sandboxStatus } = await import('~/server/utils/sandbox-limits');
+  const sbx = await sandboxStatus(s.tenantId);
+  if (sbx.sandbox && sbx.agentsExhausted) {
+    throw apiError('sandbox_limit',
+      `Sandbox workspaces can run ${sbx.agentCap} live AI number${sbx.agentCap === 1 ? '' : 's'}. Go live to add more.`, 403);
+  }
+
   const { aiActive } = await import('~/server/utils/entitlements');
   const gate = await aiActive(s.tenantId);
   if (!gate.ok) throw apiError('forbidden', 'AI features require an active subscription. Choose a plan to enable AI.', 403);
