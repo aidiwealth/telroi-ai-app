@@ -23,7 +23,9 @@ export default defineEventHandler(async (event) => {
     // asteriskVoiceToken reads the identity as tenant_<tenantId>_<userId> to find
     // this person's own endpoint — a bare 'support_x' left it looking up a tenant
     // that doesn't exist, so it never found the endpoint we made for them.
-    const tok = await voiceTokenFor(dial.provider, `tenant_${ws.tenantId}_${(admin as any).id || 'agent'}`);
+    const ident = `tenant_${ws.tenantId}_${(admin as any).id || 'agent'}`;
+    console.log('[support-token] 4b calling voiceTokenFor', dial.provider, ident);
+    const tok = await voiceTokenFor(dial.provider, ident);
     console.log('[support-token] 5 token ok');
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready };
   } catch (e: any) {
