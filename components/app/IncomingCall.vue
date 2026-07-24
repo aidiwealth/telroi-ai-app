@@ -45,6 +45,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+
+// Which token endpoint registers this browser to receive calls. Clients use
+// their own workspace's; admins pass the support one so support calls ring them.
+const props = withDefaults(defineProps<{ tokenEndpoint?: string }>(), {
+  tokenEndpoint: '/api/voice/token'
+});
+
 const voice = useVoiceCall();
 const ringtone = useRingtone();
 const callActive = useCallActive();
@@ -84,7 +91,7 @@ function endActive() {
 
 onMounted(async () => {
   if (!import.meta.client) return;
-  try { await voice.startReceiving({ tokenEndpoint: '/api/voice/token' }); } catch { /* optional */ }
+  try { await voice.startReceiving({ tokenEndpoint: props.tokenEndpoint }); } catch { /* optional */ }
 });
 
 onUnmounted(() => {

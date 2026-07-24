@@ -21,6 +21,9 @@
       </div>
     </div>
     <CopilotDock api-base="/api/copilot/admin" />
+    <!-- Support calls ring here: the browser registers against the support
+         workspace so ring_all can reach whichever admins are online. -->
+    <IncomingCall token-endpoint="/api/admin/support/voice-token" />
     <AdminTasks />
     <IdleLogout mode="admin" />
     <TourGuide />
