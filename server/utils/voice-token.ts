@@ -85,9 +85,12 @@ export async function asteriskVoiceToken(identity: string) {
       statusCode: 409, data: { error: { code: 'webrtc_not_provisioned' } }
     });
   }
+  console.log('[ast-token] found endpoint', ep.sipUsername, 'hasSecret', !!ep.secretEnc);
   const sipDomain = process.env.SIP_DOMAIN || DEFAULT_SIP_DOMAIN;
   const wsServer = (useRuntimeConfig().public as any)?.sipWsServer || `wss://${sipDomain}:8089/ws`;
-  return { provider: 'telroi', sipUsername: ep.sipUsername, sipPassword: decrypt(ep.secretEnc!), sipDomain, wsServer };
+  const pw = decrypt(ep.secretEnc!);
+  console.log('[ast-token] decrypted ok, len', pw.length);
+  return { provider: 'telroi', sipUsername: ep.sipUsername, sipPassword: pw, sipDomain, wsServer };
 }
 
 
