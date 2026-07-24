@@ -758,6 +758,14 @@ async function saveSupport() {
   savingSupport.value = true; savedSupport.value = false;
   try {
     await $fetch('/api/admin/settings', { method: 'POST', body: { supportNumbersByRegion: { NG: supportRegion.NG || '', INTL: supportRegion.INTL || '' } } });
+    // Storing the choice isn't enough — the support workspace has to own the
+    // number before inbound calls can ring anyone or be logged against it.
+    // Reported separately so a binding problem doesn't look like a failed save.
+    const toBind = [supportRegion.NG, supportRegion.INTL].filter((x) => !!x && x.length > 2);
+    for (const telnum of toBind) {
+      try { await $fetch('/api/admin/support/bind-number', { method: 'POST', body: { telnum } }); }
+      catch (e: any) { alert(`Saved, but ${telnum} could not be attached to the support workspace: ${e?.data?.error?.message || e?.message || 'unknown error'}`); }
+    }
     await loadSupport();
     savedSupport.value = true;
   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
