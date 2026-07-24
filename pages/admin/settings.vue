@@ -833,7 +833,10 @@ onMounted(async () => {
     try {
       const all = await $fetch<any>('/api/admin/carrier/numbers');
       // All assignable support numbers — NG and international (Twilio/Telnyx).
-      supportNumbers.value = (all.numbers || []).filter((n: any) => ['telroi', 'twilio', 'telnyx'].includes(n.provider));
+      // Every number we hold is callable — the trunk behind it (ruach, kasooko,
+      // sotel) doesn't change that. Filtering to a few provider names dropped the
+      // Nigerian numbers before the region split below could ever see them.
+      supportNumbers.value = all.numbers || [];
     } catch { /* */ }
     paymentMode.value = s.paymentMode || 'test';
     otpChannel.value = s.otpChannel || 'resend';
