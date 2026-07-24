@@ -618,8 +618,11 @@ const saved = ref(false);
 const cfg = ref<any>({});
 const supportNumbers = ref<{ telnum: string; region: string; provider: string }[]>([]);
 const supportRegion = reactive<{ NG: string; INTL: string }>({ NG: '', INTL: '' });
-const supportNumbersNG = computed(() => supportNumbers.value.filter((n) => ['telroi'].includes(n.provider)));
-const supportNumbersINTL = computed(() => supportNumbers.value.filter((n) => !['telroi'].includes(n.provider)));
+// Split by region, not by carrier. Every Nigerian number routes through our own
+// PBX whichever trunk sits behind it (Ruach, Kasooko, Sotel), so filtering on
+// provider put most of them in the international list and left one to choose from.
+const supportNumbersNG = computed(() => supportNumbers.value.filter((n) => n.region === 'NG'));
+const supportNumbersINTL = computed(() => supportNumbers.value.filter((n) => n.region !== 'NG'));
 function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx' } as any)[p] || p; }
 
 // Inbound webhooks config
