@@ -74,7 +74,7 @@ export async function resolveLiveCallProvider(opts: {
 
   // 'asterisk', 'pbx' and the legacy 'digidite' all mean the same thing now: our
   // own PBX. Normalize them rather than carrying three names for one system.
-  if (cfg === 'asterisk' || cfg === 'pbx' || cfg === 'digidite') {
+  if (cfg === 'telroi' || cfg === 'asterisk' || cfg === 'pbx' || cfg === 'digidite') {
     provider = 'telroi'; reason = `admin override (${cfg})`;
   } else if (cfg === 'telnyx' || cfg === 'twilio') {
     provider = cfg as VoiceProvider; reason = `admin override (${cfg})`;
