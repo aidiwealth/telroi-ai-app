@@ -10,5 +10,6 @@ export default defineEventHandler(async (event) => {
   // Only serve when Live Call is enabled for this tenant.
   const { hasFeature } = await import('~/server/utils/entitlements');
   if (!(await hasFeature(t.id, 'crm'))) { setResponseStatus(event, 403); return { error: 'not_enabled' }; }
-  return { ok: true, config: await widgetConfig(t.id) };
+  const { geoFromEvent } = await import('~/server/utils/live-call');
+  return { ok: true, config: await widgetConfig(t.id, geoFromEvent(event).country) };
 });

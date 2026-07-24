@@ -28,6 +28,25 @@ const WIDGET_JS = String.raw`(function () {
   var userPhone = S.getAttribute('data-user-phone') || '';
   // Landing-page visitor vs logged-in user of the client's product.
   var visitorType = userId ? 'user' : 'visitor';
+  // Dial codes for the callback form. Visitors can be anywhere, so this is a
+  // broad list rather than only the countries we route from — the business's own
+  // country is preselected since that is where most of its visitors will be.
+  var DIAL_CODES = [
+    { iso: 'NG', dial: '+234', flag: '\uD83C\uDDF3\uD83C\uDDEC' },
+    { iso: 'US', dial: '+1', flag: '\uD83C\uDDFA\uD83C\uDDF8' },
+    { iso: 'GB', dial: '+44', flag: '\uD83C\uDDEC\uD83C\uDDE7' },
+    { iso: 'GH', dial: '+233', flag: '\uD83C\uDDEC\uD83C\uDDED' },
+    { iso: 'KE', dial: '+254', flag: '\uD83C\uDDF0\uD83C\uDDEA' },
+    { iso: 'ZA', dial: '+27', flag: '\uD83C\uDDFF\uD83C\uDDE6' },
+    { iso: 'EG', dial: '+20', flag: '\uD83C\uDDEA\uD83C\uDDEC' },
+    { iso: 'CA', dial: '+1', flag: '\uD83C\uDDE8\uD83C\uDDE6' },
+    { iso: 'IE', dial: '+353', flag: '\uD83C\uDDEE\uD83C\uDDEA' },
+    { iso: 'FR', dial: '+33', flag: '\uD83C\uDDEB\uD83C\uDDF7' },
+    { iso: 'DE', dial: '+49', flag: '\uD83C\uDDE9\uD83C\uDDEA' },
+    { iso: 'IN', dial: '+91', flag: '\uD83C\uDDEE\uD83C\uDDF3' },
+    { iso: 'AE', dial: '+971', flag: '\uD83C\uDDE6\uD83C\uDDEA' },
+    { iso: 'AU', dial: '+61', flag: '\uD83C\uDDE6\uD83C\uDDFA' }
+  ];
   var cfg = null, sessionId = null;
   var widgetCall = null, callStartedAt = 0, callDuration = 0;
 
@@ -102,20 +121,34 @@ const WIDGET_JS = String.raw`(function () {
       hero.appendChild(orb); hero.appendChild(title); hero.appendChild(sub);
       var row = el('div', 'display:flex;gap:9px;margin-bottom:12px');
       var n = el('input'); n.placeholder = 'Name'; n.value = userName; n.style.cssText = pill(); focusable(n, color);
-      var ph = el('input'); ph.placeholder = 'Number'; ph.value = userPhone; ph.type = 'tel'; ph.style.cssText = pill(); focusable(ph, color);
-      row.appendChild(n); row.appendChild(ph);
+      row.appendChild(n);
+      // Country code alongside the number: a bare local number is ambiguous and
+      // gets dialled in the wrong country. Defaults to the business's own country,
+      // which is where most visitors will be.
+      var row2 = el('div', 'display:flex;gap:9px;margin-bottom:12px');
+      var cc = el('select'); cc.style.cssText = pill() + ';flex:0 0 118px;cursor:pointer'; focusable(cc, color);
+      DIAL_CODES.forEach(function (c) {
+        var o = document.createElement('option');
+        o.value = c.dial; o.textContent = c.flag + ' ' + c.dial;
+        if (c.iso === (cfg.country || 'NG')) o.selected = true;
+        cc.appendChild(o);
+      });
+      var ph = el('input'); ph.placeholder = 'Phone number'; ph.value = userPhone; ph.type = 'tel'; ph.style.cssText = pill(); focusable(ph, color);
+      row2.appendChild(cc); row2.appendChild(ph);
       var btn = el('button', orbBtnCss(color), 'Request call<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;vertical-align:-3px"><path d="M5 12h14M13 6l6 6-6 6"/></svg>');
       btnHover(btn);
       var err = el('div', 'color:#c0392b;font-size:12px;margin-top:10px;text-align:center;display:none');
       btn.onclick = function () {
         if (!n.value.trim() || ph.value.replace(/\D/g,'').length < 6) { err.style.display = 'block'; err.textContent = 'Please enter your name and a valid mobile number.'; return; }
         btn.disabled = true; btn.innerHTML = 'Connecting\u2026';
-        api('session', { key: KEY, name: n.value.trim(), phone: ph.value.trim(), visitorType: visitorType, externalUserId: userId, pageUrl: location.href })
+        var local = ph.value.replace(/\D/g, '').replace(/^0+/, '');
+        var fullPhone = cc.value + local;
+        api('session', { key: KEY, name: n.value.trim(), phone: fullPhone, visitorType: visitorType, externalUserId: userId, pageUrl: location.href })
           .then(function (r) { if (!r.ok) throw 0; sessionId = r.sessionId; return api('call', { key: KEY, sessionId: sessionId }); })
           .then(function (r) { showCalling(r); })
           .catch(function () { if (cfg.csatEnabled && sessionId) { showCsat('failed'); } else { btn.disabled = false; btn.innerHTML = 'Request call'; err.style.display = 'block'; err.textContent = 'Could not connect. Please try again.'; } });
       };
-      bodyWrap.appendChild(hero); bodyWrap.appendChild(row); bodyWrap.appendChild(btn); bodyWrap.appendChild(err);
+      bodyWrap.appendChild(hero); bodyWrap.appendChild(row); bodyWrap.appendChild(row2); bodyWrap.appendChild(btn); bodyWrap.appendChild(err);
     }
     function showCalling(callResp) {
       var routedTo = callResp.routedTo;

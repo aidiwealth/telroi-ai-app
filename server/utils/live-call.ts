@@ -11,13 +11,28 @@ export async function tenantByWidgetKey(key: string) {
 }
 
 // Public widget config — only what's safe to expose client-side.
-export async function widgetConfig(tenantId: string) {
+export async function widgetConfig(tenantId: string, visitorCountry?: string | null) {
   const eff = await effectiveSettings(tenantId, 'live_call');
   const s = eff.settings;
+  // Which dial code the callback form should preselect. The visitor's own country
+  // is the best guess when the edge gives it to us; otherwise the business's, since
+  // most of its visitors are local to it.
+  let country = (visitorCountry || '').toUpperCase() || null;
+  if (!country) {
+    try {
+      const { useDb, schema } = await import('~/server/db');
+      const { eq } = await import('drizzle-orm');
+      const [t] = await useDb().select({ country: schema.tenants.country })
+        .from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+      // country is stored as a name ("Nigeria"), not an ISO code — map it.
+      const { countryProfile } = await import('./countries');
+      country = t?.country ? (countryProfile(t.country).region || null) : null;
+    } catch { /* fall through to the widget's own default */ }
+  }
   return {
     bubbleColor: s.bubbleColor, bubblePosition: s.bubblePosition,
     greeting: s.greeting, routeTo: s.routeTo, csatEnabled: s.csatEnabled,
-    trackLocation: s.trackLocation
+    trackLocation: s.trackLocation, country
   };
 }
 
