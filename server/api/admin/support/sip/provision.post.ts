@@ -45,7 +45,10 @@ export default defineEventHandler(async (event) => {
     tenantId: ws.tenantId, provider: 'telroi', kind: 'registration',
     externalId: result.username, label, sipUsername: result.username,
     secretEnc: encrypt(result.password),
-    domain: result.domain, meta: { transport: result.transport, context: result.context, support: true }
+    // webrtc + userId are what asteriskVoiceToken matches on when handing this
+    // admin their credentials; without them the endpoint exists but is invisible.
+    domain: result.domain,
+    meta: { transport: result.transport, context: result.context, support: true, webrtc: true, userId: (admin as any).id || null }
   }).returning();
 
   return {

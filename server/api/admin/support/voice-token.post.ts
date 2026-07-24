@@ -17,7 +17,10 @@ export default defineEventHandler(async (event) => {
   // them; the PBX is where the two meet.
   const dial = await resolveLiveCallProvider({ tenantId: ws.tenantId, configuredProvider: 'telroi' });
   try {
-    const tok = await voiceTokenFor(dial.provider, `support_${(admin as any).id || 'agent'}`);
+    // asteriskVoiceToken reads the identity as tenant_<tenantId>_<userId> to find
+    // this person's own endpoint — a bare 'support_x' left it looking up a tenant
+    // that doesn't exist, so it never found the endpoint we made for them.
+    const tok = await voiceTokenFor(dial.provider, `tenant_${ws.tenantId}_${(admin as any).id || 'agent'}`);
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready };
   } catch (e: any) {
     throw apiError('voice_not_configured', e?.message || 'Voice provider not configured', 503);
