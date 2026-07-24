@@ -16,7 +16,8 @@ export async function requirePlatformAdmin(event: H3Event) {
   if (!admin) throw apiError('forbidden', 'Platform admin access required', 403);
   // Rolling idle timeout: reset the 30-min window on each authenticated request.
   try { await refreshAdminSession(event, { email: admin.email, role: admin.role }); } catch { /* non-fatal */ }
-  return { email: admin.email, role: admin.role };
+  // id included so callers can identify this admin (e.g. their own SIP endpoint).
+  return { id: admin.id, email: admin.email, role: admin.role };
 }
 
 // Guard for areas restricted to superadmins (App releases, Settings, Pricing).
