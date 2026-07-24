@@ -23,6 +23,25 @@ export default defineEventHandler(async (event) => {
     twilioVoiceSet: !!s?.twilioVoiceCredsEnc,
     telnyxVoiceSet: !!s?.telnyxVoiceCredsEnc,
     digiditeVoiceSet: !!s?.digiditeVoiceCredsEnc,
+    // Non-secret WebRTC values so the cards show what's configured. A blank field
+    // should mean "not set" — returning only a boolean made a configured card look
+    // empty, so operators re-entered details that were already there.
+    telnyxVoice: (() => {
+      if (!s?.telnyxVoiceCredsEnc) return null;
+      try {
+        const v = JSON.parse(decrypt(s.telnyxVoiceCredsEnc));
+        // sipPassword omitted — the card shows "· set" for it instead.
+        return { sipUsername: v.sipUsername, connectionId: v.connectionId, callerId: v.callerId };
+      } catch { return null; }
+    })(),
+    twilioVoice: (() => {
+      if (!s?.twilioVoiceCredsEnc) return null;
+      try {
+        const v = JSON.parse(decrypt(s.twilioVoiceCredsEnc));
+        // apiKeySecret omitted.
+        return { apiKeySid: v.apiKeySid, twimlAppSid: v.twimlAppSid, callerId: v.callerId };
+      } catch { return null; }
+    })(),
     // Non-secret Sotel trunk values for the form to pre-fill (auth password omitted).
     asteriskVoiceSet: !!s?.asteriskVoiceCredsEnc,
     asteriskVoice: (() => {

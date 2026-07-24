@@ -267,7 +267,16 @@ const savingOther = ref(false);
 const savedOther = ref(false);
 
 async function loadCfg() {
-  try { cfg.value = await $fetch<any>('/api/admin/settings'); } catch { /* */ }
+  try {
+    cfg.value = await $fetch<any>('/api/admin/settings');
+    // Show what's already set. Secrets stay blank (the server never returns them)
+    // and the card marks them "· set" — but leaving the identifiers blank too made
+    // a configured card look untouched, so operators re-typed details needlessly.
+    const tv = cfg.value?.telnyxVoice;
+    if (tv) { tnVoice.sipUsername = tv.sipUsername || ''; tnVoice.connectionId = tv.connectionId || ''; tnVoice.callerId = tv.callerId || ''; }
+    const wv = cfg.value?.twilioVoice;
+    if (wv) { twVoice.apiKeySid = wv.apiKeySid || ''; twVoice.twimlAppSid = wv.twimlAppSid || ''; twVoice.callerId = wv.callerId || ''; }
+  } catch { /* */ }
 }
 async function saveOther() {
   savingOther.value = true; savedOther.value = false;
@@ -275,8 +284,17 @@ async function saveOther() {
     const body: any = {};
     if (twSid.value && twToken.value) { body.twilioAccountSid = twSid.value; body.twilioAuthToken = twToken.value; }
     if (tnKey.value) { body.telnyxApiKey = tnKey.value; body.telnyxConnectionId = tnConn.value; }
-    if (twVoice.apiKeySid && twVoice.apiKeySecret && twVoice.twimlAppSid) body.twilioVoice = { ...twVoice };
-    if (tnVoice.sipUsername && tnVoice.sipPassword) body.telnyxVoice = { ...tnVoice };
+    // Send the card when its identifiers are present. A blank secret means "keep
+    // the stored one" — requiring it again meant changing only a caller ID
+    // silently saved nothing.
+    if (twVoice.apiKeySid && twVoice.twimlAppSid) {
+      body.twilioVoice = { ...twVoice };
+      if (!twVoice.apiKeySecret) delete body.twilioVoice.apiKeySecret;
+    }
+    if (tnVoice.sipUsername) {
+      body.telnyxVoice = { ...tnVoice };
+      if (!tnVoice.sipPassword) delete body.telnyxVoice.sipPassword;
+    }
     await $fetch('/api/admin/settings', { method: 'POST', body });
     cfg.value = await $fetch<any>('/api/admin/settings');
     twToken.value = tnKey.value = ''; twVoice.apiKeySecret = ''; tnVoice.sipPassword = '';

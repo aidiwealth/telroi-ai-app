@@ -97,8 +97,23 @@ export default defineEventHandler(async (event) => {
   if (d.twilioVoice && d.twilioVoice.apiKeySid && d.twilioVoice.apiKeySecret && d.twilioVoice.twimlAppSid) {
     patch.twilioVoiceCredsEnc = encrypt(JSON.stringify({ apiKeySid: d.twilioVoice.apiKeySid, apiKeySecret: d.twilioVoice.apiKeySecret, twimlAppSid: d.twilioVoice.twimlAppSid, callerId: d.twilioVoice.callerId || '' }));
   }
-  if (d.telnyxVoice && d.telnyxVoice.sipUsername && d.telnyxVoice.sipPassword) {
-    patch.telnyxVoiceCredsEnc = encrypt(JSON.stringify({ sipUsername: d.telnyxVoice.sipUsername, sipPassword: d.telnyxVoice.sipPassword, connectionId: d.telnyxVoice.connectionId || '', callerId: d.telnyxVoice.callerId || '' }));
+  // Merge over the stored creds so a blank password keeps the existing one —
+  // otherwise changing just a caller ID would either wipe the password or, if we
+  // insisted on it, save nothing at all.
+  if (d.telnyxVoice && d.telnyxVoice.sipUsername) {
+    const { decrypt } = await import('~/server/utils/crypto');
+    let prev: any = {};
+    try {
+      const cur = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+      if (cur[0]?.telnyxVoiceCredsEnc) prev = JSON.parse(decrypt(cur[0].telnyxVoiceCredsEnc));
+    } catch { /* start fresh */ }
+    const sipPassword = d.telnyxVoice.sipPassword || prev.sipPassword || '';
+    if (sipPassword) {
+      patch.telnyxVoiceCredsEnc = encrypt(JSON.stringify({
+        sipUsername: d.telnyxVoice.sipUsername, sipPassword,
+        connectionId: d.telnyxVoice.connectionId || '', callerId: d.telnyxVoice.callerId || ''
+      }));
+    }
   }
   if (d.digiditeVoice && d.digiditeVoice.wsServer && d.digiditeVoice.sipUsername && d.digiditeVoice.sipPassword) {
     patch.digiditeVoiceCredsEnc = encrypt(JSON.stringify({ wsServer: d.digiditeVoice.wsServer, sipDomain: d.digiditeVoice.sipDomain || '', sipUsername: d.digiditeVoice.sipUsername, sipPassword: d.digiditeVoice.sipPassword, callerId: d.digiditeVoice.callerId || '' }));
