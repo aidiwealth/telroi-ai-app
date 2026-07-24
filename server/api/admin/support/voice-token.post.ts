@@ -9,7 +9,6 @@ import { voiceTokenFor } from '~/server/utils/voice-token';
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
   const ws = await ensureSupportWorkspace();
-  const eff = await effectiveSettings(ws.tenantId, 'live_call');
   // Support agents always register to our own PBX, whatever numbers the support
   // workspace happens to own. Registration decides where a browser can be RUNG,
   // and ring_all dials PBX endpoints — a Telnyx registration can place calls but
