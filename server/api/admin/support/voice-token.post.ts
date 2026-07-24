@@ -10,7 +10,12 @@ export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
   const ws = await ensureSupportWorkspace();
   const eff = await effectiveSettings(ws.tenantId, 'live_call');
-  const dial = await resolveLiveCallProvider({ tenantId: ws.tenantId, configuredProvider: (eff.settings.callProvider as string) || 'auto' });
+  // Support agents always register to our own PBX, whatever numbers the support
+  // workspace happens to own. Registration decides where a browser can be RUNG,
+  // and ring_all dials PBX endpoints — a Telnyx registration can place calls but
+  // never receive one from us. Callers still arrive over whichever carrier suits
+  // them; the PBX is where the two meet.
+  const dial = await resolveLiveCallProvider({ tenantId: ws.tenantId, configuredProvider: 'telroi' });
   try {
     const tok = await voiceTokenFor(dial.provider, `support_${(admin as any).id || 'agent'}`);
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready };
