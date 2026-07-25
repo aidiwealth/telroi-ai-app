@@ -100,7 +100,10 @@ export default defineEventHandler(async (event) => {
     const support = await ensureSupportWorkspace();
     if (support.tenantId === t.id) {
       const { supportNumberForCountry } = await import('~/server/utils/support-numbers');
-      preferredFromNumber = await supportNumberForCountry(visitorCountry);
+      // The country the visitor chose on the form decides which support line
+      // calls them — a caller ID from elsewhere can't be presented by the
+      // carrier that reaches them, and the leg gets refused.
+      preferredFromNumber = await supportNumberForCountry(sessForGeo?.country || visitorCountry);
     }
   } catch { /* not the support workspace, or not configured */ }
   const dial = await resolveLiveCallProvider({

@@ -6,7 +6,11 @@ import { useDb, schema } from '~/server/db';
 const Body = z.object({
   key: z.string(), name: z.string().min(1).max(120), phone: z.string().min(4).max(32),
   visitorType: z.enum(['visitor', 'user']).default('visitor'),
-  externalUserId: z.string().optional(), pageUrl: z.string().optional()
+  externalUserId: z.string().optional(), pageUrl: z.string().optional(),
+  // The country they picked on the form. Beats geo for deciding which support
+  // line rings them: someone browsing from abroad may still want the call on a
+  // local number, and only they know which.
+  country: z.string().max(2).optional()
 });
 export default defineEventHandler(async (event) => {
   setHeader(event, 'Access-Control-Allow-Origin', '*');
@@ -35,7 +39,7 @@ export default defineEventHandler(async (event) => {
   const [session] = await db.insert(schema.liveCallSessions).values({
     tenantId: t.id, visitorName: p.data.name, visitorPhone: p.data.phone,
     visitorType: p.data.visitorType, externalUserId: p.data.externalUserId || null,
-    pageUrl: p.data.pageUrl || null, country: geo.country || null, region: geo.region || null, city: geo.city || null,
+    pageUrl: p.data.pageUrl || null, country: (p.data.country || geo.country || null), region: geo.region || null, city: geo.city || null,
     status: 'opened', contactId
   }).returning();
   return { ok: true, sessionId: session.id };

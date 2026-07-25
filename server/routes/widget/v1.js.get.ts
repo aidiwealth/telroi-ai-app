@@ -143,7 +143,10 @@ const WIDGET_JS = String.raw`(function () {
         btn.disabled = true; btn.innerHTML = 'Connecting\u2026';
         var local = ph.value.replace(/\D/g, '').replace(/^0+/, '');
         var fullPhone = cc.value + local;
-        api('session', { key: KEY, name: n.value.trim(), phone: fullPhone, visitorType: visitorType, externalUserId: userId, pageUrl: location.href })
+        // Send the country they picked, not just the combined number — the
+        // server uses it to choose which support line calls them back.
+        var pickedIso = (DIAL_CODES.find(function (c) { return c.dial === cc.value; }) || {}).iso || '';
+        api('session', { key: KEY, name: n.value.trim(), phone: fullPhone, country: pickedIso, visitorType: visitorType, externalUserId: userId, pageUrl: location.href })
           .then(function (r) { if (!r.ok) throw 0; sessionId = r.sessionId; return api('call', { key: KEY, sessionId: sessionId }); })
           .then(function (r) { showCalling(r); })
           .catch(function () { if (cfg.csatEnabled && sessionId) { showCsat('failed'); } else { btn.disabled = false; btn.innerHTML = 'Request call'; err.style.display = 'block'; err.textContent = 'Could not connect. Please try again.'; } });
