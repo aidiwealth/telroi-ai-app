@@ -20,11 +20,19 @@ import { detectRegion } from '~/server/utils/regions';
 // outbound calls. Nigeria → kasooko trunk; others fall back to it too for now
 // (Twilio/Telnyx numbers never reach here — placeCall routes those to their
 // APIs before this client is used). Configurable via env if needed.
+// Which Asterisk trunk carries a call to a given region. Only Nigeria was
+// mapped, so every other destination fell through to a Nigerian trunk — a US
+// number was dialled over Kasooko, which dropped it in a tenth of a second.
 function trunkForRegion(region: string): string {
   const map: Record<string, string> = {
-    NG: process.env.TRUNK_NG || 'kasooko-endpoint'
+    NG: process.env.TRUNK_NG || 'kasooko-endpoint',
+    US: process.env.TRUNK_US || 'telnyx-endpoint',
+    CA: process.env.TRUNK_US || 'telnyx-endpoint',
+    GB: process.env.TRUNK_INTL || 'telnyx-endpoint'
   };
-  return map[region] || process.env.TRUNK_DEFAULT || 'kasooko-endpoint';
+  // Anything unmapped goes out on the international trunk rather than a
+  // Nigerian one, which could never have carried it.
+  return map[region] || process.env.TRUNK_DEFAULT || 'telnyx-endpoint';
 }
 
 export class AsteriskClient {
