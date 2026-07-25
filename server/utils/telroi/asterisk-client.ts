@@ -78,11 +78,25 @@ export class AsteriskClient {
       });
     }
     const agentEndpoint = await this.agentEndpointFor(body.user);
-    const region = detectRegion(body.phone);
-    const trunk = body.trunk || trunkForRegion(region);
+    // The trunk follows the caller ID, not the destination. A carrier will only
+    // carry a call presenting a number it gave us, so dialling a Ruach number's
+    // caller ID out over Kasooko gets refused. Fall back to the region map when
+    // no caller ID is given or we don't recognise it.
+    let trunk = body.trunk || '';
+    if (!trunk && body.clid) {
+      const digits = body.clid.replace(/[^\d]/g, '').slice(-9);
+      const subs = await useDb().select({ telnum: schema.numberSubscriptions.telnum, provider: schema.numberSubscriptions.provider })
+        .from(schema.numberSubscriptions)
+        .where(eq(schema.numberSubscriptions.tenantId, this.tenantId));
+      const owner = subs.find((n: any) => n.telnum.replace(/[^\d]/g, '').endsWith(digits));
+      if (owner?.provider && owner.provider !== 'telroi') trunk = `${owner.provider}-endpoint`;
+    }
+    if (!trunk) trunk = trunkForRegion(detectRegion(body.phone));
     const r = await agentOriginate({
       agentEndpoint,
-      to: body.phone.replace(/[^\d+]/g, ''),
+      // Digits only: the carrier dialplans match _81234XXXXXXXXXX and the like,
+      // so a leading + matches nothing and the leg is rejected on the spot.
+      to: body.phone.replace(/[^\d]/g, ''),
       trunk,
       callerId: body.clid,
       tenantId: this.tenantId,
