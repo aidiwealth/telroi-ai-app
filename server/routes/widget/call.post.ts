@@ -138,9 +138,30 @@ export default defineEventHandler(async (event) => {
     const { upsertCallEvent } = await import('~/server/utils/call-log');
     if (sessForGeo) await upsertCallEvent({ tenantId: t.id, callid: `lc_${sessForGeo.id}`, direction: 'in', phone: sessForGeo.visitorPhone || '', carrier: dial.provider, status: 'ringing', raw: { source: 'live_call', route: routeTarget, provider: dial.provider, fromNumber: dial.fromNumber, providerReason: dial.reason, providerReady: dial.ready } });
   } catch { /* */ }
-  // Mint a browser-voice token for the resolved provider so the widget can open
-  // a real WebRTC leg (mic + audio). If the provider isn't configured, the
-  // widget shows a graceful message instead of a fake "connecting".
+  // Ring the visitor back. The widget promises a callback, and this is the half
+  // that was never wired: the session was recorded and a token minted, but
+  // nothing ever placed a call, so no agent phone or browser ever rang.
+  //
+  // makeCall is the same path the dashboard dialer uses — it rings an agent
+  // first, then dials the destination and bridges the two. With no user given it
+  // falls back to the tenant's first registered device.
+  let called: { callid: string } | null = null;
+  let callError: string | null = null;
+  const visitorPhone = sessForGeo?.visitorPhone || '';
+  if (visitorPhone) {
+    try {
+      const { AsteriskClient } = await import('~/server/utils/telroi/asterisk-client');
+      const asterisk = new AsteriskClient(t.id);
+      called = await asterisk.makeCall({ phone: visitorPhone, clid: dial.fromNumber || undefined });
+    } catch (e: any) {
+      callError = e?.data?.error?.message || e?.message || 'Could not place the call.';
+      console.error('[widget] callback failed:', callError);
+    }
+  } else {
+    callError = 'No phone number was given.';
+  }
+
+  // Kept for the older browser-audio path; the callback above is what rings.
   let voiceToken: any = null;
   try {
     const { voiceTokenFor } = await import('~/server/utils/voice-token');
@@ -155,6 +176,9 @@ export default defineEventHandler(async (event) => {
     route: routeTarget,
     mode: 'webrtc',
     dial: { provider: dial.provider, ready: dial.ready, fromNumber: dial.fromNumber, reason: dial.reason },
+    // Did we actually ring them? The widget should say "we're calling you" only
+    // when a call was really placed, not merely because a session was recorded.
+    callback: { placed: !!called, callid: called?.callid || null, error: callError },
     voice: voiceToken      // null when provider not configured
   };
 });
