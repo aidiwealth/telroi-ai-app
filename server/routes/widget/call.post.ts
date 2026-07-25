@@ -95,17 +95,23 @@ export default defineEventHandler(async (event) => {
   // per-region support number (NG vs international) instead of an arbitrary
   // subscription — so the number admin picked in Settings powers the call.
   let preferredFromNumber: string | null = null;
+  let isSupportCall = false;
   try {
     const { ensureSupportWorkspace } = await import('~/server/utils/support');
     const support = await ensureSupportWorkspace();
     if (support.tenantId === t.id) {
+      isSupportCall = true;
       const { supportNumberForCountry } = await import('~/server/utils/support-numbers');
       preferredFromNumber = await supportNumberForCountry(visitorCountry);
     }
   } catch { /* not the support workspace, or not configured */ }
+  // Support calls run over our own PBX at both ends. The admin's browser is
+  // registered there, and ring_all dials PBX endpoints — a visitor connected
+  // through Telnyx would have nowhere to be bridged to, which is why the call
+  // died before anyone could answer.
   const dial = await resolveLiveCallProvider({
     tenantId: t.id,
-    configuredProvider: (cfg.callProvider as string) || 'auto',
+    configuredProvider: isSupportCall ? 'telroi' : ((cfg.callProvider as string) || 'auto'),
     visitorCountry: visitorCountry,
     teamId: routeTarget.teamId || null,
     toRoute: routeTarget,
