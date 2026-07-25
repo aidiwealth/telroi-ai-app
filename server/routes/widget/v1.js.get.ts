@@ -174,14 +174,18 @@ const WIDGET_JS = String.raw`(function () {
         return;
       }
       // Real in-browser audio via the resolved provider.
-      startWebrtc(voice, routedTo, status);
+      startWebrtc(voice, routedTo, status, callResp.destination);
     }
 
     // ── Real WebRTC for the widget (Twilio / Telnyx / Digidite) ──
     function loadJs(src, cb) { if (document.querySelector('script[src="' + src + '"]')) return cb(); var s = document.createElement('script'); s.src = src; s.async = true; s.onload = cb; s.onerror = function(){ cb(new Error('load failed')); }; document.head.appendChild(s); }
-    function startWebrtc(voice, routedTo, status) {
+    function startWebrtc(voice, routedTo, status, destination) {
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function () {
-        var to = voice.callerId || '';   // destination is resolved server-side via TwiML/connection routing
+        // Dial the tenant's own number. The leg then arrives at our webhook as an
+        // ordinary inbound call to that DID, is attributed to the tenant, and
+        // routes to their agents. Dialling the caller ID had the number calling
+        // itself, which the carrier dropped immediately.
+        var to = destination || voice.callerId || '';
         if (voice.provider === 'twilio') {
           loadJs('https://sdk.twilio.com/js/voice/releases/2.11.0/twilio.min.js', function () {
             var device = new window.Twilio.Device(voice.token, { codecPreferences: ['opus', 'pcmu'] });
