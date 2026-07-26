@@ -16,7 +16,7 @@
 
 import Ari from 'ari-client';
 import { config } from './config.ts';
-import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveTenantEndpoints, resolveTenantByPrefix, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
+import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveTenantEndpoints, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
 import { logCall } from './call-log.ts';
 import { installLogCapture } from './log-buffer.ts';
 import { closeDb } from './db.ts';
@@ -140,13 +140,10 @@ async function main() {
     // Live Call widget: a visitor's browser reached us through the carrier. The
     // tenant and the route they configured both ride in the extension, decided by
     // the web app where those settings live — there's no DID to look them up from.
-    // wg/wa + the first eight hex of the tenant id. Short on purpose: a full uuid
-    // made a 40-character SIP user part with six hyphens, which the carrier would
-    // not carry. The prefix is matched against the tenants we already cache.
-    const widgetAgents = /^wg[0-9a-f]{8}$/i.test(dialedDid);
-    const widgetAi = /^wa[0-9a-f]{8}$/i.test(dialedDid);
-    const widgetPrefix = (widgetAgents || widgetAi) ? dialedDid.slice(2).toLowerCase() : null;
-    const widgetTenantId = widgetPrefix ? (resolveTenantByPrefix(widgetPrefix) || null) : null;
+    // Live Call widget: the visitor's browser registered to us as a guest endpoint
+    // and dialled the one extension its context allows. The guest dialplan passes
+    // the tenant id, which was fixed when the endpoint was leased.
+    const widgetTenantId = dialedDid.startsWith('widget:') ? dialedDid.slice(7) : null;
 
     log(`[call ${chId}] from "${callerName}" <${callerNum}> -> DID ${dialedDid}${isEscalation ? ' (ESCALATION -> agents)' : ''}`);
 
