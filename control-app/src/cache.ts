@@ -251,6 +251,17 @@ export function resolveTenantEndpoints(tenantId: string | null): string[] {
   return state.tenantEndpoints.get(tenantId) || [];
 }
 
+// Find a tenant from the first eight hex characters of its id. Live Call widget
+// calls arrive as a short SIP user part — a full uuid was too long for the
+// carrier to carry — so the prefix is what we have to match on.
+export function resolveTenantByPrefix(prefix: string): string | null {
+  if (!prefix || prefix.length < 8) return null;
+  for (const tenantId of state.tenantEndpoints.keys()) {
+    if (tenantId.replace(/-/g, '').toLowerCase().startsWith(prefix)) return tenantId;
+  }
+  return null;
+}
+
 export function resolveEndpoint(endpointId: string | null): string | null {
   if (!endpointId) return null;
   return state.sipEndpoints.get(endpointId) || null;

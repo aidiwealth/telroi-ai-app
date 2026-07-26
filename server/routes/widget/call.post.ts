@@ -165,7 +165,11 @@ export default defineEventHandler(async (event) => {
     // The route is decided here, where the tenant's Live Call settings live, and
     // carried in the URI — the control-app has no knowledge of widget config and
     // shouldn't have to re-derive it.
-    destination: `sip:widget-${cfg.routeTo === 'ai' ? 'ai' : 'agents'}-${t.id}@${process.env.SIP_DOMAIN || 'sip.telroi.ai'}`,
+    // A short user part: the full tenant uuid made a 40-character SIP user with
+    // six hyphens, which some carriers mangle or refuse outright. The session id
+    // is already unique per call, so its first eight characters identify this
+    // call, and the control-app resolves the tenant from it.
+    destination: `sip:w${cfg.routeTo === 'ai' ? 'a' : 'g'}${t.id.replace(/-/g, '').slice(0, 8)}@${process.env.SIP_DOMAIN || 'sip.telroi.ai'}`,
     voice: voiceToken      // null when provider not configured
   };
 });
