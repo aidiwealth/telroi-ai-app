@@ -157,11 +157,15 @@ export default defineEventHandler(async (event) => {
     dial: { provider: dial.provider, ready: dial.ready, fromNumber: dial.fromNumber, reason: dial.reason },
     // Did we actually ring them? The widget should say "we're calling you" only
     // when a call was really placed, not merely because a session was recorded.
-    // The number the visitor's browser should dial. It has to be the tenant's
-    // own DID: the leg then arrives at our webhook like any inbound call, is
-    // attributed to the tenant, and routes to their agents. Dialling the caller
-    // ID instead had the number calling itself, which the carrier dropped at once.
-    destination: dial.fromNumber || null,
+    // Where the visitor's browser should connect. A SIP URI on our own PBX, not
+    // a phone number: dialling a DID meant the tenant's number calling itself,
+    // which the carrier dropped on the spot. The carrier carries the leg and
+    // hands it to Asterisk, where the tenant's agents are registered and can be
+    // rung — the same handoff the AI escalation path uses.
+    // The route is decided here, where the tenant's Live Call settings live, and
+    // carried in the URI — the control-app has no knowledge of widget config and
+    // shouldn't have to re-derive it.
+    destination: `sip:widget-${cfg.routeTo === 'ai' ? 'ai' : 'agents'}-${t.id}@${process.env.SIP_DOMAIN || 'sip.telroi.ai'}`,
     voice: voiceToken      // null when provider not configured
   };
 });

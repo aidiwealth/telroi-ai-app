@@ -137,10 +137,46 @@ async function main() {
     const isEscalation = dialedDid.startsWith('esc-');
     if (isEscalation) dialedDid = dialedDid.slice(4);
 
+    // Live Call widget: a visitor's browser reached us through the carrier. The
+    // tenant and the route they configured both ride in the extension, decided by
+    // the web app where those settings live — there's no DID to look them up from.
+    const widgetAgents = dialedDid.startsWith('widget-agents-');
+    const widgetAi = dialedDid.startsWith('widget-ai-');
+    const widgetTenantId = widgetAgents ? dialedDid.slice(14) : widgetAi ? dialedDid.slice(10) : null;
+
     log(`[call ${chId}] from "${callerName}" <${callerNum}> -> DID ${dialedDid}${isEscalation ? ' (ESCALATION -> agents)' : ''}`);
 
     try {
       await channel.answer();
+
+      // 0) Live Call widget. There is no DID to resolve — the web app decided the
+      // tenant and the route when the visitor clicked, and carried both in the
+      // extension. Ring that tenant's agents and bridge; anything the DID lookup
+      // below would do (route type, blacklist) has already been settled.
+      if (widgetTenantId) {
+        const allUsers = resolveTenantEndpoints(widgetTenantId);
+        const liveUsers = await filterLiveEndpoints(client, allUsers, log);
+        const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
+        log(`  [widget ${chId}] tenant ${widgetTenantId} — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
+        const unavailable = async () => {
+          const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", widgetTenantId).catch(() => null);
+          try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
+        };
+        if (!endpoints.length) { await unavailable(); return; }
+        let wRes: { answered: boolean } = { answered: false };
+        try {
+          wRes = await bridgeToDepartment({
+            client, caller: channel, endpoints, callerIdNum: callerNum || 'Web visitor', ringTimeoutSec: 40
+          });
+        } catch (err) {
+          log(`  [widget ${chId}] bridge failed: ${(err as Error)?.message}`);
+        }
+        if (!wRes.answered) {
+          log(`  [widget ${chId}] not answered`);
+          await unavailable();
+        }
+        return;
+      }
 
       // 1) Resolve DID -> client + routing (from cache)
       const route = lookupNumber(dialedDid);
