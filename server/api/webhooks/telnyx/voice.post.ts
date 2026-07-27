@@ -92,6 +92,14 @@ export default defineEventHandler(async (event) => {
             if (act.action === 'dial_person' || act.action === 'dial_department') {
               if (act.dialTarget) { await cc.telnyxTransfer(callId, act.dialTarget); return; }
             }
+            if (act.action === 'ring_all') {
+              // The agents are registered to our PBX, which the carrier can't
+              // reach — hand the call there and let it ring them. Same handoff an
+              // AI call uses when the caller asks for a person.
+              const sipDomain = process.env.SIP_DOMAIN || 'sip.telroi.ai';
+              await cc.telnyxTransfer(callId, `sip:esc-${matchedOurNumber}@${sipDomain}`);
+              return;
+            }
             if (act.action === 'ai') {
               // AI over Telnyx runs through the media adapter on the control-app:
               // Telnyx forks the call audio to our WebSocket, which buffers the

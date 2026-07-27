@@ -38,7 +38,7 @@ export interface IvrStep {
   options?: Array<{ digit: string; nextNodeId: string | null; label?: string }>; // 'menu'
 }
 export interface InboundAction {
-  action: 'ai' | 'dial_person' | 'dial_department' | 'ivr' | 'reject';
+  action: 'ai' | 'dial_person' | 'dial_department' | 'ring_all' | 'ivr' | 'reject';
   ivr?: IvrStep;
   greeting?: string;          // spoken greeting (AI agent greeting or default)
   agentId?: string | null;
@@ -136,6 +136,12 @@ export async function resolveInboundAction(tenantId: string, telnum: string): Pr
   }
   if (route.type === 'person') {
     return { action: 'dial_person', dialTarget: route.target };
+  }
+  // Ring everyone who's free. The carrier can't reach our agents itself — they're
+  // registered to our PBX — so the caller is handed there, the same way an AI call
+  // reaches a human.
+  if (route.type === 'ring_all') {
+    return { action: 'ring_all' };
   }
   return { action: 'reject' };
 }
