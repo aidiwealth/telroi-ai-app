@@ -9,6 +9,7 @@ import { useDb, schema } from '../db';
 export type InboundRoute =
   | { type: 'person'; target: string | null; telnum: string; provider: string }
   | { type: 'department'; departmentId: string | null; telnum: string; provider: string }
+  | { type: 'ring_all'; telnum: string; provider: string }
   | { type: 'ai'; agentId: string | null; escalateMode: string | null; escalateTo: string | null; escalateAfter: number; telnum: string; provider: string }
   | { type: 'none'; telnum: string; provider: string };
 
@@ -24,6 +25,12 @@ export async function resolveInboundRoute(tenantId: string, telnum: string): Pro
   if (sub.routeType === 'department') {
     return { type: 'department', departmentId: sub.departmentId || null, telnum, provider };
   }
+  if (sub.routeType === 'ring_all') {
+    return { type: 'ring_all', telnum, provider };
+  }
+  // Anything unrecognised falls through to person — which is why ring_all became
+  // a person route with no target, and the call was answered and then dropped in
+  // silence.
   return { type: 'person', target: sub.routeTarget || null, telnum, provider };
 }
 
