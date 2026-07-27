@@ -309,9 +309,19 @@ async function main() {
       // asked for a human, so re-running the route would loop them back to it.
       if (isEscalation) {
         const allUsers = resolveTenantEndpoints(route.tenantId);
-        const liveUsers = await filterLiveEndpoints(client, allUsers, log);
-        const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
+        const freeEsc = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
+        let endpoints = await freeEsc();
         log(`  [esc ${chId}] ringing agents — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
+        // A carrier-routed ring-all call arrives here, so it needs holding too —
+        // otherwise callers on those numbers are turned away the moment every
+        // agent is mid-conversation, while callers on a trunk-routed number wait.
+        if (!endpoints.length && allUsers.length) {
+          const held = await holdUntilFree({
+            client, channel, tenantId: route.tenantId, freeEndpoints: freeEsc, log,
+            say: (t) => synthesizeMessage(t, route.tenantId, route.routeAgentId || undefined).catch(() => null)
+          });
+          if (held) endpoints = held;
+        }
         if (!endpoints.length) {
           // No row to update — this leg isn't logged (see above), so don't create
           // an orphan 'missed' row for it.
