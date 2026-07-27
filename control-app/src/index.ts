@@ -169,7 +169,9 @@ async function main() {
         let wRes: { answered: boolean } = { answered: false };
         try {
           wRes = await bridgeToDepartment({
-            client, caller: channel, endpoints, callerIdNum: callerNum || 'Web visitor', ringTimeoutSec: 40
+            // The caller id on a guest leg is the endpoint's own username, which
+            // tells an agent nothing — say where the call came from instead.
+            client, caller: channel, endpoints, callerIdNum: 'Web visitor', ringTimeoutSec: 40
           });
         } catch (err) {
           log(`  [widget ${chId}] bridge failed: ${(err as Error)?.message}`);
