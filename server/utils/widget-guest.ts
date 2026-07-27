@@ -87,6 +87,28 @@ export async function leaseGuestEndpoint(tenantId: string, sessionId: string, ma
   return { sipUsername: row.sipUsername!, sipPassword: result.password, domain: row.domain || '', endpointId: row.id };
 }
 
+/**
+ * Make sure this tenant has at least one guest endpoint, provisioning one if not.
+ * Called in the background when a widget's config is fetched, so an endpoint is
+ * waiting long before anyone clicks to call — provisioning takes the better part
+ * of a minute, which no visitor should ever sit through.
+ */
+export async function ensureGuestEndpoint(tenantId: string): Promise<void> {
+  const db = useDb();
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.sipEndpoints)
+    .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.kind, 'widget_guest')));
+  if (n > 0) return;
+  if (!provisionAgentConfigured()) return;
+
+  const result = await agentProvision(tenantId, 'widget-guest-1', true, 'widget-guest');
+  await db.insert(schema.sipEndpoints).values({
+    tenantId, provider: 'telroi', kind: 'widget_guest',
+    externalId: result.username, label: 'widget-guest-1', sipUsername: result.username,
+    secretEnc: encrypt(result.password), domain: result.domain,
+    meta: { webrtc: true, guest: true, context: 'widget-guest' }
+  });
+}
+
 export async function releaseGuestEndpoint(sessionId: string) {
   await useDb().update(schema.sipEndpoints)
     .set({ leasedSessionId: null, leasedAt: null })
