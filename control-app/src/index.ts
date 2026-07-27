@@ -21,6 +21,7 @@ import { logCall } from './call-log.ts';
 import { installLogCapture } from './log-buffer.ts';
 import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridge.ts';
+import { holdUntilFree } from './queue.ts';
 import { startProvisionAgent } from './provision-agent.ts';
 import { attachTelnyxMedia } from './telnyx-media.ts';
 import { startScheduler } from './scheduler.ts';
@@ -158,14 +159,24 @@ async function main() {
       // below would do (route type, blacklist) has already been settled.
       if (widgetTenantId) {
         const allUsers = resolveTenantEndpoints(widgetTenantId);
-        const liveUsers = await filterLiveEndpoints(client, allUsers, log);
-        const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
+        const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
+        let endpoints = await free();
         log(`  [widget ${chId}] tenant ${widgetTenantId} — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
         const unavailable = async () => {
           const msg = await synthesizeMessage("I'm sorry, no one is available to take your call right now. Please try again a little later. Goodbye.", widgetTenantId).catch(() => null);
           try { await playAndHangup(client, channel, msg || 'sound:vm-nobodyavail'); } catch { try { await channel.hangup(); } catch { /* gone */ } }
         };
-        if (!endpoints.length) { await unavailable(); return; }
+        if (!endpoints.length) {
+          // Busy agents mean a wait, not a closed door — hold them as we would a
+          // phone caller. Nobody registered at all is a different matter.
+          if (!allUsers.length) { await unavailable(); return; }
+          const held = await holdUntilFree({
+            client, channel, tenantId: widgetTenantId, freeEndpoints: free, log,
+            say: (t) => synthesizeMessage(t, widgetTenantId).catch(() => null)
+          });
+          if (!held) { try { await channel.hangup(); } catch { /* gone */ } return; }
+          endpoints = held;
+        }
         let wRes: { answered: boolean } = { answered: false };
         try {
           wRes = await bridgeToDepartment({
@@ -469,14 +480,30 @@ async function main() {
         // for a single target it was never given.
         case 'ring_all': {
           const allUsers = resolveTenantEndpoints(route.tenantId);
-          const liveUsers = await filterLiveEndpoints(client, allUsers, log);
-          const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
+          const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
+          let endpoints = await free();
           log(`     Ring-all route -> ${endpoints.length} available of ${allUsers.length} endpoint(s)`);
           if (!endpoints.length) {
-            log(`     no one available — playing no-service`);
-            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
-            await playAndHangup(client, channel, 'sound:ss-noservice');
-            break;
+            // Everyone is mid-call rather than absent, so hold the caller instead
+            // of turning them away — they keep their place and are told where
+            // they stand until somebody frees up.
+            if (allUsers.length) {
+              const held = await holdUntilFree({
+                client, channel, tenantId: route.tenantId, freeEndpoints: free, log,
+                say: (t) => synthesizeMessage(t, route.tenantId, route.routeAgentId || undefined).catch(() => null)
+              });
+              if (!held) {
+                logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
+                try { await channel.hangup(); } catch { /* gone */ }
+                break;
+              }
+              endpoints = held;
+            } else {
+              log(`     no agents at all — playing no-service`);
+              logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
+              await playAndHangup(client, channel, 'sound:ss-noservice');
+              break;
+            }
           }
           try {
             await bridgeToDepartment({
