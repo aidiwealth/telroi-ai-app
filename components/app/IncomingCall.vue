@@ -29,6 +29,14 @@
       <div class="incoming-text">
         <div class="incoming-label">On call</div>
         <div class="incoming-from">{{ activeFrom || 'Connected' }} · {{ durStr }}</div>
+        <!-- Only when someone is actually holding: an agent mid-call shouldn't be
+             nagged by an empty queue, but should know when people are waiting. -->
+        <div v-if="waiting.length" class="ic-queue">
+          <span class="ic-queue-count">{{ waiting.length }} waiting</span>
+          <span class="ic-queue-sep">·</span>
+          <span>longest {{ longestWait }}</span>
+          <button class="ic-queue-next" @click="endAndTakeNext">End &amp; take next</button>
+        </div>
       </div>
       <div class="incoming-actions">
         <button class="ic-btn ic-mute" :class="{ 'is-muted': voice.muted.value }" :title="voice.muted.value ? 'Unmute' : 'Mute'" @click="voice.toggleMute()">
@@ -57,6 +65,28 @@ const ringtone = useRingtone();
 const callActive = useCallActive();
 
 const onCall = computed(() => voice.state.value === 'in_call');
+
+// Who's holding for this workspace. Polled only while on a call — an idle agent's
+// endpoint is free, so the queue would already be ringing them.
+const waiting = ref<Array<{ position: number; waitingSec: number; callerNum: string }>>([]);
+let queueTimer: any = null;
+const longestWait = computed(() => {
+  const s2 = waiting.value.reduce((m, w) => Math.max(m, w.waitingSec || 0), 0);
+  return `${Math.floor(s2 / 60)}:${('0' + (s2 % 60)).slice(-2)}`;
+});
+async function pollQueue() {
+  try { waiting.value = (await $fetch<any>('/api/voice/queue'))?.waiting || []; }
+  catch { waiting.value = []; }
+}
+// Hanging up frees this agent's endpoint, and the queue rings them again within
+// a few seconds — no need to reach into it and pick someone out.
+function endAndTakeNext() { voice.hangup(); }
+watch(onCall, (on) => {
+  if (queueTimer) { clearInterval(queueTimer); queueTimer = null; }
+  if (on) { void pollQueue(); queueTimer = setInterval(pollQueue, 5000); }
+  else waiting.value = [];
+});
+onUnmounted(() => { if (queueTimer) clearInterval(queueTimer); });
 const activeFrom = ref('');
 const elapsed = ref(0);
 let timer: any = null;
@@ -124,6 +154,11 @@ onUnmounted(() => {
 .incoming-text { flex: 1; min-width: 0; }
 .incoming-label { font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-mute); }
 .incoming-from { font-size: 16px; color: var(--ink); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ic-queue { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 12.5px; color: var(--ink-soft); }
+.ic-queue-count { font-weight: 600; color: var(--ink); }
+.ic-queue-sep { opacity: .5; }
+.ic-queue-next { margin-left: auto; border: 1px solid var(--rule); background: transparent; color: var(--ink); border-radius: 7px; padding: 4px 9px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.ic-queue-next:hover { background: var(--paper); }
 .incoming-actions { display: flex; gap: 10px; flex: none; }
 .ic-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; color: #fff; transition: filter 0.12s; }
 .ic-btn:hover { filter: brightness(0.95); }

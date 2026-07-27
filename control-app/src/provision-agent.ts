@@ -191,6 +191,15 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
         return send(res, 200, { ok: true, lines: getLines(after), latest: latestSeq() });
       }
 
+      // GET /queue?tenantId=... -> who is waiting, for the agent dashboard.
+      if (req.method === 'GET' && (req.url || '').startsWith('/queue')) {
+        const u = new URL(req.url || '', 'http://127.0.0.1');
+        const tenantId = (u.searchParams.get('tenantId') || '').trim();
+        if (!tenantId) return send(res, 400, { ok: false, error: 'tenantId required' });
+        const { snapshot } = await import('./queue.ts');
+        return send(res, 200, { ok: true, waiting: snapshot(tenantId) });
+      }
+
       if (req.method === 'GET' && req.url === '/health') {
         return send(res, 200, { ok: true, ari: !!ari });
       }

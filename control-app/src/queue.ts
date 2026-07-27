@@ -45,6 +45,25 @@ export function dequeue(tenantId: string, channelId: string): void {
   if (!q.length) queues.delete(tenantId);
 }
 
+/**
+ * Who's waiting, for the dashboard. Position is the caller's place in line and
+ * waitingSec how long they've held — enough for an agent to see the queue and
+ * judge whether to wrap up their current call.
+ */
+export function snapshot(tenantId: string): Array<{ channelId: string; position: number; waitingSec: number; callerNum: string }> {
+  const q = queues.get(tenantId) || [];
+  return q.map((c, i) => ({
+    channelId: c.channel.id,
+    position: i + 1,
+    waitingSec: Math.round((Date.now() - c.joinedAt) / 1000),
+    // A guest leg's caller id is its own endpoint username, which means nothing
+    // to an agent — say where the call came from instead.
+    callerNum: /^tnt_/.test(String((c.channel as any)?.caller?.number || ''))
+      ? 'Web visitor'
+      : ((c.channel as any)?.caller?.number || 'Web visitor')
+  }));
+}
+
 /** The caller who has waited longest, without removing them. */
 export function peek(tenantId: string): QueuedCaller | null {
   const q = queues.get(tenantId);
