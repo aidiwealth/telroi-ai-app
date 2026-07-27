@@ -36,7 +36,10 @@ async function agentCall(path: string, body: unknown): Promise<any> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(12000)
+    // Provisioning writes a config file and reloads pjsip, which regularly takes
+    // longer than twelve seconds — the caller was giving up while the work was
+    // still going, sometimes leaving an endpoint created but unrecorded.
+    signal: AbortSignal.timeout(path === '/provision' ? 45000 : 12000)
   });
   const json = await res.json().catch(() => null);
   if (!res.ok || !json?.ok) {
