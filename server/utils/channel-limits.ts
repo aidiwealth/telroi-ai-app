@@ -40,14 +40,19 @@ export async function liveCallCount(tenantId: string): Promise<number> {
   //    (no end + started within the last 2h) so a crashed call doesn't wedge a
   //    channel forever.
   const since = new Date(Date.now() - 20 * 60 * 1000); // 20 min — a stuck/crashed call shouldn't wedge a channel longer than this
-  const events = await db.select({ id: schema.callEvents.id })
+  //    Widget calls are excluded here: they write an lc_<sessionId> event for the
+  //    very session counted above, so including both made one conversation eat
+  //    two channels — a client with three could hold a single web call and then
+  //    be told every line was busy.
+  const events = await db.select({ id: schema.callEvents.id, callid: schema.callEvents.callid })
     .from(schema.callEvents)
     .where(and(
       eq(schema.callEvents.tenantId, tenantId),
       inArray(schema.callEvents.status, ['ringing', 'in-progress', 'initiated', 'answered']),
       gte(schema.callEvents.startedAt, since)
     ));
-  return sessions.length + events.length;
+  const nonWidget = events.filter((e) => !String(e.callid || '').startsWith('lc_'));
+  return sessions.length + nonWidget.length;
 }
 
 export async function channelUsage(tenantId: string): Promise<ChannelUsage> {

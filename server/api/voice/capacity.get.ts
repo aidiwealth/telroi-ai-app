@@ -14,5 +14,15 @@ export default defineEventHandler(async (event) => {
   const tenantId = getQuery(event).tenantId as string;
   if (!tenantId) throw createError({ statusCode: 400, statusMessage: 'tenantId required' });
   const u = await channelUsage(tenantId);
+
+  // Internal workspaces — our own support desk — aren't metered. The widget path
+  // already skipped them, so a phone call was refused for being at capacity while
+  // a web call to the same agents went through.
+  const { useDb, schema } = await import('~/server/db');
+  const { eq } = await import('drizzle-orm');
+  const [t] = await useDb().select({ isInternal: schema.tenants.isInternal })
+    .from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  if (t?.isInternal) return { ...u, ok: true };
+
   return { ...u, ok: u.capacity === 0 ? false : u.inUse < u.capacity };
 });
