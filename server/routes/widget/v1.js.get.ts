@@ -213,10 +213,12 @@ const WIDGET_JS = String.raw`(function () {
             client.connect();
           });
         } else if (voice.provider === 'telroi' || voice.provider === 'digidite') {
-          // cdnjs has no sip.js builds — the old URL 404'd and the callback ran
-          // anyway, so window.SIP was undefined and the failure surfaced as an
-          // unrelated TypeError. Load from jsdelivr and say so when it fails.
-          loadJs('https://cdn.jsdelivr.net/npm/sip.js@0.21.2/lib/index.min.js', function (err) {
+          // Served from our own domain rather than a CDN: sip.js publishes ES
+          // modules only, which a plain script tag cannot load, and a widget
+          // embedded on customer sites shouldn't depend on a third party being up
+          // or on those customers allowing an extra origin in their CSP. The
+          // bundle is built at release time and sets window.SIP.
+          loadJs(BASE + '/widget-sipjs.js', function (err) {
             var SIP = window.SIP;
             if (err || !SIP || !SIP.UserAgent) {
               status.innerHTML = '<div style="font-size:13px;color:#c0392b;padding:8px 0">Couldn\'t load the calling library. Please try again.</div>';
