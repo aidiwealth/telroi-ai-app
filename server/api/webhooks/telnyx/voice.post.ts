@@ -77,6 +77,16 @@ export default defineEventHandler(async (event) => {
         // call.initiated left the call at 'ringing' forever (never answered).
 
         // ---- Call Control IVR state machine (issue commands back to Telnyx) ----
+        // A call we can't attribute never reaches the state machine, so it is
+        // never answered and the caller waits in silence until they give up —
+        // with nothing anywhere to say why. Record it.
+        if (!isInbound && callId && eventType === 'call.initiated') {
+          await logEvent({
+            tenantId: tenantId || null, kind: 'system', action: 'telnyx.unrouted', level: 'warn',
+            summary: `${from} -> ${to} not treated as inbound (matched ${matchedOurNumber || 'nothing'})`, ref: callId
+          });
+        }
+
         if (isInbound && callId) {
           const cc = await import('~/server/utils/telnyx-cc');
           const { resolveInboundAction, resolveFlowNode } = await import('~/server/utils/inbound-routing');
@@ -125,8 +135,20 @@ export default defineEventHandler(async (event) => {
             await cc.telnyxHangup(callId);
           };
 
-          if (eventType === 'call.initiated') { await cc.telnyxAnswer(callId); return { ok: true }; }
-          if (eventType === 'call.answered') { await drive(routeAction || await resolveInboundAction(tenantId, matchedOurNumber)); return { ok: true }; }
+          if (eventType === 'call.initiated') {
+            await logEvent({ tenantId, kind: 'system', action: 'telnyx.initiated', summary: `${from} -> ${to} (answering)`, ref: callId });
+            try { await cc.telnyxAnswer(callId); }
+            catch (e: any) {
+              await logEvent({ tenantId, kind: 'system', action: 'telnyx.answer_failed', level: 'error', summary: e?.message || 'answer failed', ref: callId });
+            }
+            return { ok: true };
+          }
+          if (eventType === 'call.answered') {
+            const act = routeAction || await resolveInboundAction(tenantId, matchedOurNumber);
+            await logEvent({ tenantId, kind: 'system', action: 'telnyx.routed', summary: `${to} -> ${act?.action || 'none'}`, ref: callId });
+            await drive(act);
+            return { ok: true };
+          }
           if (eventType === 'call.speak.ended') {
             const st = cc.decodeState(payload.client_state);
             if (st.n) { await drive(await resolveFlowNode(tenantId, matchedOurNumber, st.n)); } else { await cc.telnyxHangup(callId); }
