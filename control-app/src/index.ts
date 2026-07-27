@@ -37,6 +37,24 @@ const INTERNAL_SECRET = process.env.PROVISION_AGENT_SECRET || process.env.TELROI
 // AI call. Uses the web app's unified live-call count (dialer + widget + API +
 // inbound together). Fail-open: if the check errors/times out, allow the call
 // (never drop a real caller because of a transient capacity-lookup failure).
+/**
+ * Who is on this guest endpoint. A widget call arrives as its endpoint's username,
+ * which means nothing to whoever answers — the lease knows the visitor, so ask.
+ */
+async function guestCallerName(username: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/voice/guest-caller?username=${encodeURIComponent(username)}`, {
+      headers: { 'x-telroi-internal': INTERNAL_SECRET },
+      signal: AbortSignal.timeout(3000)
+    });
+    if (!res.ok) return null;
+    const j = await res.json() as { name?: string | null };
+    return j.name || null;
+  } catch {
+    return null;   // a nameless caller still gets through
+  }
+}
+
 async function inboundHasCapacity(tenantId: string, log: (m: string) => void): Promise<boolean> {
   try {
     const res = await fetch(`${WEBAPP_URL}/api/voice/capacity?tenantId=${encodeURIComponent(tenantId)}`, {
@@ -161,6 +179,7 @@ async function main() {
       if (widgetTenantId) {
         const allUsers = resolveTenantEndpoints(widgetTenantId);
         const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
+        const visitorName = await guestCallerName(String(callerNum || ''));
         let endpoints = await free();
         log(`  [widget ${chId}] tenant ${widgetTenantId} — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
         const unavailable = async () => {
@@ -182,8 +201,8 @@ async function main() {
         try {
           wRes = await bridgeToDepartment({
             // The caller id on a guest leg is the endpoint's own username, which
-            // tells an agent nothing — say where the call came from instead.
-            client, caller: channel, endpoints, callerIdNum: 'Web visitor', ringTimeoutSec: 40
+            // tells an agent nothing — use the visitor's name where we have it.
+            client, caller: channel, endpoints, callerIdNum: visitorName || 'Web visitor', ringTimeoutSec: 40
           });
         } catch (err) {
           log(`  [widget ${chId}] bridge failed: ${(err as Error)?.message}`);
