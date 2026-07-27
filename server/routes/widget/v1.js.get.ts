@@ -294,8 +294,20 @@ const WIDGET_JS = String.raw`(function () {
         if (!widgetCall) return;
         if (widgetCall.provider === 'twilio') { widgetCall.conn && widgetCall.conn.disconnect(); widgetCall.device && widgetCall.device.destroy(); }
         if (widgetCall.provider === 'telnyx') { widgetCall.conn && widgetCall.conn.hangup(); widgetCall.client && widgetCall.client.disconnect(); }
-        if (widgetCall.provider === 'digidite') { try { widgetCall.conn && widgetCall.conn.bye(); } catch (e) {} try { widgetCall.conn && widgetCall.conn.cancel(); } catch (e) {} widgetCall.ua && widgetCall.ua.stop(); }
+        // 'telroi' is the guest endpoint on our own PBX; 'digidite' is the old
+        // name for the same path. Missing the new one meant nothing was hung up:
+        // the widget moved on to the rating screen while the call stayed live and
+        // the visitor's microphone kept feeding it.
+        if (widgetCall.provider === 'telroi' || widgetCall.provider === 'digidite') {
+          try { widgetCall.conn && widgetCall.conn.bye(); } catch (e) {}
+          try { widgetCall.conn && widgetCall.conn.cancel(); } catch (e) {}
+          try { widgetCall.ua && widgetCall.ua.stop(); } catch (e) {}
+        }
       } catch (e) {}
+      // Stop the duration ticking once the call is over — it would otherwise run
+      // for the life of the page, updating an element that no longer exists.
+      if (durationTimer) { clearInterval(durationTimer); durationTimer = null; }
+      isMuted = false;
       widgetCall = null;
     }
     function finishCall(outcome) {
