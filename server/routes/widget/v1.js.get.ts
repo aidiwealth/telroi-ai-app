@@ -181,7 +181,19 @@ const WIDGET_JS = String.raw`(function () {
     }
 
     // ── Real WebRTC for the widget (Twilio / Telnyx / Digidite) ──
-    function loadJs(src, cb) { if (document.querySelector('script[src="' + src + '"]')) return cb(); var s = document.createElement('script'); s.src = src; s.async = true; s.onload = cb; s.onerror = function(){ cb(new Error('load failed')); }; document.head.appendChild(s); }
+    // A tag left behind by a failed load used to count as "already loaded", so
+    // every later attempt returned success while the library was still missing.
+    function loadJs(src, cb) {
+      var existing = document.querySelector('script[src="' + src + '"]');
+      if (existing) {
+        if (existing.getAttribute('data-loaded') === '1') return cb();
+        existing.parentNode.removeChild(existing);
+      }
+      var s = document.createElement('script'); s.src = src; s.async = true;
+      s.onload = function () { s.setAttribute('data-loaded', '1'); cb(); };
+      s.onerror = function () { if (s.parentNode) s.parentNode.removeChild(s); cb(new Error('load failed')); };
+      document.head.appendChild(s);
+    }
     function startWebrtc(voice, routedTo, status, destination) {
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function () {
         // Dial the tenant's own number. The leg then arrives at our webhook as an
