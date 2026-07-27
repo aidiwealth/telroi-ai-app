@@ -25,6 +25,15 @@ export default defineEventHandler(async (event) => {
       status: 'ended', endedAt: new Date()
     })
     .where(and(eq(schema.liveCallSessions.id, p.data.sessionId), eq(schema.liveCallSessions.tenantId, t.id)));
+
+  // The visitor is done, so give their guest endpoint back rather than leaving
+  // it held until the sweeper notices. A visitor who closes the tab never gets
+  // here, which is what the sweeper remains for.
+  try {
+    const { releaseGuestEndpoint } = await import('~/server/utils/widget-guest');
+    await releaseGuestEndpoint(p.data.sessionId);
+  } catch { /* the sweeper will get it */ }
+
   // Update the linked call-log event status to reflect the real outcome, and
   // charge the call to this tenant's wallet (client wallet, or support wallet
   // for the support workspace) on the provider that was resolved at call time.
