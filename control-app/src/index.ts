@@ -569,7 +569,12 @@ async function main() {
       }
     } catch (err) {
       console.error(`[control-app] error on channel ${chId}:`, err);
-      try { await channel.hangup(); } catch { /* gone */ }
+    } finally {
+      // However this call ended, leave Stasis with the channel down. One left up
+      // sits in the application indefinitely — and since ringing now skips a busy
+      // endpoint, a single stale channel takes that agent out of service for good.
+      // Harmless when the channel is already gone, which is the common case.
+      try { await channel.hangup(); } catch { /* already down */ }
     }
   });
 
