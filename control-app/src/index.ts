@@ -463,6 +463,42 @@ async function main() {
           }
           break;
         }
+        // Ring everyone who's free, first to answer takes it. The routing options
+        // offer this, and the escalation path has always honoured it, but an
+        // ordinary inbound call fell through to the person case and died looking
+        // for a single target it was never given.
+        case 'ring_all': {
+          const allUsers = resolveTenantEndpoints(route.tenantId);
+          const liveUsers = await filterLiveEndpoints(client, allUsers, log);
+          const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
+          log(`     Ring-all route -> ${endpoints.length} available of ${allUsers.length} endpoint(s)`);
+          if (!endpoints.length) {
+            log(`     no one available — playing no-service`);
+            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in' });
+            await playAndHangup(client, channel, 'sound:ss-noservice');
+            break;
+          }
+          try {
+            await bridgeToDepartment({
+              client,
+              caller: channel,
+              endpoints,
+              callerIdNum: callerNum || 'Telroi',
+              ringTimeoutSec: 40,
+              onStatus: (status, details) => {
+                const agent = details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined;
+                logCall({
+                  tenantId: route.tenantId, callid: chId, phone: callerNum,
+                  status, direction: 'in', duration: details?.duration, user: agent
+                });
+              }
+            });
+          } catch (err) {
+            log(`     ring-all bridge failed: ${(err as Error)?.message} — playing fallback`);
+            await playAndHangup(client, channel, 'sound:ss-noservice');
+          }
+          break;
+        }
         case 'person':
         default: {
           // Option B: route_target holds a sip_endpoints.id. Resolve it to the
