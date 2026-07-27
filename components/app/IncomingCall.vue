@@ -56,8 +56,9 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 // Which token endpoint registers this browser to receive calls. Clients use
 // their own workspace's; admins pass the support one so support calls ring them.
-const props = withDefaults(defineProps<{ tokenEndpoint?: string }>(), {
-  tokenEndpoint: '/api/voice/token'
+const props = withDefaults(defineProps<{ tokenEndpoint?: string; queueEndpoint?: string }>(), {
+  tokenEndpoint: '/api/voice/token',
+  queueEndpoint: '/api/voice/queue'
 });
 
 const voice = useVoiceCall();
@@ -75,7 +76,7 @@ const longestWait = computed(() => {
   return `${Math.floor(s2 / 60)}:${('0' + (s2 % 60)).slice(-2)}`;
 });
 async function pollQueue() {
-  try { waiting.value = (await $fetch<any>('/api/voice/queue'))?.waiting || []; }
+  try { waiting.value = (await $fetch<any>(props.queueEndpoint))?.waiting || []; }
   catch { waiting.value = []; }
 }
 // Hanging up frees this agent's endpoint, and the queue rings them again within
