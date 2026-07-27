@@ -168,13 +168,16 @@ const WIDGET_JS = String.raw`(function () {
       // Native bridge hook (iOS/Android WebView handle their own audio).
       if (window.TelroiLiveCall && window.TelroiLiveCall.onCall) window.TelroiLiveCall.onCall({ sessionId: sessionId, routedTo: routedTo, voice: voice });
 
-      if (!voice) {
-        // Provider not configured yet — tell the visitor honestly.
-        status.innerHTML = '<div style="font-size:13px;color:#c0392b;padding:8px 0">Calling isn\'t available right now. Please try again later.</div>';
-        return;
-      }
-      // Real in-browser audio via the resolved provider.
-      startWebrtc(voice, routedTo, status, callResp.destination);
+      // Real in-browser audio. Ask for a guest endpoint on the PBX: the visitor
+      // registers there like an agent does, and the two are bridged locally.
+      api('voice-token', { key: KEY, sessionId: sessionId })
+        .then(function (g) {
+          if (!g || !g.ok) throw 0;
+          startWebrtc({ provider: 'telroi', sipUsername: g.sipUsername, sipPassword: g.sipPassword, sipDomain: g.sipDomain, wsServer: g.wsServer }, routedTo, status, g.destination);
+        })
+        .catch(function () {
+          status.innerHTML = '<div style="font-size:13px;color:#c0392b;padding:8px 0">All lines are busy right now. Please try again shortly.</div>';
+        });
     }
 
     // ── Real WebRTC for the widget (Twilio / Telnyx / Digidite) ──
@@ -209,11 +212,11 @@ const WIDGET_JS = String.raw`(function () {
             client.on('telnyx.notification', function (n) { var st = n && n.call && n.call.state; if (st === 'active') { callStartedAt = Date.now(); status.innerHTML = '<div style="font-size:14px;color:#1a7a4f">Connected</div>'; } if (st === 'hangup' || st === 'destroy') finishCall('answered'); });
             client.connect();
           });
-        } else if (voice.provider === 'digidite') {
+        } else if (voice.provider === 'telroi' || voice.provider === 'digidite') {
           loadJs('https://cdnjs.cloudflare.com/ajax/libs/sip.js/0.21.2/sip.min.js', function () {
             var SIP = window.SIP;
             var ua = new SIP.UserAgent({ uri: SIP.UserAgent.makeURI('sip:' + voice.sipUsername + '@' + voice.sipDomain), transportOptions: { server: voice.wsServer }, authorizationUsername: voice.sipUsername, authorizationPassword: voice.sipPassword });
-            widgetCall = { provider: 'digidite', ua: ua };
+            widgetCall = { provider: voice.provider, ua: ua };
             ua.start().then(function () {
               var target = SIP.UserAgent.makeURI('sip:' + (to || voice.sipUsername) + '@' + voice.sipDomain);
               var inviter = new SIP.Inviter(ua, target, { sessionDescriptionHandlerOptions: { constraints: { audio: true, video: false } } });
