@@ -45,8 +45,10 @@ async function agentCall(path: string, body: unknown): Promise<any> {
   return json;
 }
 
-export async function agentProvision(tenantId: string, label: string, webrtc = false): Promise<AgentProvisionResult> {
-  const j = await agentCall('/provision', { tenantId, label, webrtc });
+export async function agentProvision(tenantId: string, label: string, webrtc = false, context?: string): Promise<AgentProvisionResult> {
+  // context lets a caller put the endpoint somewhere other than the agents'
+  // dialplan — Live Call guests go in a restricted one with no trunk access.
+  const j = await agentCall('/provision', { tenantId, label, webrtc, context });
   return {
     username: j.username, password: j.password, domain: j.domain,
     transport: j.transport, context: j.context, configPath: j.configPath

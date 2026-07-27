@@ -721,16 +721,22 @@ export const sipEndpoints = pgTable('sip_endpoints', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   provider: providerKindEnum('provider').notNull(),     // twilio | telnyx | telroi
-  kind: text('kind').notNull(),                          // trunk | credential_connection | registration
+  kind: text('kind').notNull(),                          // trunk | credential_connection | registration | widget_guest
   externalId: text('external_id'),                       // TK… (Twilio) / connection id (Telnyx) / telnum (Digidite)
   label: text('label'),
   sipUsername: text('sip_username'),
   secretEnc: text('secret_enc'),                          // AES-256-GCM device password, if vendor-issued
   domain: text('domain'),                                // termination/registrar domain
   meta: jsonb('meta').$type<Record<string, unknown>>().default({}),
+  // Widget guest endpoints are lent to one visitor at a time. Null = free.
+  // A lease older than a couple of minutes is stale and gets reclaimed, so a
+  // browser that vanishes mid-call doesn't hold an endpoint forever.
+  leasedSessionId: uuid('leased_session_id'),
+  leasedAt: timestamp('leased_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
-  tenantIdx: index('sip_endpoints_tenant_idx').on(t.tenantId)
+  tenantIdx: index('sip_endpoints_tenant_idx').on(t.tenantId),
+  leaseIdx: index('sip_endpoints_lease_idx').on(t.tenantId, t.kind, t.leasedSessionId)
 }));
 
 /* ---------- API keys (for THIS dashboard's own API) ---------- */

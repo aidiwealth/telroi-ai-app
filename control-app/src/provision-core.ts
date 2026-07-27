@@ -38,7 +38,13 @@ export function genPassword(): string {
   return crypto.randomBytes(18).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
 }
 
-function endpointConfig(username: string, password: string, tenantId: string, label: string, webrtc: boolean): string {
+function endpointConfig(username: string, password: string, tenantId: string, label: string, webrtc: boolean, context?: string): string {
+  // Live Call guests land in a context with one extension and no route to a
+  // trunk, and carry their tenant as a channel variable — their credentials are
+  // readable in the browser, so a stolen one must be able to ring an agent and
+  // nothing else, for one tenant only.
+  const ctx = context || CONTEXT;
+  const pinned = context === 'widget-guest' ? `set_var=WIDGET_TENANT=${tenantId}\n` : '';
   const transport = webrtc ? 'transport-wss' : TRANSPORT;
   const mediaBlock = webrtc
     ? `webrtc=yes
@@ -53,8 +59,8 @@ rewrite_contact=yes`;
 [${username}]
 type=endpoint
 transport=${transport}
-context=${CONTEXT}
-disallow=all
+context=${ctx}
+${pinned}disallow=all
 allow=opus
 allow=ulaw
 allow=alaw
@@ -113,18 +119,18 @@ function pjsipReload(): void {
  * config file, makes it readable, reloads PJSIP. Returns the credentials so the
  * caller can store them (encrypted) and show them to the client once.
  */
-export function provisionEndpoint(tenantId: string, label: string, webrtc = false): ProvisionResult {
+export function provisionEndpoint(tenantId: string, label: string, webrtc = false, context?: string): ProvisionResult {
   const username = genUsername();
   const password = genPassword();
   const configPath = `${PJSIP_D}/${username}.conf`;
 
   ensurePlaceholder();
-  writeFileSync(configPath, endpointConfig(username, password, tenantId, label, webrtc), { mode: 0o640 });
+  writeFileSync(configPath, endpointConfig(username, password, tenantId, label, webrtc, context), { mode: 0o640 });
   chownToAsterisk(configPath);
   pjsipReload();
 
   const transport = webrtc ? 'transport-wss' : TRANSPORT;
-  return { username, password, domain: SIP_DOMAIN, transport, context: CONTEXT, configPath };
+  return { username, password, domain: SIP_DOMAIN, transport, context: context || CONTEXT, configPath };
 }
 
 /**

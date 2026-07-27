@@ -96,7 +96,8 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
         const label = String(body.label || 'Provisioned device').slice(0, 120);
         const webrtc = body.webrtc === true || body.webrtc === 'true';
         if (!tenantId) return send(res, 400, { ok: false, error: 'tenantId required' });
-        const result = provisionEndpoint(tenantId, label, webrtc);
+        const context = body.context ? String(body.context).trim() : undefined;
+        const result = provisionEndpoint(tenantId, label, webrtc, context);
         log(`provisioned ${result.username} for tenant ${tenantId}`);
         return send(res, 200, { ok: true, ...result });
       }
