@@ -154,3 +154,46 @@ export async function holdUntilFree(opts: {
   log(`  [queue ${channel.id}] caller left the queue`);
   return null;
 }
+
+/**
+ * Hang up channels whose endpoint has gone away.
+ *
+ * Asterisk's qualify notices a browser that vanished — a refreshed tab, a closed
+ * window, a dropped connection — and removes its contact, but an established
+ * dialogue stays up regardless. Since ringing skips an endpoint that has channels
+ * on it, one abandoned channel takes that agent out of service until somebody
+ * clears it by hand.
+ *
+ * A channel is only reaped when its endpoint has no contact at all: a live call
+ * on a reachable endpoint is left well alone, however long it runs.
+ */
+export function startChannelReaper(client: any, log: (m: string) => void, everyMs = 30000): void {
+  setInterval(async () => {
+    try {
+      const channels = await client.channels.list();
+      for (const ch of channels) {
+        const name = String(ch.name || '');
+        const m = /^PJSIP\/(tnt_[a-f0-9]+)-/.exec(name);
+        if (!m) continue;                       // not one of ours
+        const username = m[1];
+
+        // Give a new channel time to establish before judging it.
+        const started = ch.creationtime ? Date.parse(ch.creationtime) : 0;
+        if (started && Date.now() - started < 60000) continue;
+
+        let reachable = true;
+        try {
+          const ep = await client.endpoints.get({ tech: 'PJSIP', resource: username });
+          reachable = ep?.state === 'online';
+        } catch { reachable = false; }
+        if (reachable) continue;
+
+        log(`[reaper] ${name} has no reachable endpoint — hanging up`);
+        try { await client.channels.hangup({ channelId: ch.id }); } catch { /* already gone */ }
+      }
+    } catch (e) {
+      log(`[reaper] sweep failed: ${(e as Error)?.message}`);
+    }
+  }, everyMs);
+  log(`[reaper] watching for channels whose endpoint has gone, every ${Math.round(everyMs / 1000)}s`);
+}

@@ -21,7 +21,7 @@ import { logCall } from './call-log.ts';
 import { installLogCapture } from './log-buffer.ts';
 import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridge.ts';
-import { holdUntilFree } from './queue.ts';
+import { holdUntilFree, startChannelReaper } from './queue.ts';
 import { startProvisionAgent } from './provision-agent.ts';
 import { attachTelnyxMedia } from './telnyx-media.ts';
 import { startScheduler } from './scheduler.ts';
@@ -121,6 +121,7 @@ async function main() {
   // Attach the Telnyx AI media WebSocket to the same HTTP server (shares :8090).
   if (agentServer) { try { attachTelnyxMedia(agentServer); } catch (e) { log('telnyx-media attach failed:', (e as Error).message); } }
   try { startScheduler(); } catch (e) { log('scheduler failed to start:', (e as Error).message); }
+  try { startChannelReaper(client, (m) => log(m)); } catch (e) { log('reaper failed to start:', (e as Error).message); }
 
   // -- Handle each call entering Stasis --
   client.on('StasisStart', async (event, channel) => {
