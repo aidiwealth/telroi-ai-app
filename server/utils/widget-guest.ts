@@ -12,7 +12,7 @@
 // twelve seconds, which no visitor should wait for. A tenant accumulates them up
 // to the number of channels they pay for — the same ceiling their phone calls
 // have.
-import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { useDb, schema } from '~/server/db';
 import { agentProvision, provisionAgentConfigured } from '~/server/utils/provision-agent';
 import { encrypt, decrypt } from '~/server/utils/crypto';
@@ -26,15 +26,27 @@ export interface GuestLease {
   endpointId: string;
 }
 
+/**
+ * Reclaim endpoints whose visitor has gone. Age alone isn't enough to judge that
+ * — a long conversation would have its endpoint taken mid-call and handed to
+ * someone else — so only leases whose session has actually finished are freed.
+ */
 async function sweepStale(tenantId: string) {
   const db = useDb();
-  await db.update(schema.sipEndpoints)
-    .set({ leasedSessionId: null, leasedAt: null })
+  const stale = await db.select({ id: schema.sipEndpoints.id })
+    .from(schema.sipEndpoints)
+    .innerJoin(schema.liveCallSessions, eq(schema.liveCallSessions.id, schema.sipEndpoints.leasedSessionId))
     .where(and(
       eq(schema.sipEndpoints.tenantId, tenantId),
       eq(schema.sipEndpoints.kind, 'widget_guest'),
-      lt(schema.sipEndpoints.leasedAt, new Date(Date.now() - LEASE_STALE_MS))
+      lt(schema.sipEndpoints.leasedAt, new Date(Date.now() - LEASE_STALE_MS)),
+      inArray(schema.liveCallSessions.status, ['ended', 'missed'])
     ));
+  if (stale.length) {
+    await db.update(schema.sipEndpoints)
+      .set({ leasedSessionId: null, leasedAt: null })
+      .where(inArray(schema.sipEndpoints.id, stale.map((r) => r.id)));
+  }
 }
 
 export async function leaseGuestEndpoint(tenantId: string, sessionId: string, maxEndpoints: number): Promise<GuestLease | null> {
