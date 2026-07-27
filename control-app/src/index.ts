@@ -57,7 +57,12 @@ async function filterLiveEndpoints(client: any, usernames: string[], log: (m: st
     try {
       const ep = await client.endpoints.get({ tech: 'PJSIP', resource: u });
       // ARI reports state: 'online' (registered) | 'offline' (no contact) | 'unknown'.
-      return { u, keep: ep?.state === 'online' };
+      // channel_ids holds whatever calls the endpoint is already on — ringing an
+      // agent mid-conversation would interrupt them, and the caller would hear it
+      // ring out while somebody else was free.
+      const busy = Array.isArray(ep?.channel_ids) && ep.channel_ids.length > 0;
+      if (busy) log(`  [ring] ${u} is on a call — skipping`);
+      return { u, keep: ep?.state === 'online' && !busy };
     } catch (e) {
       // Fail-open: a lookup glitch shouldn't drop a possibly-reachable agent.
       log(`  [ring_all] endpoint ${u} state check failed (${(e as Error)?.message}) — keeping`);
@@ -137,9 +142,6 @@ async function main() {
     const isEscalation = dialedDid.startsWith('esc-');
     if (isEscalation) dialedDid = dialedDid.slice(4);
 
-    // Live Call widget: a visitor's browser reached us through the carrier. The
-    // tenant and the route they configured both ride in the extension, decided by
-    // the web app where those settings live — there's no DID to look them up from.
     // Live Call widget: the visitor's browser registered to us as a guest endpoint
     // and dialled the one extension its context allows. The guest dialplan passes
     // the tenant id, which was fixed when the endpoint was leased.

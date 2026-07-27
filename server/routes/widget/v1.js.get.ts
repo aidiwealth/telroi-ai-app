@@ -244,7 +244,7 @@ const WIDGET_JS = String.raw`(function () {
               widgetCall.conn = inviter;
               inviter.stateChange.addListener(function (st) {
                 if (st === 'Establishing') status.innerHTML = '<div style="font-size:14px;color:#333">Ringing…</div>';
-                if (st === 'Established') { callStartedAt = Date.now(); status.innerHTML = '<div style="font-size:14px;color:#1a7a4f">Connected</div>'; attachAudio(inviter); }
+                if (st === 'Established') { callStartedAt = Date.now(); attachAudio(inviter); showInCall(status); }
                 if (st === 'Terminated') finishCall('answered');
               });
               inviter.invite();
@@ -255,6 +255,37 @@ const WIDGET_JS = String.raw`(function () {
         status.innerHTML = '<div style="font-size:13px;color:#c0392b">Microphone access is needed to call. Please allow it and try again.</div>';
       });
     }
+    // Replaces the status line once a call is up: a live duration so the visitor
+    // can see it's really connected, and a mute they can find without hunting.
+    var durationTimer = null, isMuted = false;
+    function showInCall(status) {
+      status.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:4px">'
+        + '<span style="width:8px;height:8px;border-radius:50%;background:#1a7a4f;display:inline-block"></span>'
+        + '<span style="font-size:14px;color:#1a7a4f;font-weight:600">Connected</span></div>'
+        + '<div id="telroi-dur" style="font-size:22px;color:#1a1a1a;font-variant-numeric:tabular-nums;letter-spacing:.02em">00:00</div>'
+        + '<button id="telroi-mute" style="margin-top:12px;border:1px solid #ddd;background:#fff;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer">Mute</button>';
+      if (durationTimer) clearInterval(durationTimer);
+      durationTimer = setInterval(function () {
+        var el2 = document.getElementById('telroi-dur');
+        if (!el2 || !callStartedAt) return;
+        var s2 = Math.round((Date.now() - callStartedAt) / 1000);
+        el2.textContent = ('0' + Math.floor(s2 / 60)).slice(-2) + ':' + ('0' + (s2 % 60)).slice(-2);
+      }, 1000);
+      var mb = document.getElementById('telroi-mute');
+      if (mb) mb.onclick = function () { toggleMute(mb); };
+    }
+    function toggleMute(btn) {
+      try {
+        var sess = widgetCall && widgetCall.conn;
+        var pc = sess && sess.sessionDescriptionHandler && sess.sessionDescriptionHandler.peerConnection;
+        if (!pc) return;
+        isMuted = !isMuted;
+        pc.getSenders().forEach(function (snd) { if (snd.track && snd.track.kind === 'audio') snd.track.enabled = !isMuted; });
+        btn.textContent = isMuted ? 'Unmute' : 'Mute';
+        btn.style.background = isMuted ? '#f4f4f4' : '#fff';
+      } catch (e) {}
+    }
+
     function attachAudio(session) {
       try { var pc = session.sessionDescriptionHandler.peerConnection; var rs = new MediaStream(); pc.getReceivers().forEach(function (r) { if (r.track) rs.addTrack(r.track); }); var a = document.getElementById('telroi-wa') || (function(){ var x = document.createElement('audio'); x.id = 'telroi-wa'; x.autoplay = true; document.body.appendChild(x); return x; })(); a.srcObject = rs; } catch (e) {}
     }
