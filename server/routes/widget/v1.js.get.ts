@@ -213,8 +213,15 @@ const WIDGET_JS = String.raw`(function () {
             client.connect();
           });
         } else if (voice.provider === 'telroi' || voice.provider === 'digidite') {
-          loadJs('https://cdnjs.cloudflare.com/ajax/libs/sip.js/0.21.2/sip.min.js', function () {
+          // cdnjs has no sip.js builds — the old URL 404'd and the callback ran
+          // anyway, so window.SIP was undefined and the failure surfaced as an
+          // unrelated TypeError. Load from jsdelivr and say so when it fails.
+          loadJs('https://cdn.jsdelivr.net/npm/sip.js@0.21.2/lib/index.min.js', function (err) {
             var SIP = window.SIP;
+            if (err || !SIP || !SIP.UserAgent) {
+              status.innerHTML = '<div style="font-size:13px;color:#c0392b;padding:8px 0">Couldn\'t load the calling library. Please try again.</div>';
+              return;
+            }
             var ua = new SIP.UserAgent({ uri: SIP.UserAgent.makeURI('sip:' + voice.sipUsername + '@' + voice.sipDomain), transportOptions: { server: voice.wsServer }, authorizationUsername: voice.sipUsername, authorizationPassword: voice.sipPassword });
             widgetCall = { provider: voice.provider, ua: ua };
             ua.start().then(function () {
