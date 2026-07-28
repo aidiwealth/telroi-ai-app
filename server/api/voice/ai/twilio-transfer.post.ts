@@ -3,7 +3,7 @@
 // adapter. As with the other carrier, the credentials live here rather than on
 // the PBX box, so the adapter asks rather than holding a second copy.
 import { twilio } from '~/server/utils/providers';
-import { voiceCredentials } from '~/server/utils/voice-credentials';
+import { masterCarrierCreds } from '~/server/utils/platform';
 
 export default defineEventHandler(async (event) => {
   const cfg = useRuntimeConfig() as any;
@@ -17,8 +17,13 @@ export default defineEventHandler(async (event) => {
   if (!callSid || !to) throw createError({ statusCode: 400, statusMessage: 'callSid and to required' });
 
   try {
-    const { twilio: creds } = await voiceCredentials();
-    if (!creds?.accountSid) return { ok: false, error: 'Twilio not configured' };
+    // The WebRTC card carries an API key for browser tokens, not the account's
+    // auth token — using it to move a live call got a 401 from Twilio. The master
+    // credentials are what their REST API accepts, and what outbound calls
+    // already authenticate with.
+    const master = await masterCarrierCreds();
+    const creds = master?.twilio;
+    if (!creds?.accountSid || !creds?.authToken) return { ok: false, error: 'Twilio not configured' };
 
     // A SIP target reaches our own PBX, where the agents are; anything else is a
     // number Twilio can dial directly.
