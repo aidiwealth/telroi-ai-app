@@ -40,7 +40,7 @@
 
     <!-- Sub-views: the EXACT client components, pointed at the support workspace -->
     <div v-show="tab === 'numbers'">
-      <VansWorkspace api-base="/api/admin/support/vans" :bundled="true" />
+      <VansWorkspace api-base="/api/admin/support/vans" :bundled="true" escalation-endpoint="/api/admin/support/escalation-targets" />
     </div>
     <div v-show="tab === 'connections'">
       <AiConnectionsWorkspace api-base="/api/admin/support/ai/connections" agents-base="/api/admin/support/agents" />

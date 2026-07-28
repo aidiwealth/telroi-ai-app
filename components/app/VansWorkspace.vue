@@ -125,7 +125,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 
-const props = withDefaults(defineProps<{ apiBase?: string; bundled?: boolean }>(), { apiBase: '/api/vans', bundled: false });
+const props = withDefaults(defineProps<{ apiBase?: string; bundled?: boolean; escalationEndpoint?: string }>(), {
+  apiBase: '/api/vans', bundled: false,
+  // Defaults to the client's own endpoint, so nothing changes for them; admin
+  // passes the support one, which its session can actually read.
+  escalationEndpoint: '/api/voice/escalation-targets'
+});
 const api = useApi();
 const toast = useToast();
 
@@ -153,13 +158,13 @@ async function load() {
       const r = await api.get<any>(props.apiBase);
       vans.value = r.vans || []; agents.value = r.agents || [];
       ownedNumbers.value = (r.numbers || []).filter((x: any) => x.status === 'active');
-      escalationTargets.value = r.escalationTargets || (await api.get<any>('/api/voice/escalation-targets').catch(() => ({ targets: [] })))?.targets || [];
+      escalationTargets.value = r.escalationTargets || (await api.get<any>(props.escalationEndpoint).catch(() => ({ targets: [] })))?.targets || [];
     } else {
       const [v, a, n, t] = await Promise.all([
         api.get<Van[]>(props.apiBase),
         api.get<Agent[]>('/api/agents'),
         api.get<any[]>('/api/numbers/subscriptions').catch(() => []),
-        api.get<any>('/api/voice/escalation-targets').catch(() => ({ targets: [] }))
+        api.get<any>(props.escalationEndpoint).catch(() => ({ targets: [] }))
       ]);
       vans.value = v; agents.value = a;
       escalationTargets.value = t?.targets || [];
