@@ -70,8 +70,28 @@ export default defineEventHandler(async (event) => {
           act = await resolveInboundAction(tenantId2, to);
         }
         if (act.action === 'ai') {
-          // AI answers via the media gateway; greet then connect the AI leg.
-          twiml = `<Say voice="Polly.Joanna">${escapeXml(act.greeting || 'How can I help you?')}</Say><Pause length="60"/>`;
+          // Fork the call audio to our media adapter, which drives the same brain
+          // the other carrier uses. The greeting comes from there in the agent's
+          // own voice rather than being read here — this used to say hello and
+          // then leave the caller in silence for a minute.
+          const wsUrl = process.env.TWILIO_MEDIA_WS_URL || 'wss://sip.telroi.ai:8443/twilio-media';
+          const param = (k: string, v: unknown) =>
+            v === null || v === undefined || v === '' ? '' : `<Parameter name="${k}" value="${escapeXml(String(v))}"/>`;
+          twiml = `<Connect><Stream url="${escapeXml(wsUrl)}">`
+            + param('agentId', act.agentId)
+            + param('tenantId', tenantId2)
+            + param('telnum', to)
+            + param('escalateTo', act.escalateTo)
+            + param('escalateAfter', act.escalateAfter)
+            + param('escalateMode', (act as any).escalateMode)
+            + `</Stream></Connect>`;
+        } else if (act.action === 'ring_all') {
+          // The agents are registered to our PBX, which the carrier can't reach —
+          // hand the call there and let it ring them, the same handoff the other
+          // carrier uses. Answering on this side first would leave the caller
+          // hearing silence while we set it up.
+          const sipDomain = process.env.SIP_DOMAIN || 'sip.telroi.ai';
+          twiml = `<Dial answerOnBridge="true"><Sip>sip:esc-${escapeXml(to)}@${escapeXml(sipDomain)}</Sip></Dial>`;
         } else if (act.action === 'dial_person' && act.dialTarget) {
           twiml = `<Dial>${escapeXml(act.dialTarget)}</Dial>`;
         } else if (act.action === 'dial_department' && act.dialTarget) {

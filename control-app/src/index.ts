@@ -24,6 +24,7 @@ import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridg
 import { holdUntilFree, startChannelReaper } from './queue.ts';
 import { startProvisionAgent } from './provision-agent.ts';
 import { attachTelnyxMedia } from './telnyx-media.ts';
+import { attachTwilioMedia } from './twilio-media.ts';
 import { startScheduler } from './scheduler.ts';
 
 // Filter a list of PJSIP usernames to only those currently REGISTERED (online),
@@ -138,6 +139,7 @@ async function main() {
   const agentServer = startProvisionAgent(client);
   // Attach the Telnyx AI media WebSocket to the same HTTP server (shares :8090).
   if (agentServer) { try { attachTelnyxMedia(agentServer); } catch (e) { log('telnyx-media attach failed:', (e as Error).message); } }
+  if (agentServer) { try { attachTwilioMedia(agentServer); } catch (e) { log('twilio-media attach failed:', (e as Error).message); } }
   try { startScheduler(); } catch (e) { log('scheduler failed to start:', (e as Error).message); }
   try { startChannelReaper(client, (m) => log(m)); } catch (e) { log('reaper failed to start:', (e as Error).message); }
 

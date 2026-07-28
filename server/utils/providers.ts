@@ -33,6 +33,23 @@ export const twilio = {
     return { callid: j.sid, status: j.status };
   },
 
+  // Move a call that's already up. Twilio has no transfer command as such: you
+  // replace the call's instructions, and it follows the new ones — which is how
+  // an AI conversation hands over to a person.
+  async redirectCall(c: TwilioCreds, callSid: string, twiml: string) {
+    const body = new URLSearchParams({ Twiml: twiml });
+    const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${c.accountSid}/Calls/${callSid}.json`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Basic ' + Buffer.from(`${c.accountSid}:${c.authToken}`).toString('base64'),
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body
+    });
+    if (!r.ok) throw createError({ statusCode: r.status, message: `Twilio redirect failed: ${await r.text()}` });
+    return { ok: true };
+  },
+
   // ── Elastic SIP Trunking (real API: https://trunking.twilio.com/v1) ──
   // Creates a Trunk (TK…) the client points their SIP gear at. Auth via the
   // platform master account; the trunk's termination domain ends in
