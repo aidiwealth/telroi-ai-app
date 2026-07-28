@@ -102,7 +102,6 @@ export default defineEventHandler(async (event) => {
             if (act.action === 'dial_person' || act.action === 'dial_department') {
               if (act.dialTarget) { await cc.telnyxTransfer(callId, act.dialTarget); return; }
             }
-            console.log(`[telnyx-route] ${eventType} to=${to} matched=${matchedOurNumber} action=${act?.action}`);
             if (act.action === 'ring_all') {
               // The agents are registered to our PBX, which the carrier can't
               // reach — hand the call there and let it ring them. Same handoff an
