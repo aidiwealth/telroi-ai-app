@@ -28,7 +28,10 @@ export default defineEventHandler(async (event) => {
   if (!gate.ok) {
     const msg = 'This AI service is not active on this account. Please contact the business.';
     const tts = await ttsSynthesize(tenantId, agent.ttsConnId, msg, { language: agent.language }, agent.tier === 'managed').catch(() => null);
-    return { reply: msg, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history, action: 'hangup' };
+    // history isn't in scope here — it's read from the body further down — so
+    // referencing it threw, and a workspace without an active AI subscription got
+    // a 500 instead of the message explaining why.
+    return { reply: msg, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [], action: 'hangup' };
   }
 
   // Sandbox workspaces get a fixed number of AI conversations to prove the product

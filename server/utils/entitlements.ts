@@ -96,6 +96,9 @@ export async function aiActive(tenantId: string): Promise<{ ok: boolean; reason?
   const db = useDb();
   const [tenant] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
   if (!tenant) return { ok: false, reason: 'no_workspace' };
+  // Our own support desk isn't a customer: it has no plan and never will, and
+  // gating it behind a subscription check meant its AI refused every call.
+  if (tenant.isInternal) return { ok: true };
   if (!tenant.planSelected) return { ok: false, reason: 'no_plan' };
   // Active = an unexpired trial, OR a real (non-trial) plan the workspace is on.
   const active = trialActive(tenant) || !!tenant.planSelected;
