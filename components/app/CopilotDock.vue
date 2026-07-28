@@ -186,7 +186,7 @@ async function send(preset?: string) {
 
 <style scoped>
 /* Collapsed edge pill (unchanged position: right-middle, under setup tasks) */
-.cp-dock { position: fixed; right: 0; top: calc(50% + 52px); z-index: 89; }
+.cp-dock { position: fixed; right: 0; top: calc(50% + 4px); z-index: 89; }
 .cp-edge { display: flex; align-items: center; gap: 7px; padding: 10px 12px 10px 14px; border: none; border-radius: 12px 0 0 12px; background: var(--signal, #1a4b72); color: #fff; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.18); font-size: 13px; font-weight: 600; }
 .cp-edge svg { width: 18px; height: 18px; }
 .cp-edge:hover { filter: brightness(1.08); }

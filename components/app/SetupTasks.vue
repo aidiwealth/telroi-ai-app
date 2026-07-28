@@ -115,7 +115,7 @@ onMounted(async () => {
 <style scoped>
 /* Just above Copilot — close enough to read as a pair, far enough below centre
    to clear the live-call control in the corner. */
-.todo-dock { position: fixed; right: 0; top: calc(50% + 4px); z-index: 89; }
+.todo-dock { position: fixed; right: 0; top: calc(50% + 52px); z-index: 89; }
 .edge-tab { display: flex; align-items: center; gap: 7px; padding: 10px 12px 10px 14px; border: 1px solid var(--rule); border-right: 0; border-radius: 12px 0 0 12px; background: var(--paper); color: var(--signal); cursor: pointer; box-shadow: -2px 0 10px rgba(10,10,11,.06); font-size: 13px; font-weight: 600; }
 .edge-tab svg { width: 18px; height: 18px; }
 .edge-tab:hover { background: var(--paper-2); }
