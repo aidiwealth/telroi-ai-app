@@ -55,5 +55,12 @@ export default defineEventHandler(async (event) => {
     nextBillingAt: new Date(Date.now() + 30 * 86400000)
   });
 
+  // Mark it sold, as a client purchase would. Without this the number stays
+  // 'available' and keeps appearing in the onboarding wizard and the purchase
+  // list, where a client could try to buy a number the support desk is using.
+  await db.update(schema.numberInventory)
+    .set({ status: 'sold', soldToTenantId: ws.tenantId })
+    .where(eq(schema.numberInventory.telnum, telnum));
+
   return { ok: true, created: true };
 });
