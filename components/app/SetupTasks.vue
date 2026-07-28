@@ -12,9 +12,14 @@
     <div v-else class="todo-overlay" @click.self="setCollapsed(true)">
       <div class="todo-panel">
         <div class="todo-head">
-          <div>
+          <div class="todo-head-text">
             <span class="todo-title">Finish setting up</span>
-            <span class="todo-sub">{{ tasks.length }} {{ tasks.length === 1 ? 'item' : 'items' }} left</span>
+            <span class="todo-sub">
+              {{ yourTurn.length ? `${yourTurn.length} waiting on you` : 'Nothing needs you right now' }}
+              <template v-if="yourTurn.length < tasks.length">
+                · {{ tasks.length - yourTurn.length }} in progress
+              </template>
+            </span>
           </div>
           <button class="todo-collapse" @click="setCollapsed(true)" title="Close">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -22,10 +27,18 @@
         </div>
 
         <div class="todo-list">
-          <div v-for="t in tasks" :key="t.id" class="todo-item" :class="t.owner">
+          <div v-for="t in sortedTasks" :key="t.id" class="todo-item" :class="t.owner">
             <div class="todo-item-top">
-              <span class="todo-badge" :class="t.owner">{{ ownerLabel(t.owner) }}</span>
+              <!-- The icon carries the state faster than the words do: a tick for
+                   what's yours to do, a clock for what we're doing, a ring for
+                   what needs a conversation. -->
+              <span class="todo-icon" :class="t.owner">
+                <svg v-if="t.owner === 'client'" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                <svg v-else-if="t.owner === 'admin'" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                <svg v-else viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+              </span>
               <span class="todo-item-title">{{ t.title }}</span>
+              <span class="todo-badge" :class="t.owner">{{ ownerLabel(t.owner) }}</span>
             </div>
             <p class="todo-item-desc">{{ t.desc }}</p>
             <div class="todo-item-actions">
@@ -43,13 +56,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 const api = useApi();
 
 const tasks = ref<any[]>([]);
+// What the client can act on comes first — a list that opens with things they
+// can't do anything about reads as a wall rather than a next step.
+const yourTurn = computed(() => tasks.value.filter((t) => t.owner === 'client'));
+const sortedTasks = computed(() => [
+  ...tasks.value.filter((t) => t.owner === 'client'),
+  ...tasks.value.filter((t) => t.owner !== 'client')
+]);
 const supportEmail = ref('support@telroi.ai');
 const COLLAPSE_KEY = 'telroi_setup_tasks_collapsed';
-const collapsed = ref(false);
+const collapsed = ref(true);
 
 // Persist collapse: once collapsed, it stays collapsed across refreshes/logins
 // until the user re-opens it.
@@ -78,7 +98,10 @@ async function load() {
 
 onMounted(() => {
   if (import.meta.client) {
-    try { if (localStorage.getItem(COLLAPSE_KEY) === '1') collapsed.value = true; } catch { /* ignore */ }
+    // Starts collapsed. Copilot already opens on the dashboard, and two things
+    // competing for attention makes a poor first impression — the tasks wait in
+    // the sidebar until someone opens them, and stay open once they have.
+    try { collapsed.value = localStorage.getItem(COLLAPSE_KEY) !== '0'; } catch { collapsed.value = true; }
   }
   load();
 });
@@ -117,21 +140,31 @@ router.afterEach(() => { load(); });
   animation: todo-in 0.18s cubic-bezier(0.16,1,0.3,1);
 }
 @keyframes todo-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-.todo-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--rule-2); background: var(--paper-2); }
+.todo-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 22px; border-bottom: 1px solid var(--rule-2); background: var(--paper-2); }
+.todo-head-text { display: flex; flex-direction: column; gap: 3px; }
 .todo-title { display: block; font-weight: 600; font-size: 15px; }
 .todo-sub { font-size: 12px; color: var(--ink-mute); }
 .todo-collapse { width: 28px; height: 28px; border-radius: 8px; color: var(--ink-mute); display: flex; align-items: center; justify-content: center; }
 .todo-collapse:hover { background: var(--paper-3); color: var(--ink); }
 .todo-list { flex: 1; overflow-y: auto; padding: 10px; }
-.todo-item { padding: 12px; border-radius: var(--radius); border: 1px solid var(--rule-2); margin-bottom: 8px; }
+.todo-item { padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--rule-2); margin-bottom: 10px; transition: border-color .15s; }
+/* What's theirs to do carries the accent; the rest stays quiet, so the list
+   reads as "here's your next step" rather than a wall of equal demands. */
+.todo-item.client { border-left: 2px solid var(--signal); background: var(--paper); }
+.todo-item.client:hover { border-color: var(--signal); }
 .todo-item:last-child { margin-bottom: 0; }
-.todo-item-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-.todo-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+.todo-item-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.todo-icon { flex: none; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.todo-icon.client { background: var(--signal-soft); color: var(--signal); }
+.todo-icon.admin { background: rgba(183,121,31,0.12); color: var(--warn); }
+.todo-icon.support { background: var(--paper-3); color: var(--ink-soft); }
+/* Smaller now the icon says the same thing — confirmation rather than the signal. */
+.todo-badge { margin-left: auto; flex: none; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
 .todo-badge.client { background: var(--signal-soft); color: var(--signal); }
 .todo-badge.admin { background: rgba(183,121,31,0.14); color: var(--warn); }
 .todo-badge.support { background: var(--paper-3); color: var(--ink-soft); }
-.todo-item-title { font-size: 13.5px; font-weight: 500; }
-.todo-item-desc { font-size: 12.5px; color: var(--ink-soft); line-height: 1.45; margin-bottom: 8px; }
+.todo-item-title { font-size: 13.5px; font-weight: 500; flex: 1; min-width: 0; }
+.todo-item-desc { font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin: 0 0 10px 36px; }
 .todo-action { font-size: 13px; color: var(--signal); font-weight: 500; }
 .todo-action:hover { text-decoration: underline; }
 .todo-pending { font-size: 12px; color: var(--ink-mute); font-style: italic; }
