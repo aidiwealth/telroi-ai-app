@@ -169,7 +169,16 @@ async function main() {
     if (isEscalation) {
       const rest = dialedDid.slice(4);
       const cut = rest.indexOf('--');
-      if (cut >= 0) { escCallId = rest.slice(cut + 2) || null; dialedDid = rest.slice(0, cut); }
+      if (cut >= 0) {
+        // Hex on the wire: a SIP user part can't carry the colon one carrier puts
+        // in its call ids. Anything that isn't hex is from an older handoff — take
+        // it as-is rather than dropping the call over a formatting change.
+        const raw = rest.slice(cut + 2);
+        escCallId = /^[0-9a-f]+$/i.test(raw) && raw.length % 2 === 0
+          ? Buffer.from(raw, 'hex').toString('utf8')
+          : (raw || null);
+        dialedDid = rest.slice(0, cut);
+      }
       else dialedDid = rest;
     }
 

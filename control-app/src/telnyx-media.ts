@@ -152,7 +152,10 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
       if (mode === 'ring_all' || mode === 'endpoint') {
         const did = (meta.telnum || '').replace(/[^0-9+]/g, '');
         if (!did) return null;
-        return `sip:esc-${did}--${callId || ''}@${PBX_SIP_HOST}`;
+        // Hex-encoded: this carrier's call ids contain a colon, which a SIP
+        // user part can't carry — the address was invalid and never arrived.
+        const tag = callId ? Buffer.from(String(callId), 'utf8').toString('hex') : '';
+        return `sip:esc-${did}--${tag}@${PBX_SIP_HOST}`;
       }
       return null;
     }

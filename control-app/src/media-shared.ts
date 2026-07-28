@@ -75,7 +75,12 @@ export function escalationTarget(meta: Meta, callId?: string | null): string | n
   if (mode === 'ring_all' || mode === 'endpoint') {
     const did = (meta.telnum || '').replace(/[^0-9+]/g, '');
     if (!did) return null;
-    return `sip:esc-${did}--${callId || ''}@${PBX_SIP_HOST}`;
+    // The id goes in a SIP user part, which can't carry a colon — one carrier's
+    // ids are plain but the other's look like "v3:WLUG...", and that colon made
+    // the whole address invalid, so the handoff never arrived. Hex-encode it and
+    // decode on the way back.
+    const tag = callId ? Buffer.from(String(callId), 'utf8').toString('hex') : '';
+    return `sip:esc-${did}--${tag}@${PBX_SIP_HOST}`;
   }
   return null;
 }
