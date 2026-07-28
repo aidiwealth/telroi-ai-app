@@ -28,6 +28,11 @@
           </button>
         </div>
 
+        <p v-if="trial" class="gl-trial">
+          You have {{ trial.daysLeft }} day{{ trial.daysLeft === 1 ? '' : 's' }} left on your trial.
+          Choosing now doesn't shorten it — your plan starts when the trial ends.
+        </p>
+
         <p v-if="usage" class="gl-usage">
           Plus usage: {{ money(usage.voiceMinute) }} a minute for calls,
           {{ money(usage.didMonthly) }} per number and {{ money(usage.channelMonthly) }}
@@ -60,6 +65,7 @@ const pricing = ref<any>(null);
 
 const workspaceName = computed(() => auth.tenant?.name || 'Your workspace');
 const usage = computed(() => pricing.value?.usage || null);
+const trial = ref<{ daysLeft: number; endsAt: string } | null>(null);
 const currency = computed(() => pricing.value?.currency || 'USD');
 
 // Prices are stored in minor units — cents, or kobo once converted.
@@ -103,6 +109,7 @@ onMounted(async () => {
   try {
     const r = await $fetch<any>('/api/go-live');
     pricing.value = r?.pricing || null;
+    trial.value = r?.trial || null;
     // The server already decides who this is for — approved and not yet live.
     // Reading its flag rather than re-deriving it keeps the two from drifting.
     // It returns on the next visit if they'd rather decide later.
@@ -133,6 +140,7 @@ onMounted(async () => {
 .gl-plan-per { font-size: 12.5px; font-weight: 400; color: var(--ink-soft); margin-left: 2px; }
 .gl-plan-note { font-size: 12px; color: var(--ink-soft); line-height: 1.45; }
 
+.gl-trial { font-size: 12.5px; color: var(--ink); background: var(--paper-2); border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 10px 12px; line-height: 1.55; margin: 0 0 14px; }
 .gl-usage { font-size: 12px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 20px; }
 .gl-error { font-size: 13px; color: var(--danger); margin: 0 0 14px; }
 

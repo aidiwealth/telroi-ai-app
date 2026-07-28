@@ -30,9 +30,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = useDb();
-  // Real plan, no trial — going live means the plan fee applies from here.
+  const [tenant] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
+
+  // A running trial is kept. Someone three days into seven shouldn't lose four
+  // by deciding early which plan they want — the plan takes effect when the trial
+  // ends. Only a trial that's already expired is cleared.
+  const { trialActive } = await import('~/server/utils/entitlements');
+  const stillTrialing = tenant ? trialActive(tenant as any) : false;
+
   await db.update(schema.tenants).set({
-    plan: p.data.plan, trialPlan: null, trialEndsAt: null, planSelected: true
+    plan: p.data.plan,
+    planSelected: true,
+    ...(stillTrialing ? {} : { trialPlan: null, trialEndsAt: null })
   }).where(eq(schema.tenants.id, s.tenantId));
 
   const res = await activateWorkspace(s.tenantId);
@@ -56,5 +65,9 @@ export default defineEventHandler(async (event) => {
     summary: `Went live on ${p.data.plan}`
   });
 
-  return { ok: true, plan: p.data.plan, live: true, provisioning };
+  return {
+    ok: true, plan: p.data.plan, live: true, provisioning,
+    // So the client can be told when their plan actually starts charging.
+    trialEndsAt: stillTrialing ? tenant?.trialEndsAt ?? null : null
+  };
 });

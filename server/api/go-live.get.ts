@@ -38,5 +38,13 @@ export default defineEventHandler(async (event) => {
     }
   } : null;
 
-  return { ...live, sandbox, pricing };
+  // Days left on a trial, if one is running. Going live keeps it, so the client
+  // should be told their plan starts then rather than now.
+  const { trialActive, trialDaysLeft } = await import('~/server/utils/entitlements');
+  const [full] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
+  const trial = full && trialActive(full as any)
+    ? { endsAt: full.trialEndsAt, daysLeft: trialDaysLeft(full as any) }
+    : null;
+
+  return { ...live, sandbox, pricing, trial };
 });
