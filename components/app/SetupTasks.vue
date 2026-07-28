@@ -113,13 +113,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Sits above Copilot, mirrored about centre, so the two read as a pair of docked
-   tabs rather than two things that happen to share an edge. */
-.todo-dock { position: fixed; right: 0; top: calc(50% - 52px); z-index: 89; }
-.edge-tab { display: flex; align-items: center; gap: 7px; padding: 10px 12px 10px 14px; border: none; border-radius: 12px 0 0 12px; background: var(--signal, #1a4b72); color: #fff; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.18); font-size: 13px; font-weight: 600; }
+/* Just above Copilot — close enough to read as a pair, far enough below centre
+   to clear the live-call control in the corner. */
+.todo-dock { position: fixed; right: 0; top: calc(50% + 4px); z-index: 89; }
+.edge-tab { display: flex; align-items: center; gap: 7px; padding: 10px 12px 10px 14px; border: 1px solid var(--rule); border-right: 0; border-radius: 12px 0 0 12px; background: var(--paper); color: var(--signal); cursor: pointer; box-shadow: -2px 0 10px rgba(10,10,11,.06); font-size: 13px; font-weight: 600; }
 .edge-tab svg { width: 18px; height: 18px; }
-.edge-tab:hover { filter: brightness(1.08); }
-.edge-tab-count { font-size: 11px; font-weight: 600; background: rgba(255,255,255,.22); color: #fff; border-radius: 999px; min-width: 17px; padding: 1px 6px; text-align: center; }
+.edge-tab:hover { background: var(--paper-2); }
+.edge-tab-count { font-size: 11px; font-weight: 600; background: var(--signal); color: #fff; border-radius: 999px; min-width: 17px; padding: 1px 6px; text-align: center; }
 
 .st-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(10,10,11,.5); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .st-panel { position: relative; width: 100%; max-width: 560px; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-lg); padding: 40px 44px 28px; box-shadow: 0 24px 60px rgba(10,10,11,.22); }
