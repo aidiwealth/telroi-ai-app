@@ -17,6 +17,9 @@
     <IdleLogout />
     <TourGuide />
     <IncomingCall />
+    <!-- Appears once compliance is approved and no plan has been chosen, and
+         returns on the next visit if they'd rather decide later. -->
+    <GoLiveModal />
   </div>
 </template>
 

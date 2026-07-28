@@ -38,10 +38,23 @@ export default defineEventHandler(async (event) => {
   const res = await activateWorkspace(s.tenantId);
   if (!res.ok) throw apiError(res.reason || 'failed', 'Could not activate the workspace.', 400);
 
+  // Going live is what triggers the carrier setup a workspace needs to place
+  // real calls. The sandbox toggle has always done this; going live through the
+  // proper flow skipped it, so a client who chose a plan was live on paper with
+  // nothing provisioned behind it. Best-effort: a hiccup here shouldn't undo the
+  // activation they've just paid to start.
+  let provisioning: any = null;
+  try {
+    const { provisionOnGoLive } = await import('~/server/utils/provision-lifecycle');
+    provisioning = await provisionOnGoLive(s.tenantId);
+  } catch (e: any) {
+    provisioning = { ok: false, reason: e?.message };
+  }
+
   await logEvent({
     tenantId: s.tenantId, kind: 'system', action: 'workspace.went_live',
     summary: `Went live on ${p.data.plan}`
   });
 
-  return { ok: true, plan: p.data.plan, live: true };
+  return { ok: true, plan: p.data.plan, live: true, provisioning };
 });
