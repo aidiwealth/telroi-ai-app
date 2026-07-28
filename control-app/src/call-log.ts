@@ -21,6 +21,9 @@ export interface CallLogInput {
   startedAt?: Date;
   duration?: number;
   wait?: number;
+  // Seconds a human spent on a call the AI handed over. Kept apart from duration,
+  // which stays the whole conversation.
+  agentSeconds?: number;
   user?: string;
   raw?: Record<string, unknown>;
 }
@@ -39,6 +42,7 @@ export function logCall(input: CallLogInput): void {
         carrier: input.carrier ?? null,
         startedAt: input.startedAt ?? new Date(),
         duration: input.duration ?? null,
+        agentSeconds: input.agentSeconds ?? null,
         user: input.user ?? null,
         wait: input.wait ?? null,
         raw: input.raw ?? {}
@@ -51,6 +55,9 @@ export function logCall(input: CallLogInput): void {
                                then greatest(0, round(extract(epoch from (now() - ${schema.callEvents.startedAt}))))::int
                                else null end)`,
           phone: sql`excluded.phone`,
+          // Once a handoff has been timed, keep it: later status updates for the
+          // same call carry no agent time and shouldn't erase it.
+          agentSeconds: sql`coalesce(excluded.agent_seconds, ${schema.callEvents.agentSeconds})`,
           user: sql`coalesce(excluded.user, ${schema.callEvents.user})`,
           // Ring-to-answer wait (seconds): when this update marks the call
           // 'answered', compute now - started_at (the ringing timestamp). Only

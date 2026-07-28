@@ -97,6 +97,9 @@ export const callEvents = pgTable('call_events', {
   carrier: text('carrier'),
   startedAt: timestamp('started_at', { withTimezone: true }),
   duration: integer('duration'),
+  // Seconds a human spent on a call the AI handed over — duration stays the
+  // whole conversation.
+  agentSeconds: integer('agent_seconds'),
   user: text('user'),
   raw: jsonb('raw').$type<Record<string, unknown>>().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()

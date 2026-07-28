@@ -95,7 +95,9 @@ export function attachTwilioMedia(server: http.Server, path = '/twilio-media') {
       playback = streamMuLaw(mu, sendMedia, () => { playing = false; log(`${label}: playback done`); });
     }
 
-    const escalationTarget = () => sharedEscalationTarget(meta);
+    // The call id rides along so the escalation leg can be recorded against the
+    // call it continues, rather than vanishing as an untracked second leg.
+    const escalationTarget = () => sharedEscalationTarget(meta, callSid);
 
     const resetTurn = () => { speaking = false; quietRun = 0; speechFrames = 0; buf = []; peakEnergy = 0; sumEnergy = 0; energyCount = 0; };
 

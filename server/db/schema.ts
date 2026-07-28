@@ -412,6 +412,10 @@ export const callEvents = pgTable('call_events', {
   takenOverAt: timestamp('taken_over_at', { withTimezone: true }),
   startedAt: timestamp('started_at', { withTimezone: true }),
   duration: integer('duration'),
+  // How long a human was on a call the AI handed over. duration stays the whole
+  // conversation — what the customer is billed for — while this answers a
+  // different question: how much work the AI is actually deflecting.
+  agentSeconds: integer('agent_seconds'),
   wait: integer('wait'),
   rating: integer('rating'),
   recordingUrl: text('recording_url'),

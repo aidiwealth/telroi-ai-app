@@ -162,7 +162,16 @@ async function main() {
     // esc- prefix says "ring this DID's agents" — without it we'd look the DID up
     // and hand the caller straight back to the AI they just escaped from.
     const isEscalation = dialedDid.startsWith('esc-');
-    if (isEscalation) dialedDid = dialedDid.slice(4);
+    // The call being continued rides after a double hyphen, so the time a human
+    // spends can be recorded against it rather than disappearing as an untracked
+    // second leg. Handoffs made before this carry no id — route them anyway.
+    let escCallId: string | null = null;
+    if (isEscalation) {
+      const rest = dialedDid.slice(4);
+      const cut = rest.indexOf('--');
+      if (cut >= 0) { escCallId = rest.slice(cut + 2) || null; dialedDid = rest.slice(0, cut); }
+      else dialedDid = rest;
+    }
 
     // Live Call widget: the visitor's browser registered to us as a guest endpoint
     // and dialled the one extension its context allows. The guest dialplan passes
@@ -333,9 +342,21 @@ async function main() {
         }
         let escRes: { answered: boolean } = { answered: false };
         try {
+          const escStart = Date.now();
           escRes = await bridgeToDepartment({
-            client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40
-            // No onStatus: this leg has no call row to update.
+            client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
+            // Record against the call this continues. Without an id there's
+            // nothing to attach to, so the leg stays unlogged as before rather
+            // than creating a row the customer would find baffling.
+            onStatus: escCallId ? (status, details) => {
+              if (status !== 'ended' && status !== 'answered') return;
+              const agent = details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined;
+              logCall({
+                tenantId: route.tenantId, callid: escCallId!, phone: callerNum, direction: 'in',
+                status: 'answered', user: agent,
+                agentSeconds: status === 'ended' ? Math.round((Date.now() - escStart) / 1000) : undefined
+              } as any);
+            } : undefined
           });
         } catch (err) {
           log(`  [esc ${chId}] bridge failed: ${(err as Error)?.message}`);

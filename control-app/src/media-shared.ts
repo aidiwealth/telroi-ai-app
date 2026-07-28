@@ -69,13 +69,13 @@ export async function renderFiller(tenantId: string, agentId: string, text: stri
  * anything else means the dashboard agents, who are registered to our own PBX and
  * so have to be reached through it.
  */
-export function escalationTarget(meta: Meta): string | null {
+export function escalationTarget(meta: Meta, callId?: string | null): string | null {
   const mode = meta.escalateMode || 'none';
   if (mode === 'phone') return meta.escalateTo || null;
   if (mode === 'ring_all' || mode === 'endpoint') {
     const did = (meta.telnum || '').replace(/[^0-9+]/g, '');
     if (!did) return null;
-    return `sip:esc-${did}@${PBX_SIP_HOST}`;
+    return `sip:esc-${did}--${callId || ''}@${PBX_SIP_HOST}`;
   }
   return null;
 }
