@@ -462,7 +462,35 @@
             </tbody>
           </table>
         </section>
-      </div>      <div v-if="showPolicy" class="ad-policy-overlay" @click.self="showPolicy = false">
+      </div>
+
+      <!-- Last, and quiet until it's opened. A panel that's permanently red stops
+           meaning anything; the colour should arrive with the decision. -->
+      <section class="ad-panel ad-danger">
+        <h3 class="ad-panel-h">Delete workspace</h3>
+        <p class="ad-danger-note">
+          Removes {{ data.tenant.name }} and everything belonging to it — agents, settings,
+          team and wallet. There's no undo. A workspace that has taken calls, still holds
+          numbers, has money in its wallet, or is live can't be deleted.
+        </p>
+        <div v-if="!delConfirm">
+          <button class="btn btn-danger btn-sm" @click="delConfirm = true">Delete this workspace</button>
+        </div>
+        <div v-else class="ad-danger-confirm">
+          <label class="ad-ovr"><span>Type <strong>{{ data.tenant.slug }}</strong> to confirm</span>
+            <input v-model="delSlug" class="ad-ctl" :placeholder="data.tenant.slug" autocomplete="off" />
+          </label>
+          <div class="ad-danger-actions">
+            <button class="btn btn-danger btn-sm" :disabled="delSlug !== data.tenant.slug || delBusy" @click="deleteWorkspace">
+              {{ delBusy ? 'Deleting…' : 'Delete permanently' }}
+            </button>
+            <button class="btn btn-ghost btn-sm" :disabled="delBusy" @click="delConfirm = false; delSlug = ''">Cancel</button>
+          </div>
+          <p v-if="delError" class="ad-danger-error">{{ delError }}</p>
+        </div>
+      </section>
+
+      <div v-if="showPolicy" class="ad-policy-overlay" @click.self="showPolicy = false">
         <div class="ad-policy-modal">
           <div class="ad-policy-head">
             <div>
@@ -774,6 +802,29 @@ function syncCapForm() {
   capForm.value.agents = data.value?.tenant?.sandboxAgentCap ?? '';
 }
 
+// Deleting a workspace. The slug has to be typed, and the server refuses
+// anything with a history worth keeping — so the interface can stay calm and let
+// the guards do the work.
+const delConfirm = ref(false);
+const delSlug = ref('');
+const delBusy = ref(false);
+const delError = ref('');
+async function deleteWorkspace() {
+  const domain = route.params.domain as string;
+  delBusy.value = true; delError.value = '';
+  try {
+    await $fetch(`/api/admin/clients/${encodeURIComponent(domain)}`, {
+      method: 'DELETE', body: { confirmSlug: delSlug.value }
+    });
+    await navigateTo('/admin/clients');
+  } catch (e: any) {
+    // The server's messages say what to do about it, so show them as written.
+    delError.value = e?.data?.error?.message || 'Could not delete this workspace.';
+  } finally {
+    delBusy.value = false;
+  }
+}
+
 async function savePlan() {
   const tid = data.value?.tenant?.id;
   planBusy.value = true;
@@ -875,6 +926,11 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.ad-danger { margin-top: 28px; border-color: var(--rule); }
+.ad-danger-note { font-size: 13px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 14px; max-width: 62ch; }
+.ad-danger-confirm { display: flex; flex-direction: column; gap: 12px; max-width: 380px; }
+.ad-danger-actions { display: flex; gap: 8px; }
+.ad-danger-error { font-size: 12.5px; color: var(--danger); line-height: 1.5; margin: 2px 0 0; }
 .ad-back { color: var(--ink-soft); font-size: 13px; display: inline-block; margin-bottom: 20px; }
 .ad-back:hover { color: var(--ink); }
 .ad-loading, .ad-empty { color: var(--ink-mute); padding: 40px 0; }
