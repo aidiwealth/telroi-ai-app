@@ -17,7 +17,11 @@ export const monnify = {
   // Exchange API key + secret for a short-lived bearer token.
   async token(apiKey: string, secretKey: string, env: string): Promise<string> {
     const basic = Buffer.from(`${apiKey}:${secretKey}`).toString('base64');
+    // Without a timeout a slow or unreachable Monnify hangs the request until the
+    // platform's gateway gives up — which shows the caller a 502 page and leaves
+    // nothing in the logs to say why.
     const r = await fetch(`${base(env)}/api/v1/auth/login`, {
+      signal: AbortSignal.timeout(15000),
       method: 'POST', headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/json' }
     });
     if (!r.ok) throw createError({ statusCode: r.status, message: `Monnify auth failed: ${await r.text()}` });
@@ -49,6 +53,7 @@ export const monnify = {
     if (opts.nin) body.nin = opts.nin;
 
     const r = await fetch(`${base(opts.env)}/api/v2/bank-transfer/reserved-accounts`, {
+      signal: AbortSignal.timeout(20000),
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
