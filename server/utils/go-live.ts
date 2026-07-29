@@ -7,7 +7,7 @@
 //   2. A plan chosen — the client accepts that real money will now move.
 // Only then does sandboxMode come off. Approval alone doesn't do it: nobody
 // should start being billed because an admin clicked approve.
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { useDb, schema } from '~/server/db';
 
 export interface GoLiveState {
@@ -74,6 +74,38 @@ export async function activateWorkspace(tenantId: string): Promise<{ ok: boolean
       planNextBillingAt: trialEnd || new Date()
     })
     .where(eq(schema.tenants.id, tenantId));
+
+  // Sandbox money was never real. Carrying it into a live workspace would show a
+  // client a balance they never paid for and let them spend it — so it's cleared
+  // with an entry of its own rather than quietly zeroed, leaving a record of what
+  // was removed and when. The simulated entries themselves stay: a client who
+  // spent a week testing should still see what they did.
+  try {
+    const { sql } = await import('drizzle-orm');
+    const [sum] = await db.select({
+      net: sql<number>`coalesce(sum(case when kind = 'credit' then amount_minor else -amount_minor end), 0)::int`
+    }).from(schema.ledger)
+      .where(and(eq(schema.ledger.tenantId, tenantId), eq(schema.ledger.sandbox, true)));
+
+    // Take back what sandbox put in, but never more than is actually there —
+    // simulated spending may have already consumed some of it, and the wallet
+    // refuses to go below zero.
+    const [w] = await db.select().from(schema.wallets)
+      .where(eq(schema.wallets.tenantId, tenantId)).limit(1);
+    const clear = Math.min(Math.max(sum?.net || 0, 0), w?.balanceMinor || 0);
+
+    if (clear > 0) {
+      const { debit } = await import('~/server/utils/wallet');
+      await debit({
+        tenantId, amountMinor: clear, reason: 'sandbox_cleared',
+        reference: `sandbox_cleared_${tenantId}`,
+        meta: { note: 'Sandbox balance cleared on going live' }
+      });
+    }
+  } catch (e) {
+    // A workspace shouldn't fail to go live over bookkeeping.
+    console.error('[go-live] could not clear sandbox balance:', (e as Error)?.message);
+  }
 
   return { ok: true };
 }
