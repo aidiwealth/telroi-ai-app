@@ -26,12 +26,15 @@ export default defineEventHandler(async (event) => {
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', p.error.issues[0]?.message || 'BVN or NIN required');
 
+  console.log('[wallet-account] 1 resolving credentials');
   const pay = await paymentCreds();
+  console.log('[wallet-account] 2 credentials', !!pay.monnify?.apiKey, !!pay.monnify?.contractCode, pay.mode);
   if (!pay.monnify?.apiKey || !pay.monnify?.contractCode) {
     throw apiError('not_configured', 'Monnify is not configured on this server', 503);
   }
 
   const tenant = await loadTenant(s.tenantId);
+  console.log('[wallet-account] 3 tenant loaded, calling monnify');
   const accountReference = `tlr-${tenant.slug}-${randomToken(6).replace(/[^a-zA-Z0-9]/g, '').slice(0, 8)}`;
 
   let reserved;
