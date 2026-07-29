@@ -52,6 +52,10 @@ const Body = z.object({
   docsDomain: z.string().optional(),
   statusDomain: z.string().optional(),
   stripe: KeyPair,
+  // Stripe's webhook secret belongs to the endpoint, not the account, so test and
+  // live have different ones — kept here rather than in an environment variable
+  // so switching modes doesn't need a redeploy.
+  stripeWebhook: KeyPair,
   paystack: KeyPair,
   monnify: MonnifyPair,
   // ── Voice OTP + Speech vendor selection + policy ──
@@ -167,6 +171,8 @@ export default defineEventHandler(async (event) => {
   if (d.statusDomain !== undefined) patch.statusDomain = (d.statusDomain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null;
   if (d.stripe?.live) patch.stripeLiveEnc = encrypt(d.stripe.live);
   if (d.stripe?.test) patch.stripeTestEnc = encrypt(d.stripe.test);
+  if (d.stripeWebhook?.live) patch.stripeWebhookLiveEnc = encrypt(d.stripeWebhook.live);
+  if (d.stripeWebhook?.test) patch.stripeWebhookTestEnc = encrypt(d.stripeWebhook.test);
   if (d.paystack?.live) patch.paystackLiveEnc = encrypt(d.paystack.live);
   if (d.paystack?.test) patch.paystackTestEnc = encrypt(d.paystack.test);
   if (d.monnify?.live && d.monnify.live.apiKey && d.monnify.live.secretKey) patch.monnifyLiveEnc = encrypt(JSON.stringify(d.monnify.live));

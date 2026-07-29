@@ -94,6 +94,9 @@ export async function paymentCreds(tenantId?: string) {
     return null;
   };
   const stripe = pick(s?.stripeLiveEnc, s?.stripeTestEnc) || cfg.stripeSecretKey || null;
+  // Falls back to the environment variable so an existing deployment keeps
+  // working while the settings value is filled in.
+  const stripeWebhookSecret = pick(s?.stripeWebhookLiveEnc, s?.stripeWebhookTestEnc) || cfg.stripeWebhookSecret || null;
   const paystack = pick(s?.paystackLiveEnc, s?.paystackTestEnc) || cfg.paystackSecretKey || null;
   const monnifyRaw = pick(s?.monnifyLiveEnc, s?.monnifyTestEnc);
   let monnify: any = null;
@@ -106,5 +109,5 @@ export async function paymentCreds(tenantId?: string) {
     const [t] = await db.select({ ov: schema.tenants.paymentProviderOverride }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
     override = t?.ov || null;
   }
-  return { mode, stripe, paystack, monnify, override };
+  return { mode, stripe, stripeWebhookSecret, paystack, monnify, override };
 }

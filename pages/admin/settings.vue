@@ -45,6 +45,11 @@
         <div class="set-grid">
           <div class="ad-field"><label>Live secret key {{ cfg.stripeLiveSet ? '· set' : '' }}</label><input v-model="pay.stripe.live" type="password" class="ad-input mono" :placeholder="cfg.stripeLiveSet ? '••••••••' : 'sk_live_…'" /></div>
           <div class="ad-field"><label>Test secret key {{ cfg.stripeTestSet ? '· set' : '' }}</label><input v-model="pay.stripe.test" type="password" class="ad-input mono" :placeholder="cfg.stripeTestSet ? '••••••••' : 'sk_test_…'" /></div>
+          <!-- Stripe signs webhooks with a secret belonging to the endpoint, so
+               each mode has its own. Without the right one every callback is
+               refused and payments complete without ever crediting a wallet. -->
+          <div class="ad-field"><label>Live webhook secret {{ cfg.stripeWebhookLiveSet ? '· set' : '' }}</label><input v-model="pay.stripeWebhook.live" type="password" class="ad-input mono" :placeholder="cfg.stripeWebhookLiveSet ? '••••••••' : 'whsec_…'" /></div>
+          <div class="ad-field"><label>Test webhook secret {{ cfg.stripeWebhookTestSet ? '· set' : '' }}</label><input v-model="pay.stripeWebhook.test" type="password" class="ad-input mono" :placeholder="cfg.stripeWebhookTestSet ? '••••••••' : 'whsec_…'" /></div>
         </div>
       </div>
 
@@ -782,6 +787,7 @@ async function saveOtp() {
 }
 const pay = reactive({
   stripe: { live: '', test: '' },
+  stripeWebhook: { live: '', test: '' },
   paystack: { live: '', test: '' },
   monnify: { live: { apiKey: '', secretKey: '', contractCode: '' }, test: { apiKey: '', secretKey: '', contractCode: '' } }
 });

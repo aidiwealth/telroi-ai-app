@@ -109,6 +109,12 @@ export const platformSettings = pgTable('platform_settings', {
   emailSocial: jsonb('email_social').$type<{ x?: string; linkedin?: string; instagram?: string; facebook?: string }>().default({}),
   stripeLiveEnc: text('stripe_live_enc'),
   stripeTestEnc: text('stripe_test_enc'),
+  // Stripe signs webhooks with a secret belonging to the endpoint, not the
+  // account, so test and live have different ones. Kept beside the API keys
+  // rather than in an environment variable, where switching modes meant a
+  // redeploy and every webhook was silently rejected until someone remembered.
+  stripeWebhookLiveEnc: text('stripe_webhook_live_enc'),
+  stripeWebhookTestEnc: text('stripe_webhook_test_enc'),
   paystackLiveEnc: text('paystack_live_enc'),
   paystackTestEnc: text('paystack_test_enc'),
   monnifyLiveEnc: text('monnify_live_enc'),            // {apiKey, secretKey, contractCode}

@@ -5,11 +5,19 @@ import { stripe } from '~/server/utils/payments';
 import { credit } from '~/server/utils/wallet';
 
 export default defineEventHandler(async (event) => {
-  const cfg = useRuntimeConfig();
   const raw = await readRawBody(event) || '';
   const sig = getRequestHeader(event, 'stripe-signature') || '';
+  const { paymentCreds } = await import('~/server/utils/platform');
+  const pay = await paymentCreds();
 
-  if (!cfg.stripeWebhookSecret || !stripe.verifySignature(cfg.stripeWebhookSecret, raw, sig)) {
+  // Say which of the two it is. A missing secret and a forged request looked
+  // identical, so a Stripe payment could complete, sit uncredited, and give no
+  // indication anywhere that the endpoint simply had nothing to verify against.
+  if (!pay.stripeWebhookSecret) {
+    console.error('[stripe] webhook rejected: no signing secret configured for this mode');
+    throw createError({ statusCode: 401, message: 'Stripe webhook signing secret is not configured' });
+  }
+  if (!stripe.verifySignature(pay.stripeWebhookSecret, raw, sig)) {
     throw createError({ statusCode: 401, message: 'Invalid signature' });
   }
 

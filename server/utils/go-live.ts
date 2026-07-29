@@ -62,8 +62,17 @@ export async function activateWorkspace(tenantId: string): Promise<{ ok: boolean
   if (state.live) return { ok: true };
   if (!state.approved) return { ok: false, reason: state.blockedReason || 'not_approved' };
 
+  // Billing starts now, or when the trial ends if one is running. Left alone,
+  // the workspace keeps whatever date it happened to carry — one going live today
+  // was due to be charged from six weeks earlier, for time it spent in sandbox.
+  const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  const trialEnd = t?.trialEndsAt && new Date(t.trialEndsAt).getTime() > Date.now() ? new Date(t.trialEndsAt) : null;
+
   await db.update(schema.tenants)
-    .set({ sandboxMode: false, wentLiveAt: new Date(), provisionState: 'provisioned' })
+    .set({
+      sandboxMode: false, wentLiveAt: new Date(), provisionState: 'provisioned',
+      planNextBillingAt: trialEnd || new Date()
+    })
     .where(eq(schema.tenants.id, tenantId));
 
   return { ok: true };
