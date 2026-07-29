@@ -61,8 +61,12 @@ export const monnify = {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
+    if (!r.ok) {
+      const detail = await r.text();
+      console.log('[monnify] reserve <-', r.status, detail.slice(0, 300));
+      throw createError({ statusCode: r.status, message: `Monnify reserve failed: ${detail}` });
+    }
     console.log('[monnify] reserve <-', r.status);
-    if (!r.ok) throw createError({ statusCode: r.status, message: `Monnify reserve failed: ${await r.text()}` });
     const j = await r.json();
     const rb = j?.responseBody || {};
     // accounts[] carries {bankName, bankCode, accountNumber, accountName}
