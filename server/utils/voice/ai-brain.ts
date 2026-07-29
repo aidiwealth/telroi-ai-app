@@ -156,11 +156,16 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       // it misreads the 44-byte WAV header as audio and garbles the transcript.
       // Detect raw PCM vs a real WAV: only set explicit encoding/rate for raw PCM.
       const isRawPcm = /l16|pcm/i.test(contentType) && !/wav/i.test(contentType);
+      // 'phone_call' is tuned for 8kHz telephony audio but Google offers it for
+      // very few languages — not Yoruba, and not even Nigerian English. Asking
+      // for it anyway failed every request and fell back a moment later, so each
+      // utterance cost two calls and the caller waited through both.
+      const PHONE_CALL_LANGS = ['en-US'];
       const cfg: any = {
         languageCode: lang,
-        model: 'phone_call',          // tuned for 8kHz telephony audio (keeps accuracy)
         enableAutomaticPunctuation: true
       };
+      if (PHONE_CALL_LANGS.includes(lang)) cfg.model = 'phone_call';
       if (isRawPcm) {
         cfg.encoding = 'LINEAR16';
         cfg.sampleRateHertz = Number(/rate=(\d+)/.exec(contentType)?.[1] || '16000');
