@@ -54,6 +54,10 @@ export const monnify = {
     // CBN compliance: a BVN or NIN must be attached to virtual accounts.
     if (opts.bvn) body.bvn = opts.bvn;
     if (opts.nin) body.nin = opts.nin;
+    // Monnify refuses the request outright unless it's told which partner banks
+    // to issue with. Taking all of them gives the payer a choice of where to
+    // transfer from, which is the point of a reserved account.
+    body.getAllAvailableBanks = true;
 
     const r = await fetch(`${base(opts.env)}/api/v2/bank-transfer/reserved-accounts`, {
       signal: AbortSignal.timeout(20000),
