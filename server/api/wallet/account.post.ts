@@ -42,7 +42,10 @@ export default defineEventHandler(async (event) => {
     reserved = await monnify.reserveAccount({
       apiKey: pay.monnify.apiKey, secretKey: pay.monnify.secretKey, env: pay.mode,
       contractCode: pay.monnify.contractCode,
-      accountReference, accountName: `Telroi - ${tenant.name}`,
+      // The workspace's own name, not ours prefixed to it — a payer sees this on
+      // their transfer screen and should recognise who they're paying. The prefix
+      // also ate the character allowance, leaving accounts named "Tel".
+      accountReference, accountName: tenant.name,
       customerEmail: s.email, customerName: tenant.name,
       bvn: p.data.bvn, nin: p.data.nin
     });
@@ -53,7 +56,7 @@ export default defineEventHandler(async (event) => {
   const [row] = await db.insert(schema.virtualAccounts).values({
     tenantId: s.tenantId, provider: 'monnify',
     accountReference: reserved.accountReference || accountReference,
-    accountName: reserved.primary?.accountName || `Telroi - ${tenant.name}`,
+    accountName: reserved.primary?.accountName || tenant.name,
     accountNumber: reserved.primary?.accountNumber || null,
     bankName: reserved.primary?.bankName || 'Moniepoint MFB',
     bankCode: reserved.primary?.bankCode || null,
