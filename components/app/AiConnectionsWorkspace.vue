@@ -195,6 +195,15 @@
                     <option v-for="l in AGENT_LANGUAGES" :key="l.code" :value="l.code">{{ l.label }}</option>
                   </select>
                 </label>
+                <!-- Only when it's actually their problem: the chosen language is
+                     one most providers can't hear, and theirs is one of them. -->
+                <div v-if="langNeedsGoogle" class="lang-note">
+                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>
+                  <span>
+                    <strong>{{ langLabel(agentEdit.language) }}</strong> is transcribed well by Google Cloud Speech, and poorly or not at all by most others.
+                    Point this agent's <em>Speech to text</em> at a Google Cloud connection, or callers speaking it may be met with silence.
+                  </span>
+                </div>
                 <div class="kb-card">
                   <div class="kb-head">
                     <div class="kb-head-left">
@@ -430,6 +439,19 @@ async function saveConnEdit(id: string) {
 }
 
 const editingAgent = ref<string | null>(null);
+// Languages where provider choice genuinely decides whether a caller is heard.
+// Google Cloud accepts all of these; Deepgram lists none of them, and Whisper's
+// accuracy on them is poor enough to be worse than useless on a phone line.
+const GOOGLE_ONLY_LANGS = ['yo-NG', 'ig-NG', 'ha-NG', 'am-ET', 'zu-ZA'];
+const langNeedsGoogle = computed(() => {
+  if (!GOOGLE_ONLY_LANGS.includes(agentEdit.language)) return false;
+  const stt = connections.value.find((c: any) => c.id === agentEdit.sttConnId);
+  return !stt || stt.provider !== 'google-cloud';
+});
+function langLabel(code: string) {
+  return AGENT_LANGUAGES.find((l: any) => l.code === code)?.label || code;
+}
+
 const agentEdit = reactive({ name: '', greeting: '', sttConnId: '', llmConnId: '', ttsConnId: '', language: 'en-NG' });
 const savingAgentEdit = ref(false);
 function startEditAgent(a: Agent) { editingAgent.value = a.id; agentEdit.name = a.name; agentEdit.greeting = a.greeting || ''; agentEdit.sttConnId = a.sttConnId || ''; agentEdit.llmConnId = a.llmConnId || ''; agentEdit.ttsConnId = a.ttsConnId || ''; agentEdit.language = a.language || 'en-NG'; loadKbDocs(a.id); }
@@ -664,6 +686,12 @@ onMounted(() => { load(); loadAgents(); });
 .edit-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .edit-fld { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 200px; }
 .edit-fld span { font-size: 12px; color: var(--text-muted, #8a8f98); }
+/* Guidance, not a rejection — they can still make this choice, and might have a
+   reason to. Amber rather than red. */
+.lang-note { display: flex; gap: 9px; align-items: flex-start; width: 100%; margin-top: -4px; padding: 10px 12px; border: 1px solid rgba(183,121,31,.28); background: rgba(183,121,31,.07); border-radius: 8px; font-size: 12.5px; line-height: 1.55; color: var(--ink, #0A0A0B); }
+.lang-note svg { flex: none; margin-top: 1px; color: var(--warn, #b7791f); }
+.lang-note strong { font-weight: 600; }
+.lang-note em { font-style: normal; font-weight: 500; }
 .edit-actions { display: flex; gap: 8px; }
 .loading-pad { padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; }
 .skel-row { height: 20px; }
