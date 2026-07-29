@@ -2,7 +2,8 @@
   <div v-if="tasks.length">
     <div v-if="collapsed" class="atodo-dock">
       <button class="edge-tab" @click="setCollapsed(false)" :title="`${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'} to handle`">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        <span>Tasks</span>
         <span class="edge-tab-count">{{ tasks.length }}</span>
       </button>
     </div>
@@ -65,15 +66,13 @@ router.afterEach(() => { load(); });
 </script>
 
 <style scoped>
-.atodo-dock { position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 90; }
-.edge-tab {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  width: 46px; box-sizing: border-box;
-  background: var(--signal); color: #fff; padding: 12px 10px;
-  border-radius: 12px 0 0 12px; box-shadow: -4px 4px 16px rgba(10,10,11,0.16);
-  cursor: pointer;
-}
-.edge-tab-count { font-size: 12px; font-weight: 600; background: rgba(255,255,255,0.22); border-radius: 999px; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+/* Same tab as the client side, below Copilot rather than centred over it —
+   an admin who also uses a client account shouldn't find the furniture moved. */
+.atodo-dock { position: fixed; right: 0; top: calc(50% + 52px); z-index: 89; }
+.edge-tab { display: flex; align-items: center; gap: 7px; padding: 10px 12px 10px 14px; border: 1px solid var(--rule); border-right: 0; border-radius: 12px 0 0 12px; background: var(--paper); color: var(--signal); cursor: pointer; box-shadow: -2px 0 10px rgba(10,10,11,.06); font-size: 13px; font-weight: 600; }
+.edge-tab svg { width: 18px; height: 18px; }
+.edge-tab:hover { background: var(--paper-2); }
+.edge-tab-count { font-size: 11px; font-weight: 600; background: var(--signal); color: #fff; border-radius: 999px; min-width: 17px; padding: 1px 6px; text-align: center; }
 .atodo-overlay {
   position: fixed; inset: 0; z-index: 200; background: rgba(10,10,11,0.32);
   display: flex; align-items: center; justify-content: center; padding: 24px;
