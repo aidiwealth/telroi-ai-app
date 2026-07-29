@@ -20,10 +20,13 @@ export const monnify = {
     // Without a timeout a slow or unreachable Monnify hangs the request until the
     // platform's gateway gives up — which shows the caller a 502 page and leaves
     // nothing in the logs to say why.
+    const started = Date.now();
+    console.log('[monnify] auth ->', base(env));
     const r = await fetch(`${base(env)}/api/v1/auth/login`, {
       signal: AbortSignal.timeout(15000),
       method: 'POST', headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/json' }
     });
+    console.log('[monnify] auth <-', r.status, `${Date.now() - started}ms`);
     if (!r.ok) throw createError({ statusCode: r.status, message: `Monnify auth failed: ${await r.text()}` });
     const j = await r.json();
     const tok = j?.responseBody?.accessToken;
@@ -58,6 +61,7 @@ export const monnify = {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
+    console.log('[monnify] reserve <-', r.status);
     if (!r.ok) throw createError({ statusCode: r.status, message: `Monnify reserve failed: ${await r.text()}` });
     const j = await r.json();
     const rb = j?.responseBody || {};
