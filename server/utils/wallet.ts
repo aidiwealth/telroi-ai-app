@@ -114,7 +114,11 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
     const fxMeta = await fxStamp(wallet.currency);
     await tx.insert(schema.ledger).values({
       walletId: wallet.id, tenantId, kind: 'credit',
-      amountMinor, balanceAfterMinor: after, reason, reference, meta: { ...fxMeta, ...meta }
+      amountMinor, balanceAfterMinor: after, reason, reference, meta: { ...fxMeta, ...meta },
+      // Callers marked simulated money in the meta and left the column false, so
+      // the two disagreed and anything filtering on the column counted play money
+      // as real. Set it here rather than trusting every caller to remember.
+      sandbox: meta.simulated === true
     });
     return { balanceMinor: after, idempotent: false };
   }).then(async (r) => {
