@@ -101,8 +101,6 @@ export function logCall(input: CallLogInput): void {
 // ARI/Stasis. The outbound carrier route calls this (via the agent's
 // /log-outbound endpoint) AFTER Dial() completes, so we capture the real
 // outcome. Resolve tenant from the agent's SIP username (tnt_xxxxxxxx).
-import { eq } from 'drizzle-orm';
-
 export interface OutboundLogInput {
   agentUsername: string;
   dialed: string;
