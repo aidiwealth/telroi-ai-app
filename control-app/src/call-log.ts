@@ -9,11 +9,14 @@
 // call_events has a unique index on (tenant_id, callid), so repeated writes for
 // the same call (ringing -> answered -> ended) upsert instead of duplicating.
 import { db, schema } from './db.ts';
-import { sql } from 'drizzle-orm';
+import { sql, and, eq, like, desc } from 'drizzle-orm';
 
 export interface CallLogInput {
   tenantId: string;
   callid: string;             // Asterisk channel id or Call-ID
+  // When set, callid is only the first characters of the real one — an escalation
+  // address can't carry a full carrier call id, so it carries enough to find it.
+  callidIsPrefix?: boolean;
   direction?: 'in' | 'out';
   phone?: string;             // the other party
   status?: string;            // ringing | answered | ended | rejected | blacklisted
@@ -33,9 +36,22 @@ export function logCall(input: CallLogInput): void {
   // Intentionally not awaited by callers. We swallow errors here.
   void (async () => {
     try {
+      let callid = input.callid;
+      if (input.callidIsPrefix) {
+        // Resolve to the real id before writing, or the upsert would create a row
+        // keyed by the prefix rather than updating the call it belongs to. Most
+        // recent wins if two ever share a prefix: the one still in progress is the
+        // one being escalated.
+        const [prior] = await db.select({ callid: schema.callEvents.callid })
+          .from(schema.callEvents)
+          .where(and(eq(schema.callEvents.tenantId, input.tenantId), like(schema.callEvents.callid, `${callid}%`)))
+          .orderBy(desc(schema.callEvents.startedAt)).limit(1);
+        if (!prior) return;   // nothing to attach to — better than an orphan row
+        callid = prior.callid;
+      }
       await db.insert(schema.callEvents).values({
         tenantId: input.tenantId,
-        callid: input.callid,
+        callid,
         direction: input.direction ?? 'in',
         phone: input.phone ?? null,
         status: input.status ?? null,

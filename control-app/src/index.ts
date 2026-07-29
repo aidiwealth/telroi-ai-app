@@ -361,7 +361,9 @@ async function main() {
               if (status !== 'ended' && status !== 'answered') return;
               const agent = details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined;
               logCall({
-                tenantId: route.tenantId, callid: escCallId!, phone: callerNum, direction: 'in',
+                // A prefix, not the whole id — the address can't carry a full
+                // carrier call id, so logCall resolves it to the real one.
+                tenantId: route.tenantId, callid: escCallId!, callidIsPrefix: true, phone: callerNum, direction: 'in',
                 status: 'answered', user: agent,
                 agentSeconds: status === 'ended' ? Math.round((Date.now() - escStart) / 1000) : undefined
               } as any);

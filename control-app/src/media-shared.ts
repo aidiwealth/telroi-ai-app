@@ -79,7 +79,10 @@ export function escalationTarget(meta: Meta, callId?: string | null): string | n
     // ids are plain but the other's look like "v3:WLUG...", and that colon made
     // the whole address invalid, so the handoff never arrived. Hex-encode it and
     // decode on the way back.
-    const tag = callId ? Buffer.from(String(callId), 'utf8').toString('hex') : '';
+    // Just enough of the id to find the call again. Hex-encoding the whole
+    // thing overran what the address could carry and arrived truncated;
+    // twelve characters is unique in practice and always fits.
+    const tag = callId ? Buffer.from(String(callId).slice(0, 12), 'utf8').toString('hex') : '';
     return `sip:esc-${did}--${tag}@${PBX_SIP_HOST}`;
   }
   return null;
