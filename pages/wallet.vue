@@ -269,7 +269,22 @@ async function topup() {
 
 onMounted(async () => {
   await load();
-  if (route.query.ref) { toast.info('Confirming your payment…'); setTimeout(load, 2500); }
+  if (route.query.ref) {
+    toast.info('Confirming your payment…');
+    // The webhook usually lands within a second or two, but not always — keep
+    // looking briefly rather than checking once and leaving a stale balance on
+    // screen at the moment someone has just paid.
+    const before = wallet.value.balanceMinor;
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      await load();
+      if (wallet.value.balanceMinor > before) { toast.ok('Payment received'); break; }
+    }
+    // Drop the reference from the address bar so a refresh doesn't ask again.
+    // A slow webhook isn't a failed payment, so nothing is said if it hasn't
+    // landed — it will.
+    navigateTo('/wallet', { replace: true });
+  }
 });
 </script>
 
