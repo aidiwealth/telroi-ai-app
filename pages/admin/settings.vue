@@ -802,9 +802,11 @@ function payStatus(liveSet: boolean, testSet: boolean) {
 async function savePayments() {
   savingPay.value = true; savedPay.value = false;
   try {
-    const body: any = { paymentMode: paymentMode.value, stripe: {}, paystack: {}, monnify: {} };
+    const body: any = { paymentMode: paymentMode.value, stripe: {}, stripeWebhook: {}, paystack: {}, monnify: {} };
     if (pay.stripe.live) body.stripe.live = pay.stripe.live;
     if (pay.stripe.test) body.stripe.test = pay.stripe.test;
+    if (pay.stripeWebhook.live) body.stripeWebhook.live = pay.stripeWebhook.live;
+    if (pay.stripeWebhook.test) body.stripeWebhook.test = pay.stripeWebhook.test;
     if (pay.paystack.live) body.paystack.live = pay.paystack.live;
     if (pay.paystack.test) body.paystack.test = pay.paystack.test;
     if (pay.monnify.live.apiKey && pay.monnify.live.secretKey) body.monnify.live = { ...pay.monnify.live };
@@ -813,7 +815,7 @@ async function savePayments() {
     cfg.value = await $fetch<any>('/api/admin/settings');
     integ.value = await $fetch<any>('/api/admin/integrations');
     // Clear entered secrets from memory after save.
-    pay.stripe.live = pay.stripe.test = pay.paystack.live = pay.paystack.test = '';
+    pay.stripe.live = pay.stripe.test = pay.stripeWebhook.live = pay.stripeWebhook.test = pay.paystack.live = pay.paystack.test = '';
     pay.monnify.live = { apiKey: '', secretKey: '', contractCode: '' };
     pay.monnify.test = { apiKey: '', secretKey: '', contractCode: '' };
     savedPay.value = true;
