@@ -47,5 +47,30 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return { provider: conn.provider, results };
+  // Hearing a language and speaking it are different products with different
+  // coverage — an agent that transcribes Yoruba but replies in an English voice
+  // is no use to a Yoruba speaker.
+  const voices: Record<string, { ok: boolean; detail?: string }> = {};
+  for (const lang of CHECK) {
+    try {
+      const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: { text: 'Test.' },
+          voice: { languageCode: lang },
+          audioConfig: { audioEncoding: 'LINEAR16' }
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (res.ok) { voices[lang] = { ok: true }; continue; }
+      const body = await res.text().catch(() => '');
+      const msg = (() => { try { return JSON.parse(body)?.error?.message || body; } catch { return body; } })();
+      voices[lang] = { ok: false, detail: String(msg).slice(0, 160) };
+    } catch (e: any) {
+      voices[lang] = { ok: false, detail: e?.message || 'request failed' };
+    }
+  }
+
+  return { provider: conn.provider, results, voices };
 });
