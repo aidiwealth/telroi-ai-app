@@ -192,58 +192,36 @@
       <div class="set-card-head">
         <div>
           <h2 class="set-card-title">Telroi One — client feature settings</h2>
-          <p class="set-card-sub">Set the defaults clients start with for CRM, Live Call and Apps &amp; Integrations, and lock any setting so clients can’t change it. To turn a whole feature on/off for a specific client, use that client’s page under Clients.</p>
+          <p class="set-card-desc">What clients start with, and what they’re allowed to change. To switch a whole feature on or off for one client, use their own page under Clients.</p>
         </div>
       </div>
       <div class="set-card-body">
         <AdminFeatureSettings />
+      </div>
+    </section>
 
-        <!-- Both are allowances rather than feature toggles, so they sit apart from
-             the editor above — and together, because an operator setting one will
-             want to see the other. Sandbox bounds what an unproven workspace can
-             do; trial bounds what our own AI costs us while somebody decides. -->
-        <div class="lim-panel">
-          <div class="lim-head">
-            <h3 class="lim-title">What clients get</h3>
-            <p class="lim-sub">Defaults for every workspace. Raise any of them for one client on their own page.</p>
-          </div>
+    <!-- Allowances rather than feature toggles, so a card of their own — and
+         together, because an operator setting one will want to see the other.
+         Sandbox bounds what an unproven workspace can do; trial bounds what our
+         own AI costs us while somebody decides whether to pay. -->
+    <section v-show="activeTab === 'telroione'" class="set-card">
+      <div class="set-card-head">
+        <div>
+          <h2 class="set-card-title">What clients get</h2>
+          <p class="set-card-desc">Defaults for every workspace. Raise any of them for one client on their own page.</p>
+        </div>
+      </div>
+      <div class="set-card-body">
+        <div class="set-grid">
+          <label class="ad-field"><span>Sandbox test calls</span><input v-model.number="sandboxCallCap" type="number" min="0" class="ad-input mono" /></label>
+          <label class="ad-field"><span>Sandbox AI agents</span><input v-model.number="sandboxAgentCap" type="number" min="0" class="ad-input mono" /></label>
+          <label class="ad-field"><span>Free trial AI ($)</span><input v-model.number="trialAiAllowance" type="number" min="0" step="0.5" class="ad-input mono" /></label>
+          <label class="ad-field"><span>Trial call limit (mins)</span><input v-model.number="trialCallMinutes" type="number" min="0" step="1" class="ad-input mono" /></label>
+        </div>
+        <p class="ad-hint">The first two bound what a workspace can do before going live. The last two bound what our own AI costs us while somebody is trialling — in dollars, because that's what the providers charge us.</p>
 
-          <div class="lim-groups">
-            <div class="lim-group">
-              <span class="lim-group-label">Before going live</span>
-              <div class="lim-fields">
-                <div class="ad-field">
-                  <label>Test calls</label>
-                  <input v-model.number="sandboxCallCap" type="number" min="0" class="ad-input" />
-                </div>
-                <div class="ad-field">
-                  <label>Live AI agents</label>
-                  <input v-model.number="sandboxAgentCap" type="number" min="0" class="ad-input" />
-                </div>
-              </div>
-            </div>
-
-            <div class="lim-group">
-              <span class="lim-group-label">Free during trial</span>
-              <div class="lim-fields">
-                <div class="ad-field">
-                  <label>AI allowance ($)</label>
-                  <input v-model.number="trialAiAllowance" type="number" min="0" step="0.5" class="ad-input" />
-                </div>
-                <div class="ad-field">
-                  <label>Call limit (minutes)</label>
-                  <input v-model.number="trialCallMinutes" type="number" min="0" step="1" class="ad-input" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="lim-foot">
-            <span class="lim-note">In dollars, because that's what the AI providers charge us.</span>
-            <button class="btn btn-signal" :disabled="savingLimits" @click="saveLimits">
-              {{ savingLimits ? 'Saving…' : 'Save limits' }}
-            </button>
-          </div>
+        <div class="set-actions">
+          <button class="btn btn-signal" :disabled="savingLimits" @click="saveLimits">{{ savingLimits ? 'Saving…' : 'Save limits' }}</button>
         </div>
       </div>
     </section>
@@ -905,17 +883,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.lim-panel { border: 1px solid var(--rule); border-radius: var(--radius); padding: 20px 22px; margin-top: 24px; background: var(--paper); }
-.lim-head { margin-bottom: 18px; }
-.lim-title { font-size: 15px; font-weight: 600; color: var(--ink); margin: 0 0 4px; }
-.lim-sub { font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin: 0; max-width: 60ch; }
-.lim-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.lim-group-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px; }
-.lim-fields { display: flex; gap: 12px; }
-.lim-fields .ad-field { flex: 1; min-width: 0; }
-.lim-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rule-2); }
-.lim-note { font-size: 12px; color: var(--ink-soft); }
-@media (max-width: 720px) { .lim-groups { grid-template-columns: 1fr; } }
 .set-head { margin-bottom: 24px; }
 .ad-title { font-family: var(--font-display); font-size: 30px; color: var(--ink); letter-spacing: -0.02em; }
 .ad-sub { color: var(--ink-mute); font-size: 14px; margin-top: 4px; }
