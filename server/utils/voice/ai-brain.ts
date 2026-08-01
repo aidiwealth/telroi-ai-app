@@ -225,7 +225,14 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
   const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai', 'google-cloud']);
   try {
     if (conn?.provider === 'elevenlabs') {
-      const voiceId = opts.voice || (conn.meta.defaultVoice as string) || '21m00Tcm4TlvDq8ikWAM';
+      // No sensible default exists: the stock library voices need a paid plan, so
+      // falling back to one meant a free account got silence and a payment error
+      // buried in a log. Better to say what's missing.
+      const voiceId = opts.voice || (conn.meta.defaultVoice as string) || '';
+      if (!voiceId) {
+        console.error('[ai-brain] ElevenLabs TTS: no voice set on this connection — add a voice id from your ElevenLabs dashboard');
+        return null;
+      }
       const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_16000`, {
         method: 'POST', headers: { 'xi-api-key': conn.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, model_id: (conn.meta.model as string) || 'eleven_multilingual_v2' })
