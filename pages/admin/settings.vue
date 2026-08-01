@@ -198,44 +198,50 @@
       <div class="set-card-body">
         <AdminFeatureSettings />
 
-        <!-- Sandbox limits: how much a new workspace can do before going live.
-             Not a per-feature toggle, so it sits alongside rather than inside
-             the feature editor. Individual clients can be given more on their
-             own page. -->
-        <div class="sbx-limits">
-          <h3 class="sbx-title">Sandbox limits</h3>
-          <p class="sbx-sub">What a new workspace can do before it goes live. Raise either for a specific client on their page.</p>
-          <div class="sbx-row">
-            <div class="ad-field">
-              <label>Test calls</label>
-              <input v-model.number="sandboxCallCap" type="number" min="0" class="ad-input" />
-            </div>
-            <div class="ad-field">
-              <label>Live AI agents</label>
-              <input v-model.number="sandboxAgentCap" type="number" min="0" class="ad-input" />
-            </div>
-            <button class="btn btn-signal" :disabled="savingSandbox" @click="saveSandbox">
-              {{ savingSandbox ? 'Saving…' : 'Save limits' }}
-            </button>
+        <!-- Both are allowances rather than feature toggles, so they sit apart from
+             the editor above — and together, because an operator setting one will
+             want to see the other. Sandbox bounds what an unproven workspace can
+             do; trial bounds what our own AI costs us while somebody decides. -->
+        <div class="lim-panel">
+          <div class="lim-head">
+            <h3 class="lim-title">What clients get</h3>
+            <p class="lim-sub">Defaults for every workspace. Raise any of them for one client on their own page.</p>
           </div>
-        </div>
 
-        <!-- Separate from sandbox: a workspace can be live and still trialling,
-             and these bound what our own AI costs us while it is. -->
-        <div class="sbx-limits">
-          <h3 class="sbx-title">Trial limits</h3>
-          <p class="sbx-sub">What a workspace on trial gets free before its wallet takes over. In dollars, because that's what the AI providers charge us. Raise either for a specific client on their page.</p>
-          <div class="sbx-row">
-            <div class="ad-field">
-              <label>Free AI allowance ($)</label>
-              <input v-model.number="trialAiAllowance" type="number" min="0" step="0.5" class="ad-input" />
+          <div class="lim-groups">
+            <div class="lim-group">
+              <span class="lim-group-label">Before going live</span>
+              <div class="lim-fields">
+                <div class="ad-field">
+                  <label>Test calls</label>
+                  <input v-model.number="sandboxCallCap" type="number" min="0" class="ad-input" />
+                </div>
+                <div class="ad-field">
+                  <label>Live AI agents</label>
+                  <input v-model.number="sandboxAgentCap" type="number" min="0" class="ad-input" />
+                </div>
+              </div>
             </div>
-            <div class="ad-field">
-              <label>Call length limit (minutes)</label>
-              <input v-model.number="trialCallMinutes" type="number" min="0" step="1" class="ad-input" />
+
+            <div class="lim-group">
+              <span class="lim-group-label">Free during trial</span>
+              <div class="lim-fields">
+                <div class="ad-field">
+                  <label>AI allowance ($)</label>
+                  <input v-model.number="trialAiAllowance" type="number" min="0" step="0.5" class="ad-input" />
+                </div>
+                <div class="ad-field">
+                  <label>Call limit (minutes)</label>
+                  <input v-model.number="trialCallMinutes" type="number" min="0" step="1" class="ad-input" />
+                </div>
+              </div>
             </div>
-            <button class="btn btn-signal" :disabled="savingTrial" @click="saveTrialLimits">
-              {{ savingTrial ? 'Saving…' : 'Save limits' }}
+          </div>
+
+          <div class="lim-foot">
+            <span class="lim-note">In dollars, because that's what the AI providers charge us.</span>
+            <button class="btn btn-signal" :disabled="savingLimits" @click="saveLimits">
+              {{ savingLimits ? 'Saving…' : 'Save limits' }}
             </button>
           </div>
         </div>
@@ -601,8 +607,7 @@ const sandboxAgentCap = ref(1);
 // at the edges, so nobody types 5 meaning dollars and sets five cents.
 const trialAiAllowance = ref(5);
 const trialCallMinutes = ref(5);
-const savingTrial = ref(false);
-const savingSandbox = ref(false);
+const savingLimits = ref(false);
 async function loadSandboxLimits() {
   try {
     const r = await $fetch<any>('/api/admin/settings');
@@ -614,28 +619,22 @@ async function loadSandboxLimits() {
     if (r?.trialCallMaxSeconds != null) trialCallMinutes.value = r.trialCallMaxSeconds / 60;
   } catch { /* keep defaults */ }
 }
-async function saveSandbox() {
-  savingSandbox.value = true;
-  try {
-    await $fetch('/api/admin/settings', {
-      method: 'POST',
-      body: { sandboxCallCap: sandboxCallCap.value, sandboxAgentCap: sandboxAgentCap.value }
-    });
-  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
-  finally { savingSandbox.value = false; }
-}
-async function saveTrialLimits() {
-  savingTrial.value = true;
+async function saveLimits() {
+  savingLimits.value = true;
   try {
     await $fetch('/api/admin/settings', {
       method: 'POST',
       body: {
+        sandboxCallCap: sandboxCallCap.value,
+        sandboxAgentCap: sandboxAgentCap.value,
+        // Held in the units an operator thinks in and converted here, so nobody
+        // types five meaning dollars and sets five cents.
         trialAiAllowanceUsdMinor: Math.round((trialAiAllowance.value || 0) * 100),
         trialCallMaxSeconds: Math.round((trialCallMinutes.value || 0) * 60)
       }
     });
   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
-  finally { savingTrial.value = false; }
+  finally { savingLimits.value = false; }
 }
 
 onMounted(() => { void loadSandboxLimits(); });
@@ -906,6 +905,17 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.lim-panel { border: 1px solid var(--rule); border-radius: var(--radius); padding: 20px 22px; margin-top: 24px; background: var(--paper); }
+.lim-head { margin-bottom: 18px; }
+.lim-title { font-size: 15px; font-weight: 600; color: var(--ink); margin: 0 0 4px; }
+.lim-sub { font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin: 0; max-width: 60ch; }
+.lim-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.lim-group-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px; }
+.lim-fields { display: flex; gap: 12px; }
+.lim-fields .ad-field { flex: 1; min-width: 0; }
+.lim-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--rule-2); }
+.lim-note { font-size: 12px; color: var(--ink-soft); }
+@media (max-width: 720px) { .lim-groups { grid-template-columns: 1fr; } }
 .set-head { margin-bottom: 24px; }
 .ad-title { font-family: var(--font-display); font-size: 30px; color: var(--ink); letter-spacing: -0.02em; }
 .ad-sub { color: var(--ink-mute); font-size: 14px; margin-top: 4px; }
