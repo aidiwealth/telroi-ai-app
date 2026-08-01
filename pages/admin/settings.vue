@@ -219,6 +219,26 @@
             </button>
           </div>
         </div>
+
+        <!-- Separate from sandbox: a workspace can be live and still trialling,
+             and these bound what our own AI costs us while it is. -->
+        <div class="sbx-limits">
+          <h3 class="sbx-title">Trial limits</h3>
+          <p class="sbx-sub">What a workspace on trial gets free before its wallet takes over. In dollars, because that's what the AI providers charge us. Raise either for a specific client on their page.</p>
+          <div class="sbx-row">
+            <div class="ad-field">
+              <label>Free AI allowance ($)</label>
+              <input v-model.number="trialAiAllowance" type="number" min="0" step="0.5" class="ad-input" />
+            </div>
+            <div class="ad-field">
+              <label>Call length limit (minutes)</label>
+              <input v-model.number="trialCallMinutes" type="number" min="0" step="1" class="ad-input" />
+            </div>
+            <button class="btn btn-signal" :disabled="savingTrial" @click="saveTrialLimits">
+              {{ savingTrial ? 'Saving…' : 'Save limits' }}
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -577,12 +597,21 @@ function resetEmailField() {
 // live on the client's own page.
 const sandboxCallCap = ref(20);
 const sandboxAgentCap = ref(1);
+// Held in the units an operator thinks in — dollars and minutes — and converted
+// at the edges, so nobody types 5 meaning dollars and sets five cents.
+const trialAiAllowance = ref(5);
+const trialCallMinutes = ref(5);
+const savingTrial = ref(false);
 const savingSandbox = ref(false);
 async function loadSandboxLimits() {
   try {
     const r = await $fetch<any>('/api/admin/settings');
     if (r?.sandboxCallCap != null) sandboxCallCap.value = r.sandboxCallCap;
     if (r?.sandboxAgentCap != null) sandboxAgentCap.value = r.sandboxAgentCap;
+    // Back into the units the inputs use, or an operator would see the defaults
+    // and take them for what's actually set.
+    if (r?.trialAiAllowanceUsdMinor != null) trialAiAllowance.value = r.trialAiAllowanceUsdMinor / 100;
+    if (r?.trialCallMaxSeconds != null) trialCallMinutes.value = r.trialCallMaxSeconds / 60;
   } catch { /* keep defaults */ }
 }
 async function saveSandbox() {
@@ -595,6 +624,20 @@ async function saveSandbox() {
   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
   finally { savingSandbox.value = false; }
 }
+async function saveTrialLimits() {
+  savingTrial.value = true;
+  try {
+    await $fetch('/api/admin/settings', {
+      method: 'POST',
+      body: {
+        trialAiAllowanceUsdMinor: Math.round((trialAiAllowance.value || 0) * 100),
+        trialCallMaxSeconds: Math.round((trialCallMinutes.value || 0) * 60)
+      }
+    });
+  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  finally { savingTrial.value = false; }
+}
+
 onMounted(() => { void loadSandboxLimits(); });
 
 async function saveSocial() {

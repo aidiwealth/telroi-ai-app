@@ -44,6 +44,10 @@ const Body = z.object({
   supportNumbersByRegion: z.object({ NG: z.string().optional(), INTL: z.string().optional() }).partial().optional(),
   // Sandbox allowances for new workspaces; a tenant row can override either.
   sandboxCallCap: z.coerce.number().int().min(0).optional(),
+  // What a trialling workspace may spend on our AI, and how long any one of its
+  // calls may run. Free during trial is an offer worth making; unbounded isn't.
+  trialAiAllowanceUsdMinor: z.coerce.number().int().min(0).optional(),
+  trialCallMaxSeconds: z.coerce.number().int().min(0).optional(),
   sandboxAgentCap: z.coerce.number().int().min(0).optional(),
   captchaEnabled: z.boolean().optional(),
   captchaProvider: z.enum(['turnstile', 'recaptcha']).optional(),
@@ -157,6 +161,8 @@ export default defineEventHandler(async (event) => {
   if (d.otpChannel) patch.otpChannel = d.otpChannel;
   if (d.supportTelnum !== undefined) patch.supportTelnum = d.supportTelnum || null;
   if (d.sandboxCallCap !== undefined) patch.sandboxCallCap = d.sandboxCallCap;
+  if (d.trialAiAllowanceUsdMinor !== undefined) patch.trialAiAllowanceUsdMinor = d.trialAiAllowanceUsdMinor;
+  if (d.trialCallMaxSeconds !== undefined) patch.trialCallMaxSeconds = d.trialCallMaxSeconds;
   if (d.sandboxAgentCap !== undefined) patch.sandboxAgentCap = d.sandboxAgentCap;
   if (d.supportNumbersByRegion !== undefined) {
     patch.supportNumbersByRegion = d.supportNumbersByRegion;

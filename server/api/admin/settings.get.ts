@@ -62,6 +62,8 @@ export default defineEventHandler(async (event) => {
     // Sandbox allowances for new workspaces (per-client overrides live on the
     // client page). Fall back to the same defaults the resolver uses.
     sandboxCallCap: s?.sandboxCallCap ?? 20,
+    trialAiAllowanceUsdMinor: s?.trialAiAllowanceUsdMinor ?? 500,
+    trialCallMaxSeconds: s?.trialCallMaxSeconds ?? 300,
     sandboxAgentCap: s?.sandboxAgentCap ?? 1,
     captchaEnabled: !!s?.captchaEnabled,
     captchaProvider: (s?.captchaProvider as string) || 'turnstile',
