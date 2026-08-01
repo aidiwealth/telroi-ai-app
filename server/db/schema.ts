@@ -1,7 +1,7 @@
 // server/db/schema.ts
 // Drizzle ORM schema for the Telroi dashboard (PostgreSQL).
 import {
-  pgTable, uuid, text, timestamp, integer, boolean, jsonb, pgEnum, index, uniqueIndex
+  pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex
 } from 'drizzle-orm/pg-core';
 
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'member']);export const platformRoleEnum = pgEnum('platform_role', ['superadmin', 'staff']);
