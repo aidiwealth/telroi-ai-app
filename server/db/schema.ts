@@ -24,6 +24,12 @@ export const platformSettings = pgTable('platform_settings', {
   // Sandbox limits every new workspace gets. A tenant can override these on its
   // own row; null there means "use whatever is set here".
   sandboxCallCap: integer('sandbox_call_cap').notNull().default(20),
+  // The platform default for what a trialling workspace may spend on AI. Free
+  // during trial is an offer worth making; unbounded is not.
+  trialAiAllowanceUsdMinor: integer('trial_ai_allowance_usd_minor').notNull().default(500),
+  // A ceiling on any one trial call, so the worst case is calculable rather than
+  // depending on how long somebody talks.
+  trialCallMaxSeconds: integer('trial_call_max_seconds').notNull().default(300),
   sandboxAgentCap: integer('sandbox_agent_cap').notNull().default(1),
   operatorDomain: text('operator_domain'),           // the single Digidite account domain (provisioning + NG carrier)
   operatorApiKeyEnc: text('operator_api_key_enc'),   // AES-256-GCM
@@ -223,6 +229,10 @@ export const tenants = pgTable('tenants', {
   sandboxMode: boolean('sandbox_mode').notNull().default(true),
   // Null = inherit the platform default. Set per-client to extend a trial.
   sandboxCallCap: integer('sandbox_call_cap'),
+  // What this workspace may spend on AI during its trial before the wallet takes
+  // over. Null falls back to the platform default.
+  trialAiAllowanceUsdMinor: integer('trial_ai_allowance_usd_minor'),
+  trialCallMaxSeconds: integer('trial_call_max_seconds'),
   sandboxAgentCap: integer('sandbox_agent_cap'),
   // Internal Telroi workspaces (e.g. the support/CS calling workspace) are NOT
   // customers — excluded from the admin client list, counts and plan filters.

@@ -56,21 +56,30 @@ async function guestCallerName(username: string): Promise<string | null> {
   }
 }
 
-async function inboundHasCapacity(tenantId: string, log: (m: string) => void): Promise<boolean> {
+/**
+ * Can this workspace take the call, and can its AI answer it?
+ *
+ * Both are asked at once because they're decided together: an AI route whose
+ * trial allowance is spent, or whose wallet is empty, should reach a person
+ * rather than a stream that will fail silently. Fails open on either — a check
+ * we couldn't make is a poor reason to refuse a caller.
+ */
+async function inboundCapacity(tenantId: string, log: (m: string) => void): Promise<{ ok: boolean; ai: boolean; aiReason: string | null }> {
   try {
     const res = await fetch(`${WEBAPP_URL}/api/voice/capacity?tenantId=${encodeURIComponent(tenantId)}`, {
       headers: { 'x-telroi-internal': INTERNAL_SECRET },
       signal: AbortSignal.timeout(4000)
     });
-    if (!res.ok) { log(`capacity check HTTP ${res.status} — allowing (fail-open)`); return true; }
-    const u = await res.json() as { capacity: number; inUse: number; ok: boolean };
-    log(`capacity: ${u.inUse}/${u.capacity} in use -> ${u.ok ? 'OK' : 'BUSY'}`);
-    return !!u.ok;
+    if (!res.ok) { log(`capacity check HTTP ${res.status} — allowing (fail-open)`); return { ok: true, ai: true, aiReason: null }; }
+    const u = await res.json() as { capacity: number; inUse: number; ok: boolean; ai?: boolean; aiReason?: string | null };
+    log(`capacity: ${u.inUse}/${u.capacity} in use -> ${u.ok ? 'OK' : 'BUSY'}${u.ai === false ? ` (AI unavailable: ${u.aiReason})` : ''}`);
+    return { ok: !!u.ok, ai: u.ai !== false, aiReason: u.aiReason ?? null };
   } catch (e) {
     log(`capacity check failed (${(e as Error)?.message}) — allowing (fail-open)`);
-    return true;
+    return { ok: true, ai: true, aiReason: null };
   }
 }
+
 
 async function filterLiveEndpoints(client: any, usernames: string[], log: (m: string) => void): Promise<string[]> {
   const checks = await Promise.all(usernames.map(async (u) => {
@@ -265,7 +274,11 @@ async function main() {
 
       // 2.5) Concurrency limit — check BEFORE logging this call as in-flight, so
       //       the current call doesn't count itself. Over capacity -> "all lines busy".
-      if (!(await inboundHasCapacity(route.tenantId, (m) => log(`  [${chId}] ${m}`)))) {
+      // Both answers come back together: whether there's room for the call, and
+      // whether the AI can actually answer it. The second decides routing further
+      // down, so it's held rather than asked for twice.
+      const cap = await inboundCapacity(route.tenantId, (m) => log(`  [${chId}] ${m}`));
+      if (!cap.ok) {
         log(`  tenant at channel capacity — playing busy`);
         logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { did: dialedDid, reason: 'channels_busy' } });
         const busyMsg = route.routeType === 'ai' && route.routeAgentId
@@ -283,8 +296,8 @@ async function main() {
       // already logged by the carrier webhook, and this leg's "caller" is our own
       // DID, which would show up as a bogus inbound-from-ourselves row that never
       // completes. Skip it. (Merging the agent's talk time into the original
-      // call's record is the better answer, but needs the carrier call id
-      // threaded through the handoff — worth doing properly later.)
+      // call's record is where the agent's talk time goes: the carrier call id
+      // rides in the handoff address and lands as agentSeconds on the original.)
       if (!isEscalation) {
         logCall({
           tenantId: route.tenantId, callid: chId, phone: callerNum,
@@ -391,6 +404,37 @@ async function main() {
             await playAndHangup(client, channel, 'sound:ss-noservice');
             break;
           }
+          // The AI can't answer — trial allowance spent, or a wallet with nothing
+          // in it. Ring whoever's at their desk instead: the business still takes
+          // the call, just with a person. Anything spoken here uses a stock prompt
+          // rather than synthesis, since synthesis is the thing that's unavailable.
+          if (!cap.ai) {
+            log(`     AI unavailable (${cap.aiReason}) — ringing agents instead`);
+            const allUsers = resolveTenantEndpoints(route.tenantId);
+            const liveUsers = await filterLiveEndpoints(client, allUsers, log);
+            const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
+            if (!endpoints.length) {
+              log(`     nobody available either — playing no-service`);
+              logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { did: dialedDid, reason: cap.aiReason } });
+              await playAndHangup(client, channel, 'sound:ss-noservice');
+              break;
+            }
+            logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'ringing', direction: 'in', raw: { did: dialedDid, reason: cap.aiReason } });
+            try {
+              await bridgeToDepartment({
+                client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
+                onStatus: (status, details) => {
+                  const agent = details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined;
+                  logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status, direction: 'in', duration: details?.duration, user: agent });
+                }
+              });
+            } catch (err) {
+              log(`     fallback bridge failed: ${(err as Error)?.message}`);
+              await playAndHangup(client, channel, 'sound:ss-noservice');
+            }
+            break;
+          }
+
           log(`     AI route -> agent ${agentId} (turn-based conversation)`);
           logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'answered', direction: 'in', raw: { did: dialedDid, callerName, agent: agentId } });
           // Terminal-status guarantee: whenever the caller channel leaves the app
