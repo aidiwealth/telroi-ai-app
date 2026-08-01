@@ -210,7 +210,12 @@ export const tenants = pgTable('tenants', {
   // Per-client dedicated-SIP vendor: which carrier issues this client's own SIP
   // device credentials (telroi/twilio/telnyx). Separate from sipVendorOverride
   // (the calling/routing allow-list). null = no BYOD SIP for this client.
-  sipDeviceVendor: text('sip_device_vendor'),
+  // Every workspace runs on our own PBX, and an agent needs a SIP endpoint just to
+  // answer a call from the dashboard — so this defaults rather than waiting for
+  // somebody to set it. Null meant a live client's team couldn't take calls at all,
+  // with nothing to say why. If bring-your-own-equipment ever needs approving
+  // separately, that's a different flag from this one.
+  sipDeviceVendor: text('sip_device_vendor').default('telroi'),
   // Per-client Digidite SIP account (set manually from the Digidite portal).
   // Encrypted JSON: {host, authId, password}. Client-specific.
   tenantDigiditeSipEnc: text('tenant_digidite_sip_enc'),
