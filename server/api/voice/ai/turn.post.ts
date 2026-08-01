@@ -48,12 +48,33 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // A trialling workspace's calls are capped in length as well as in total spend.
+  // The allowance alone only decides whether the NEXT call starts — one long
+  // conversation could spend it several times over before anything noticed.
+  // Returned on the greeting so the adapter knows when to end the call; zero
+  // means no limit.
+  let callMaxSeconds = 0;
+  if (first && agent.tier === 'managed') {
+    const { trialAiStatus } = await import('~/server/utils/trial-ai');
+    const trial = await trialAiStatus(tenantId).catch(() => null);
+    if (trial?.onTrial) callMaxSeconds = trial.callMaxSeconds;
+  }
+
+  // Speak a line we've written rather than one the model produced. Used when a
+  // call is ending for a reason the caller deserves to hear — a trial limit, say —
+  // where running the brain would be wasteful and might not say the right thing.
+  if (typeof body.say === 'string' && body.say.trim()) {
+    const line = body.say.trim().slice(0, 300);
+    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, line, { language: agent.language }, agent.tier === 'managed').catch(() => null);
+    return { reply: line, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [], action: 'hangup' };
+  }
+
   const history: ChatMessage[] = Array.isArray(body.history) ? body.history : [];
 
   if (first) {
     const greeting = agent.greeting || 'Hello, thanks for calling. How can I help you today?';
     const tts = await ttsSynthesize(tenantId, agent.ttsConnId, greeting, { language: agent.language }, agent.tier === 'managed');
-    return { reply: greeting, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [{ role: 'assistant', content: greeting }], action: 'continue' };
+    return { reply: greeting, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [{ role: 'assistant', content: greeting }], action: 'continue', callMaxSeconds };
   }
 
   let userText = '';

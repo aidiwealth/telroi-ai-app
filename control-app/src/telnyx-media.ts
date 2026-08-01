@@ -119,6 +119,10 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     // stream open for a moment, and without this latch the adapter kept
     // transcribing the agent's conversation and even re-issuing transfers.
     let handedOff = false;
+    // A trialling workspace's calls are capped in length, so one long
+    // conversation can't spend the whole allowance on its own. Zero = no limit.
+    const startedAt = Date.now();
+    let maxSeconds = 0;
 
     const sendMedia = (b64: string) => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: 'media', media: { payload: b64 } }));
@@ -210,6 +214,21 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
           }
         }
       }
+      // Checked after the reply rather than mid-sentence: a caller finishes their
+      // thought and then hears why the call is ending, which is the least
+      // discourteous way to enforce a limit.
+      if (maxSeconds && (Date.now() - startedAt) / 1000 >= maxSeconds) {
+        log(`trial call limit reached (${maxSeconds}s) — closing`);
+        const bye = await callTurn({
+          agentId: meta.agentId, tenantId: meta.tenantId, telnum: meta.telnum, callId,
+          say: 'This trial call has reached its time limit. Please call back if you need anything else. Goodbye.'
+        }).catch(() => null);
+        if (bye?.audioBase64) await speak(bye.audioBase64, bye.audioContentType, 'LIMIT');
+        const waited = Date.now();
+        while (playing && Date.now() - waited < 10000) await new Promise((r) => setTimeout(r, 100));
+        handedOff = true;   // stop taking turns
+        try { ws.close(); } catch { /* already gone */ }
+      }
       busy = false;
     }
 
@@ -230,6 +249,8 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
           if (g) {
             log(`GREETING: "${String(g.reply || '').slice(0, 120)}" audio=${g.audioBase64 ? 'yes' : 'no'}`);
             if (Array.isArray(g.history)) history = g.history;
+            maxSeconds = Number(g.callMaxSeconds || 0);
+            if (maxSeconds) log(`trial call limit: ${maxSeconds}s`);
             await speak(g.audioBase64, g.audioContentType, 'GREETING');
             // Warm the fillers while the greeting plays — ready before turn 1.
             Promise.all(FILLER_PHRASES.map((p) => renderFiller(meta.tenantId!, meta.agentId!, p)))
