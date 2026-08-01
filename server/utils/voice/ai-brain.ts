@@ -230,7 +230,12 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
         method: 'POST', headers: { 'xi-api-key': conn.apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, model_id: (conn.meta.model as string) || 'eleven_multilingual_v2' })
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // The default voice id is a stock one that not every account carries, so
+        // a valid key can still synthesise nothing — and it did so silently.
+        console.error(`[ai-brain] ElevenLabs TTS failed ${res.status} (voice ${voiceId}): ${(await res.text().catch(() => '')).slice(0, 200)}`);
+        return null;
+      }
       return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/l16; rate=16000' };
     }
     if (conn?.provider === 'openai') {
@@ -238,7 +243,12 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
         method: 'POST', headers: { Authorization: `Bearer ${conn.apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: (conn.meta.model as string) || 'tts-1', voice: opts.voice || 'alloy', input: text, response_format: 'wav' })
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        // Silence with no explanation anywhere was the worst of both: the caller
+        // heard nothing and the log only said audio=no.
+        console.error(`[ai-brain] OpenAI TTS failed ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+        return null;
+      }
       return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/wav' };
     }
     if (conn?.provider === 'google-cloud') {
