@@ -22,6 +22,14 @@
           <span v-if="stepLabel" class="st-step">{{ stepLabel }}</span>
         </div>
 
+        <!-- Said once, above the step, and only while the trial makes it true. -->
+        <div v-if="notice" class="st-notice">
+          <span class="st-notice-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </span>
+          <span><strong>{{ notice.title }}.</strong> {{ notice.body }}</span>
+        </div>
+
         <div class="st-body">
           <span class="st-icon" :class="current.owner">
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -61,6 +69,7 @@ const api = useApi();
 
 const tasks = ref<any[]>([]);
 const progress = ref<{ completed: number; total: number }>({ completed: 0, total: 0 });
+const notice = ref<{ title: string; body: string } | null>(null);
 const supportEmail = ref('support@telroi.ai');
 const COLLAPSE_KEY = 'telroi_setup_tasks_collapsed';
 const collapsed = ref(true);
@@ -100,6 +109,7 @@ async function load() {
     const r = await api.get<any>('/api/tenant/setup-tasks');
     tasks.value = r.tasks || [];
     progress.value = r.progress || { completed: 0, total: 0 };
+    notice.value = r.notice || null;
     supportEmail.value = r.supportEmail || 'support@telroi.ai';
   } catch { /* nothing to show */ }
 }
@@ -130,6 +140,9 @@ onMounted(async () => {
 .st-eyebrow { font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--signal); }
 .st-step { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
+.st-notice { display: flex; gap: 10px; align-items: flex-start; text-align: left; margin-bottom: 22px; padding: 12px 14px; border: 1px solid var(--rule); background: var(--signal-soft); border-radius: var(--radius); font-size: 13px; line-height: 1.55; color: var(--ink); }
+.st-notice-icon { flex: none; color: var(--signal); margin-top: 1px; display: flex; }
+.st-notice strong { font-weight: 600; }
 .st-body { text-align: center; }
 .st-icon { display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 50%; margin-bottom: 20px; }
 .st-icon.client { background: var(--signal-soft); color: var(--signal); }

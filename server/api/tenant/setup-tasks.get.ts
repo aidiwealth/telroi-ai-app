@@ -21,6 +21,14 @@ export default defineEventHandler(async (event) => {
   const agents = await db.select().from(schema.aiConnections).where(eq(schema.aiConnections.tenantId, tid));
   const vans = await db.select().from(schema.vans).where(eq(schema.vans.tenantId, tid));
 
+  // Give them a working agent before they've configured anything. Runs here
+  // because this is loaded on every dashboard visit, so existing workspaces pick
+  // one up on their next look rather than needing a migration.
+  try {
+    const { ensureSampleAgent } = await import('~/server/utils/sample-agent');
+    await ensureSampleAgent(tid);
+  } catch { /* a missing sample agent shouldn't break the dashboard */ }
+
   const tasks: any[] = [];
 
   // ── The setup path ──
@@ -95,9 +103,31 @@ export default defineEventHandler(async (event) => {
   // anything that has gone wrong, are states rather than steps — putting them in
   // the count would make the finish line move for reasons the client can't act on.
   const completed = steps.filter((st) => st.done).length;
+
+  // Somebody who doesn't know they've been given a working agent won't go looking
+  // for one, and buying a number reads as a chore rather than the thing that makes
+  // it ring. Said once, at the top, and only while it's still news.
+  let notice: { title: string; body: string } | null = null;
+  try {
+    const { trialActive, trialDaysLeft } = await import('~/server/utils/entitlements');
+    if (trialActive(tenant as any)) {
+      const days = trialDaysLeft(tenant as any);
+      notice = numbers.length
+        ? {
+            title: 'Your AI agent is ready',
+            body: `A Telroi sample agent is set up and free for the ${days} day${days === 1 ? '' : 's'} left on your trial. Point one of your numbers at it to hear it answer.`
+          }
+        : {
+            title: 'Your AI agent is ready',
+            body: `We've set up a sample agent for you, free for the ${days} day${days === 1 ? '' : 's'} left on your trial. Get a number and it can start taking calls.`
+          };
+    }
+  } catch { /* the notice is a nicety */ }
+
   return {
     tasks,
     steps,
+    notice,
     progress: { completed, total: steps.length },
     supportEmail: 'support@telroi.ai'
   };
