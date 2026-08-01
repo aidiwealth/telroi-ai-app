@@ -273,9 +273,9 @@ import { ref, reactive, onMounted } from 'vue';
 // Supported agent languages (BCP-47) — mirrors server/utils/voice/languages.ts.
 const AGENT_LANGUAGES = [
   { code: 'en-NG', label: 'English (Nigeria)' }, { code: 'yo-NG', label: 'Yoruba' },
-  { code: 'ig-NG', label: 'Igbo' }, { code: 'ha-NG', label: 'Hausa' },
+  { code: 'ha-NG', label: 'Hausa' },
   { code: 'sw-KE', label: 'Swahili' }, { code: 'am-ET', label: 'Amharic' },
-  { code: 'zu-ZA', label: 'Zulu' }, { code: 'af-ZA', label: 'Afrikaans' },
+  { code: 'af-ZA', label: 'Afrikaans' },
   { code: 'en-US', label: 'English (US)' }, { code: 'en-GB', label: 'English (UK)' },
   { code: 'fr-FR', label: 'French' }, { code: 'ar-XA', label: 'Arabic' },
   { code: 'pt-PT', label: 'Portuguese' }, { code: 'es-ES', label: 'Spanish' },
@@ -442,7 +442,7 @@ const editingAgent = ref<string | null>(null);
 // Languages where provider choice genuinely decides whether a caller is heard.
 // Google Cloud accepts all of these; Deepgram lists none of them, and Whisper's
 // accuracy on them is poor enough to be worse than useless on a phone line.
-const GOOGLE_ONLY_LANGS = ['yo-NG', 'ig-NG', 'ha-NG', 'am-ET', 'zu-ZA'];
+const GOOGLE_ONLY_LANGS = ['yo-NG', 'ha-NG', 'am-ET'];
 const langNeedsGoogle = computed(() => {
   if (!GOOGLE_ONLY_LANGS.includes(agentEdit.language)) return false;
   const stt = connections.value.find((c: any) => c.id === agentEdit.sttConnId);

@@ -34,7 +34,7 @@ function sysPrompt(ctx: string): string {
     '  - create_van {name, telnum, agentId?} — create a Virtual AI Number on an owned number',
     '  - add_blacklist {telnum, comment?} — block a number',
     '  - create_department {name, description?} — add a department',
-    '  - set_agent_language {agentId, language} — language is a BCP-47 code (en-NG, yo-NG, ig-NG, ha-NG, fr-FR, ...)',
+    '  - set_agent_language {agentId, language} — language is a BCP-47 code (en-NG, yo-NG, ha-NG, sw-KE, fr-FR, ...)',
     '  - knowledge_url {agentId, url} — add a web page to an agent\'s knowledge base',
     '  - knowledge_drive {agentId, url} — add a Google Drive file to an agent\'s knowledge',
     '  - toggle_feature {feature, enabled} — enable/disable a feature',

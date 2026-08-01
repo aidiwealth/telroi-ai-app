@@ -16,7 +16,7 @@ const Body = z.object({
   greeting: z.string().optional(),
   systemPrompt: z.string().optional(),
   tier: z.enum(['byok', 'managed']).default('byok'),
-  language: z.enum(['en-NG','yo-NG','ig-NG','ha-NG','sw-KE','am-ET','zu-ZA','af-ZA','en-US','en-GB','fr-FR','ar-XA','pt-PT','es-ES','de-DE','hi-IN','zh']).default('en-NG'),
+  language: z.enum(['en-NG','yo-NG','ha-NG','sw-KE','am-ET','af-ZA','en-US','en-GB','fr-FR','ar-XA','pt-PT','es-ES','de-DE','hi-IN','zh']).default('en-NG'),
   sttConnId: z.string().uuid().optional(),
   llmConnId: z.string().uuid().optional(),
   ttsConnId: z.string().uuid().optional(),

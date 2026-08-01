@@ -4,16 +4,18 @@
 // but have fewer natural TTS voices (they degrade to a nearby voice).
 export interface AgentLanguage { code: string; label: string; group: string; }
 
+// Igbo and Zulu are deliberately absent. Google transcribes both but has no
+// voice for either, so an agent set to one would hear the caller and then reply
+// with silence — worse than not offering it. Add them back when a provider can
+// actually speak them.
 export const AGENT_LANGUAGES: AgentLanguage[] = [
   // Nigerian
   { code: 'en-NG', label: 'English (Nigeria)', group: 'Nigerian' },
   { code: 'yo-NG', label: 'Yoruba', group: 'Nigerian' },
-  { code: 'ig-NG', label: 'Igbo', group: 'Nigerian' },
   { code: 'ha-NG', label: 'Hausa', group: 'Nigerian' },
   // Other African
   { code: 'sw-KE', label: 'Swahili', group: 'African' },
   { code: 'am-ET', label: 'Amharic', group: 'African' },
-  { code: 'zu-ZA', label: 'Zulu', group: 'African' },
   { code: 'af-ZA', label: 'Afrikaans', group: 'African' },
   // Common foreign
   { code: 'en-US', label: 'English (US)', group: 'International' },
