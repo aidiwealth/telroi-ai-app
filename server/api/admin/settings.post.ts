@@ -2,6 +2,7 @@
 // Covers the single Digidite/operator credential, master carrier accounts, and
 // payment-provider keys (live + test/sandbox per provider) plus the active mode.
 import { z } from 'zod';
+import { PLATFORM_LIMITS, overrideSchema, applyOverrides } from '~/server/utils/tenant-overrides';
 import { eq } from 'drizzle-orm';
 import { requireSuperAdmin } from '~/server/utils/platform';
 import { apiError } from '~/server/utils/api';
@@ -43,12 +44,13 @@ const Body = z.object({
   supportTelnum: z.string().optional(),
   supportNumbersByRegion: z.object({ NG: z.string().optional(), INTL: z.string().optional() }).partial().optional(),
   // Sandbox allowances for new workspaces; a tenant row can override either.
-  sandboxCallCap: z.coerce.number().int().min(0).optional(),
+  // Platform defaults for the allowances a client can override. Declared once in
+  // tenant-overrides so the schema and the patch below can't drift apart — adding
+  // a field to one and not the other meant the form took a value and the endpoint
+  // dropped it without a word.
+  ...overrideSchema(PLATFORM_LIMITS, false),
   // What a trialling workspace may spend on our AI, and how long any one of its
   // calls may run. Free during trial is an offer worth making; unbounded isn't.
-  trialAiAllowanceUsdMinor: z.coerce.number().int().min(0).optional(),
-  trialCallMaxSeconds: z.coerce.number().int().min(0).optional(),
-  sandboxAgentCap: z.coerce.number().int().min(0).optional(),
   captchaEnabled: z.boolean().optional(),
   captchaProvider: z.enum(['turnstile', 'recaptcha']).optional(),
   captchaSiteKey: z.string().optional(),
@@ -160,10 +162,7 @@ export default defineEventHandler(async (event) => {
   if (d.paymentMode) patch.paymentMode = d.paymentMode;
   if (d.otpChannel) patch.otpChannel = d.otpChannel;
   if (d.supportTelnum !== undefined) patch.supportTelnum = d.supportTelnum || null;
-  if (d.sandboxCallCap !== undefined) patch.sandboxCallCap = d.sandboxCallCap;
-  if (d.trialAiAllowanceUsdMinor !== undefined) patch.trialAiAllowanceUsdMinor = d.trialAiAllowanceUsdMinor;
-  if (d.trialCallMaxSeconds !== undefined) patch.trialCallMaxSeconds = d.trialCallMaxSeconds;
-  if (d.sandboxAgentCap !== undefined) patch.sandboxAgentCap = d.sandboxAgentCap;
+  applyOverrides(PLATFORM_LIMITS, d as any, patch);
   if (d.supportNumbersByRegion !== undefined) {
     patch.supportNumbersByRegion = d.supportNumbersByRegion;
     // Keep the legacy single field in sync with the NG number for back-compat.

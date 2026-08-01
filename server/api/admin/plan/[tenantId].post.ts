@@ -1,6 +1,7 @@
 // POST /api/admin/plan/:tenantId { plan?, trialDays?, startTrial? }
 // Operator sets a customer's plan, trial length (7/14/30), or starts a trial.
 import { z } from 'zod';
+import { TENANT_OVERRIDES, overrideSchema, applyOverrides } from '~/server/utils/tenant-overrides';
 import { eq } from 'drizzle-orm';
 import { requirePlatformAdmin } from '~/server/utils/platform';
 import { apiError } from '~/server/utils/api';
@@ -11,14 +12,12 @@ const Body = z.object({
   startTrial: z.boolean().optional(),  // (re)start a growth trial of trialDays length
   // Per-client payment gateway override. 'default' clears it (use platform default).
   paymentProvider: z.enum(['default', 'stripe', 'paystack', 'monnify']).optional(),
-  // Sandbox allowances for this client. null clears the override so they inherit
-  // the platform default set under Settings -> Telroi One.
-  sandboxCallCap: z.number().int().min(0).nullable().optional(),
-  // Null clears the override and falls back to the platform default, rather than
-  // leaving this client with nothing.
-  trialAiAllowanceUsdMinor: z.number().int().min(0).nullable().optional(),
-  trialCallMaxSeconds: z.number().int().min(0).nullable().optional(),
-  sandboxAgentCap: z.number().int().min(0).nullable().optional()
+  // Per-client allowances — sandbox and trial. Declared once in tenant-overrides
+  // so the schema and the patch below can't disagree: adding one by hand in two
+  // places and forgetting the second meant the form took a value and the endpoint
+  // dropped it, silently.  null clears an override and falls back to the platform
+  // default set under Settings.
+  ...overrideSchema(TENANT_OVERRIDES, true)
 });
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
@@ -31,10 +30,7 @@ export default defineEventHandler(async (event) => {
   if (!t) throw apiError('not_found', 'Workspace not found', 404);
 
   const patch: any = {};
-  if (p.data.sandboxCallCap !== undefined) patch.sandboxCallCap = p.data.sandboxCallCap;
-  if (p.data.trialAiAllowanceUsdMinor !== undefined) patch.trialAiAllowanceUsdMinor = p.data.trialAiAllowanceUsdMinor;
-  if (p.data.trialCallMaxSeconds !== undefined) patch.trialCallMaxSeconds = p.data.trialCallMaxSeconds;
-  if (p.data.sandboxAgentCap !== undefined) patch.sandboxAgentCap = p.data.sandboxAgentCap;
+  applyOverrides(TENANT_OVERRIDES, p.data as any, patch);
   if (p.data.trialDays) patch.trialDays = p.data.trialDays;
   if (p.data.plan) { patch.plan = p.data.plan; patch.trialPlan = null; patch.trialEndsAt = null; }
   if (p.data.startTrial) {
