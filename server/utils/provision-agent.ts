@@ -115,13 +115,33 @@ export async function ensureUserWebrtcEndpoint(tenantId: string, userId: string)
     sipUsername = mine.sipUsername!;
   } else {
     const result = await agentProvision(tenantId, `user-${userId.slice(0, 8)}`, true);
-    await db.insert(schema.sipEndpoints).values({
-      tenantId, provider: 'telroi', kind: 'registration',
-      externalId: result.username, label: `user-${userId.slice(0, 8)}`, sipUsername: result.username,
-      secretEnc: encrypt(result.password), domain: result.domain,
-      meta: { transport: result.transport, webrtc: true, userId }
-    });
-    sipUsername = result.username;
+    try {
+      await db.insert(schema.sipEndpoints).values({
+        tenantId, provider: 'telroi', kind: 'registration',
+        externalId: result.username, label: `user-${userId.slice(0, 8)}`, sipUsername: result.username,
+        secretEnc: encrypt(result.password), domain: result.domain,
+        meta: { transport: result.transport, webrtc: true, userId }
+      });
+      sipUsername = result.username;
+    } catch (e: any) {
+      // Two dashboard loads arriving together both looked, both found nothing, and
+      // both provisioned — leaving an endpoint that never registered and which
+      // ringing would try anyway. A unique index now settles it; the one that
+      // loses takes the winner's endpoint rather than failing the request.
+      const [winner] = await db.select().from(schema.sipEndpoints)
+        .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')))
+        .then((rs: any[]) => rs.filter((r) => (r.meta as any)?.webrtc && (r.meta as any)?.userId === userId));
+      if (!winner) throw e;
+      // The endpoint this request provisioned before losing has no row behind it
+      // now, so take it off the PBX rather than leaving a config file nothing
+      // knows about. Best effort — an orphan is untidy, a failed token request is
+      // worse.
+      try { await agentDeprovision(result.username); }
+      catch { /* it can be swept later */ }
+      sipUsername = winner.sipUsername!;
+      created = false;
+      return { created, sipUsername };
+    }
     created = true;
   }
   try {
