@@ -278,7 +278,11 @@ async function main() {
       // whether the AI can actually answer it. The second decides routing further
       // down, so it's held rather than asked for twice.
       const cap = await inboundCapacity(route.tenantId, (m) => log(`  [${chId}] ${m}`));
-      if (!cap.ok) {
+      // An escalation is the same conversation continuing, not a second call —
+      // the caller's original leg is still holding the channel it was counted
+      // against. Refusing it meant a workspace on one channel could never hand
+      // anyone to a human: the AI said "connecting you" and the line went dead.
+      if (!cap.ok && !isEscalation) {
         log(`  tenant at channel capacity — playing busy`);
         logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { did: dialedDid, reason: 'channels_busy' } });
         const busyMsg = route.routeType === 'ai' && route.routeAgentId
