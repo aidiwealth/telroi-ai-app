@@ -20,16 +20,20 @@ export default defineEventHandler(async (event) => {
   if (!rows.length) return { ok: true, costMinorUsd: 0, turns: 0 };
 
   const totals = rows.reduce((a, r) => ({
-    cost: a.cost + (r.costMinorUsd || 0), stt: a.stt + (r.sttSeconds || 0),
+    cost: a.cost + (r.costNanoUsd || 0), stt: a.stt + (r.sttSeconds || 0),
     inTok: a.inTok + (r.llmInputTokens || 0), outTok: a.outTok + (r.llmOutputTokens || 0),
     ttsChars: a.ttsChars + (r.ttsChars || 0), managed: a.managed || r.managed
   }), { cost: 0, stt: 0, inTok: 0, outTok: 0, ttsChars: 0, managed: false });
 
-  if (totals.managed && totals.cost > 0) {
+  // Charged in cents, accrued in nano. A call costing less than a cent rounds to
+  // nothing rather than being billed, which is the right way round: better to
+  // forgo a fraction than to invent one.
+  const costMinor = Math.round(totals.cost / 1e7);
+  if (totals.managed && costMinor > 0) {
     await sandboxLedgerEntry({
-      tenantId, amountMinor: totals.cost, reason: 'ai_managed', reference: `ai_${callId}`,
+      tenantId, amountMinor: costMinor, reason: 'ai_managed', reference: `ai_${callId}`,
       meta: { callId, turns: rows.length, sttSeconds: totals.stt, llmInputTokens: totals.inTok, llmOutputTokens: totals.outTok, ttsChars: totals.ttsChars, unit: 'usd_cents' }
     });
   }
-  return { ok: true, costMinorUsd: totals.cost, turns: rows.length };
+  return { ok: true, costMinorUsd: costMinor, turns: rows.length };
 });

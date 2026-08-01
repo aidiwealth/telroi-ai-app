@@ -40,11 +40,14 @@ export async function trialAiStatus(tenantId: string): Promise<TrialAiStatus> {
   // Only usage since the trial began counts — a workspace that trialled, lapsed
   // and started again shouldn't inherit the first attempt's spending.
   const since = tenant?.trialStartedAt || tenant?.createdAt || new Date(0);
-  const [used] = await db.select({ spent: sql<number>`coalesce(sum(cost_minor_usd), 0)::int` })
+  const [used] = await db.select({ spent: sql<number>`coalesce(sum(cost_nano_usd), 0)::bigint` })
     .from(schema.aiUsage)
     .where(and(eq(schema.aiUsage.tenantId, tenantId), gte(schema.aiUsage.createdAt, since)));
 
-  const spentMinor = used?.spent || 0;
+  // The allowance is set in cents, which is the unit an operator thinks in;
+  // usage accrues in nano. Compared here rather than at either edge, so both
+  // stay in the units that suit them.
+  const spentMinor = Math.round(Number(used?.spent || 0) / 1e7);
   return {
     onTrial: true,
     allowanceMinor,

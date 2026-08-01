@@ -235,7 +235,7 @@ export async function aiAgentPerformance(db: any, schema: any, tenantId: string,
     if (!u.agentId) continue;
     const g = byAgent.get(u.agentId) || { calls: new Set(), cost: 0, escalated: new Set() };
     if (u.callId) { g.calls.add(u.callId); if (escalatedCallIds.has(u.callId)) g.escalated.add(u.callId); }
-    g.cost += u.costMinorUsd || 0;
+    g.cost += (u.costNanoUsd || 0) / 1e7;   // nano -> cents
     byAgent.set(u.agentId, g);
   }
   const out: AiAgentPerf[] = [];
@@ -377,7 +377,7 @@ export async function buildOptimizeReport(db: any, schema: any, tenantId: string
     llmInputTokens: sql`coalesce(sum(${schema.aiUsage.llmInputTokens}),0)`,
     llmOutputTokens: sql`coalesce(sum(${schema.aiUsage.llmOutputTokens}),0)`,
     ttsChars: sql`coalesce(sum(${schema.aiUsage.ttsChars}),0)`,
-    costMinorUsd: sql`coalesce(sum(${schema.aiUsage.costMinorUsd}),0)`,
+    costMinorUsd: sql`coalesce(sum(${schema.aiUsage.costNanoUsd}),0) / 10000000`,
     managed: sql`bool_or(${schema.aiUsage.managed})`
   }).from(schema.aiUsage)
     .where(and(eq(schema.aiUsage.tenantId, tenantId), gte(schema.aiUsage.createdAt, since)))

@@ -313,7 +313,7 @@ export async function resolveDefaultConnections(tenantId: string): Promise<Defau
 // ── Managed-tier cost model + usage recording ───────────────────────────────
 export interface TurnUsage { sttSeconds: number; llmInputTokens: number; llmOutputTokens: number; ttsChars: number; }
 
-export async function managedCostMinorUsd(u: TurnUsage): Promise<number> {
+export async function managedCostNanoUsd(u: TurnUsage): Promise<number> {
   const c = useRuntimeConfig() as any;
   const num = (v: any, def: number): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : def; };
   let sttPerSec = num(c.costSttPerSec, 0.0001);
@@ -333,19 +333,23 @@ export async function managedCostMinorUsd(u: TurnUsage): Promise<number> {
   } catch { /* no pricing row -> env/defaults */ }
   let usd = u.sttSeconds * sttPerSec + u.llmInputTokens * llmInPerTok + u.llmOutputTokens * llmOutPerTok + u.ttsChars * ttsPerChar;
   if (markupPct > 0) usd = usd * (1 + markupPct / 100);
-  return Math.max(0, Math.round(usd * 100));
+  // In nano rather than cents: a turn costs thousandths of a cent, so rounding
+  // to cents made every short one free — and the ledger entry that charges for
+  // managed AI was gated on the result being above zero.
+  return Math.max(0, Math.round(usd * 1e9));
 }
 
 export async function recordAiUsage(args: {
   tenantId: string; agentId: string | null; callId: string | null; managed: boolean; usage: TurnUsage;
 }): Promise<void> {
   try {
-    const cost = args.managed ? await managedCostMinorUsd(args.usage) : 0;
+    const cost = args.managed ? await managedCostNanoUsd(args.usage) : 0;
     await useDb().insert(schema.aiUsage).values({
       tenantId: args.tenantId, agentId: args.agentId || undefined, callId: args.callId || undefined,
       managed: args.managed, sttSeconds: Math.round(args.usage.sttSeconds),
       llmInputTokens: args.usage.llmInputTokens, llmOutputTokens: args.usage.llmOutputTokens,
-      ttsChars: args.usage.ttsChars, costMinorUsd: cost
+      // Both while the old column still exists; cents is what it could hold.
+      ttsChars: args.usage.ttsChars, costNanoUsd: cost, costMinorUsd: Math.round(cost / 1e7)
     });
   } catch { /* usage tracking must never break a call */ }
 }

@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     llmInputTokens: sql<number>`coalesce(sum(${schema.aiUsage.llmInputTokens}),0)`,
     llmOutputTokens: sql<number>`coalesce(sum(${schema.aiUsage.llmOutputTokens}),0)`,
     ttsChars: sql<number>`coalesce(sum(${schema.aiUsage.ttsChars}),0)`,
-    costMinorUsd: sql<number>`coalesce(sum(${schema.aiUsage.costMinorUsd}),0)`,
+    costMinorUsd: sql<number>`coalesce(sum(${schema.aiUsage.costNanoUsd}),0) / 10000000`,
     managed: sql<boolean>`bool_or(${schema.aiUsage.managed})`
   }).from(schema.aiUsage)
     .where(and(eq(schema.aiUsage.tenantId, s.tenantId), gte(schema.aiUsage.createdAt, since)))

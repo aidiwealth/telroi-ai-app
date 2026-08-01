@@ -1175,6 +1175,10 @@ export const aiUsage = pgTable('ai_usage', {
   llmInputTokens: integer('llm_input_tokens').notNull().default(0),
   llmOutputTokens: integer('llm_output_tokens').notNull().default(0),
   ttsChars: integer('tts_chars').notNull().default(0),
+  // Nano rather than cents: a turn costs thousandths of a cent, so cents rounded
+  // every short one to zero and managed AI was never charged for. The old column
+  // stays until nothing reads it.
+  costNanoUsd: bigint('cost_nano_usd', { mode: 'number' }).notNull().default(0),
   costMinorUsd: integer('cost_minor_usd').notNull().default(0),
   meta: jsonb('meta').$type<Record<string, unknown>>().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
