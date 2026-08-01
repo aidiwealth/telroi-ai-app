@@ -10,7 +10,15 @@ export default defineEventHandler(async (event) => {
   // Use the tenant's default vendor, preferring the customer's SELECTED from-number
   // so routing follows the number the customer chose to call from.
   const dial = await resolveLiveCallProvider({ tenantId: s.tenantId, configuredProvider: 'auto', preferredFromNumber: selectedFrom || null });
-  if (dial.provider === 'telroi') {
+
+  // Where an agent's browser REGISTERS is not the same question as which trunk a
+  // call leaves on. The resolver answers the second — the from-number's carrier —
+  // and using it for the first meant a client whose numbers are Twilio had their
+  // dashboard registered with Twilio, where our own PBX could never ring them:
+  // every escalation and ring-all call found nobody home. Agents live on our PBX
+  // whatever carries their numbers; the dial prefix below still routes outbound.
+  const registerOn = 'telroi';
+  if (registerOn === 'telroi') {
     try {
       const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
       await ensureUserWebrtcEndpoint(s.tenantId, s.userId);
@@ -38,7 +46,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // The number the dialer selected is the caller ID — the user picked it.
-    const tok = await voiceTokenFor(dial.provider, `tenant_${s.tenantId}_${s.userId}`, dial.fromNumber);
+    const tok = await voiceTokenFor(registerOn, `tenant_${s.tenantId}_${s.userId}`, dial.fromNumber);
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready, dialPrefix };
   } catch (e: any) {
     throw apiError('voice_not_configured', e?.message || 'Voice provider not configured', 503);
