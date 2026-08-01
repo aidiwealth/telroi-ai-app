@@ -316,6 +316,14 @@
           <label class="ad-ovr"><span>Sandbox AI numbers</span>
             <input v-model="capForm.agents" class="ad-ctl" type="number" min="0" placeholder="platform default" />
           </label>
+          <!-- Trial rather than sandbox: this workspace can be live and still be
+               spending our AI budget rather than its own wallet. -->
+          <label class="ad-ovr"><span>Free trial AI ($)</span>
+            <input v-model="capForm.trialAllowance" class="ad-ctl" type="number" min="0" step="0.5" placeholder="platform default" />
+          </label>
+          <label class="ad-ovr"><span>Trial call limit (mins)</span>
+            <input v-model="capForm.trialCallMins" class="ad-ctl" type="number" min="0" step="1" placeholder="platform default" />
+          </label>
           <button class="btn btn-signal btn-sm" :disabled="capBusy" @click="saveCaps">{{ capBusy ? '…' : 'Set limits' }}</button>
         </div>
         <p class="ad-none" style="margin-top:8px">Leave blank to use the platform defaults from Settings → Telroi One. Limits only apply while the workspace is in sandbox.</p>
@@ -781,7 +789,9 @@ async function loadPlan() {
 // Sandbox allowances for this one client. An empty field clears the override, so
 // they go back to whatever the platform default is rather than being pinned to a
 // number that was right once.
-const capForm = ref<{ calls: string | number; agents: string | number }>({ calls: '', agents: '' });
+const capForm = ref<{ calls: string | number; agents: string | number; trialAllowance: string | number; trialCallMins: string | number }>(
+  { calls: '', agents: '', trialAllowance: '', trialCallMins: '' }
+);
 const capBusy = ref(false);
 async function saveCaps() {
   const tid = data.value?.tenant?.id;
@@ -790,7 +800,14 @@ async function saveCaps() {
     const toVal = (v: string | number) => (v === '' || v === null ? null : Number(v));
     await $fetch(`/api/admin/plan/${tid}`, {
       method: 'POST',
-      body: { sandboxCallCap: toVal(capForm.value.calls), sandboxAgentCap: toVal(capForm.value.agents) }
+      body: {
+        sandboxCallCap: toVal(capForm.value.calls),
+        sandboxAgentCap: toVal(capForm.value.agents),
+        // Blank means "use the platform default" rather than zero — an override
+        // somebody cleared shouldn't leave the client with nothing.
+        trialAiAllowanceUsdMinor: capForm.value.trialAllowance === '' ? null : Math.round(Number(capForm.value.trialAllowance) * 100),
+        trialCallMaxSeconds: capForm.value.trialCallMins === '' ? null : Math.round(Number(capForm.value.trialCallMins) * 60)
+      }
     });
     data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
     syncCapForm();
@@ -800,6 +817,10 @@ async function saveCaps() {
 function syncCapForm() {
   capForm.value.calls = data.value?.tenant?.sandboxCallCap ?? '';
   capForm.value.agents = data.value?.tenant?.sandboxAgentCap ?? '';
+  const allow = data.value?.tenant?.trialAiAllowanceUsdMinor;
+  const secs = data.value?.tenant?.trialCallMaxSeconds;
+  capForm.value.trialAllowance = allow == null ? '' : allow / 100;
+  capForm.value.trialCallMins = secs == null ? '' : secs / 60;
 }
 
 // Deleting a workspace. The slug has to be typed, and the server refuses

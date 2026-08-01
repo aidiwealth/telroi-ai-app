@@ -14,6 +14,10 @@ const Body = z.object({
   // Sandbox allowances for this client. null clears the override so they inherit
   // the platform default set under Settings -> Telroi One.
   sandboxCallCap: z.number().int().min(0).nullable().optional(),
+  // Null clears the override and falls back to the platform default, rather than
+  // leaving this client with nothing.
+  trialAiAllowanceUsdMinor: z.number().int().min(0).nullable().optional(),
+  trialCallMaxSeconds: z.number().int().min(0).nullable().optional(),
   sandboxAgentCap: z.number().int().min(0).nullable().optional()
 });
 export default defineEventHandler(async (event) => {
@@ -28,6 +32,8 @@ export default defineEventHandler(async (event) => {
 
   const patch: any = {};
   if (p.data.sandboxCallCap !== undefined) patch.sandboxCallCap = p.data.sandboxCallCap;
+  if (p.data.trialAiAllowanceUsdMinor !== undefined) patch.trialAiAllowanceUsdMinor = p.data.trialAiAllowanceUsdMinor;
+  if (p.data.trialCallMaxSeconds !== undefined) patch.trialCallMaxSeconds = p.data.trialCallMaxSeconds;
   if (p.data.sandboxAgentCap !== undefined) patch.sandboxAgentCap = p.data.sandboxAgentCap;
   if (p.data.trialDays) patch.trialDays = p.data.trialDays;
   if (p.data.plan) { patch.plan = p.data.plan; patch.trialPlan = null; patch.trialEndsAt = null; }
