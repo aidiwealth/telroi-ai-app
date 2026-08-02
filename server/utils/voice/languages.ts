@@ -29,5 +29,8 @@ export const AGENT_LANGUAGES: AgentLanguage[] = [
   { code: 'zh', label: 'Chinese (Mandarin)', group: 'International' }
 ];
 
-export const AGENT_LANGUAGE_CODES = AGENT_LANGUAGES.map((l) => l.code);
+// Typed as a tuple so z.enum can take it directly — the five endpoints that
+// validate a language each restated this list, which is why removing Igbo and
+// Zulu meant six edits and still missed the Copilot prompt.
+export const AGENT_LANGUAGE_CODES = AGENT_LANGUAGES.map((l) => l.code) as [string, ...string[]];
 export function isValidLanguage(code: string): boolean { return AGENT_LANGUAGE_CODES.includes(code); }

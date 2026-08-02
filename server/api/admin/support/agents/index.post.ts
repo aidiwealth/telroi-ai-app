@@ -4,12 +4,13 @@ import { apiError } from '~/server/utils/api';
 import { ensureSupportWorkspace } from '~/server/utils/support';
 import { useDb, schema } from '~/server/db';
 import { resolveDefaultConnections } from '~/server/utils/voice/ai-brain';
+import { AGENT_LANGUAGE_CODES } from '~/server/utils/voice/languages';
 const Body = z.object({
   name: z.string().min(1), greeting: z.string().optional(), systemPrompt: z.string().optional(),
   // Always our own keys: the managed tier bills a wallet, which makes no sense
   // for our own support desk. Set explicitly rather than left to the column
   // default, since the editor reads the tier back to say which providers are in use.
-  tier: z.enum(['byok']).default('byok'), language: z.enum(['en-NG','yo-NG','ha-NG','sw-KE','am-ET','af-ZA','en-US','en-GB','fr-FR','ar-XA','pt-PT','es-ES','de-DE','hi-IN','zh']).default('en-NG'),
+  tier: z.enum(['byok']).default('byok'), language: z.enum(AGENT_LANGUAGE_CODES).default('en-NG'),
   sttConnId: z.string().uuid().optional(), llmConnId: z.string().uuid().optional(), ttsConnId: z.string().uuid().optional(),
   fallback: z.record(z.any()).optional()
 });

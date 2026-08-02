@@ -6,8 +6,9 @@ import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { AGENT_LANGUAGE_CODES } from '~/server/utils/voice/languages';
 
-const AGENT_LANGS = ['en-NG','yo-NG','ha-NG','sw-KE','am-ET','af-ZA','en-US','en-GB','fr-FR','ar-XA','pt-PT','es-ES','de-DE','hi-IN','zh'];
+const AGENT_LANGS = AGENT_LANGUAGE_CODES;
 
 // Allow-list of Tier-2 actions with their arg schemas. Anything not here is rejected.
 const ACTIONS: Record<string, z.ZodTypeAny> = {

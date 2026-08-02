@@ -5,11 +5,12 @@ import { requirePlatformAdmin } from '~/server/utils/platform';
 import { apiError } from '~/server/utils/api';
 import { ensureSupportWorkspace } from '~/server/utils/support';
 import { useDb, schema } from '~/server/db';
+import { AGENT_LANGUAGE_CODES } from '~/server/utils/voice/languages';
 
 const Body = z.object({
   name: z.string().min(1).optional(),
   greeting: z.string().nullable().optional(),
-  language: z.enum(['en-NG','yo-NG','ha-NG','sw-KE','am-ET','af-ZA','en-US','en-GB','fr-FR','ar-XA','pt-PT','es-ES','de-DE','hi-IN','zh']).optional(),
+  language: z.enum(AGENT_LANGUAGE_CODES).optional(),
   systemPrompt: z.string().nullable().optional(),
   tier: z.enum(['byok', 'managed']).optional(),
   sttConnId: z.string().uuid().nullable().optional(),

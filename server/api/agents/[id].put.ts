@@ -3,11 +3,12 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
+import { AGENT_LANGUAGE_CODES } from '~/server/utils/voice/languages';
 
 const Body = z.object({
   name: z.string().min(1).optional(),
   greeting: z.string().nullable().optional(),
-  language: z.enum(['en-NG','yo-NG','ha-NG','sw-KE','am-ET','af-ZA','en-US','en-GB','fr-FR','ar-XA','pt-PT','es-ES','de-DE','hi-IN','zh']).optional(),
+  language: z.enum(AGENT_LANGUAGE_CODES).optional(),
   systemPrompt: z.string().nullable().optional(),
   tier: z.enum(['byok', 'managed']).optional(),
   sttConnId: z.string().uuid().nullable().optional(),

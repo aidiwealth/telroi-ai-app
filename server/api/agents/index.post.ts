@@ -10,13 +10,14 @@ import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { resolveDefaultConnections } from '~/server/utils/voice/ai-brain';
 import { getOrCreateWallet } from '~/server/utils/wallet';
+import { AGENT_LANGUAGE_CODES } from '~/server/utils/voice/languages';
 
 const Body = z.object({
   name: z.string().min(1),
   greeting: z.string().optional(),
   systemPrompt: z.string().optional(),
   tier: z.enum(['byok', 'managed']).default('byok'),
-  language: z.enum(['en-NG','yo-NG','ha-NG','sw-KE','am-ET','af-ZA','en-US','en-GB','fr-FR','ar-XA','pt-PT','es-ES','de-DE','hi-IN','zh']).default('en-NG'),
+  language: z.enum(AGENT_LANGUAGE_CODES).default('en-NG'),
   sttConnId: z.string().uuid().optional(),
   llmConnId: z.string().uuid().optional(),
   ttsConnId: z.string().uuid().optional(),
