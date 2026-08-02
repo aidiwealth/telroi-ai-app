@@ -41,6 +41,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const result = await agentProvision(ws.tenantId, label, true); // webrtc
+  try {
   const [row] = await db.insert(schema.sipEndpoints).values({
     tenantId: ws.tenantId, provider: 'telroi', kind: 'registration',
     externalId: result.username, label, sipUsername: result.username,
@@ -56,4 +57,20 @@ export default defineEventHandler(async (event) => {
     sipUsername: row.sipUsername, password: result.password,
     domain: row.domain, label
   };
+  } catch (e: any) {
+    // One browser endpoint per user is enforced by the database now, so two
+    // requests arriving together can't both create one. The loser takes the
+    // winner's rather than failing, and removes the endpoint it had already put
+    // on the PBX so no orphan config is left behind.
+    const [winner] = await db.select().from(schema.sipEndpoints)
+      .where(and(eq(schema.sipEndpoints.tenantId, ws.tenantId), eq(schema.sipEndpoints.label, label))).limit(1);
+    if (!winner) throw e;
+    try {
+      const { agentDeprovision } = await import('~/server/utils/provision-agent');
+      await agentDeprovision(result.username);
+    } catch { /* it can be swept later */ }
+    let password: string | null = null;
+    try { if (winner.secretEnc) password = decrypt(winner.secretEnc); } catch { /* not recoverable */ }
+    return { ok: true, created: false, sipUsername: winner.sipUsername, password, domain: winner.domain, label };
+  }
 });
