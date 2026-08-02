@@ -7,11 +7,15 @@ import { decrypt } from './crypto';
 
 // Twilio signs requests with the auth token over the full URL + sorted params.
 export async function verifyTwilioSignature(event: any, params: Record<string, string>): Promise<boolean | null> {
-  const sig = getHeader(event, 'x-twilio-signature');
-  if (!sig) return null;
+  // Order matters: whether we CAN verify depends on the credentials, not on what
+  // the caller chose to send. Checking the header first meant a forged request
+  // that simply omitted its signature came back 'not configured' and was let
+  // through — no auth token needed, just the URL.
   const master = await masterCarrierCreds();
   const token = master?.twilio?.authToken;
-  if (!token) return null;
+  if (!token) return null;                       // genuinely can't verify
+  const sig = getHeader(event, 'x-twilio-signature');
+  if (!sig) return false;                        // we could have, and it wasn't signed
   const proto = getHeader(event, 'x-forwarded-proto') || 'https';
   const host = getHeader(event, 'host');
   const url = `${proto}://${host}${event.path}`;
@@ -24,12 +28,12 @@ export async function verifyTwilioSignature(event: any, params: Record<string, s
 
 // Telnyx signs with Ed25519 over `${timestamp}|${rawBody}` using their public key.
 export async function verifyTelnyxSignature(event: any, rawBody?: string): Promise<boolean | null> {
-  const sig = getHeader(event, 'telnyx-signature-ed25519');
-  const ts = getHeader(event, 'telnyx-timestamp');
-  if (!sig || !ts) return null;
   const s = await platformSettings();
   const pubEnc = (s as any)?.telnyxWebhookSecretEnc;
-  if (!pubEnc) return null;
+  if (!pubEnc) return null;                      // genuinely can't verify
+  const sig = getHeader(event, 'telnyx-signature-ed25519');
+  const ts = getHeader(event, 'telnyx-timestamp');
+  if (!sig || !ts) return false;                 // we could have, and it wasn't signed
   let pubKey: string;
   try { pubKey = decrypt(pubEnc); } catch { return null; }
   if (!rawBody) return null;
@@ -42,11 +46,11 @@ export async function verifyTelnyxSignature(event: any, rawBody?: string): Promi
 
 // PBX inbound: simple shared-secret header compare.
 export async function verifyPbxSecret(event: any): Promise<boolean | null> {
-  const given = getHeader(event, 'x-telroi-pbx-secret');
-  if (!given) return null;
   const s = await platformSettings();
   const enc = (s as any)?.pbxWebhookSecretEnc;
-  if (!enc) return null;
+  if (!enc) return null;                         // genuinely can't verify
+  const given = getHeader(event, 'x-telroi-pbx-secret');
+  if (!given) return false;                      // we could have, and it wasn't sent
   let secret: string;
   try { secret = decrypt(enc); } catch { return null; }
   try { return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(secret)); } catch { return false; }
