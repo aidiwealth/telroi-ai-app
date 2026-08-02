@@ -56,7 +56,7 @@ const sorted = computed(() => [
   ...tasks.value.filter((t) => t.kind !== 'issue')
 ]);
 const COLLAPSE_KEY = 'telroi_admin_tasks_collapsed';
-const collapsed = ref(false);
+const collapsed = ref(true);
 function setCollapsed(v: boolean) {
   collapsed.value = v;
   if (import.meta.client) {
@@ -73,7 +73,9 @@ async function load() {
 
 onMounted(() => {
   if (import.meta.client) {
-    try { if (localStorage.getItem(COLLAPSE_KEY) === '1') collapsed.value = true; } catch { /* ignore */ }
+    // Starts docked, as the client's does. Opening over the dashboard on a first
+    // visit competes with whatever the operator came to do.
+    try { collapsed.value = localStorage.getItem(COLLAPSE_KEY) !== '0'; } catch { collapsed.value = true; }
   }
   load();
 });
