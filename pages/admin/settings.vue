@@ -309,12 +309,8 @@
             <span>Telnyx public key {{ cfg.telnyxWebhookSet ? '· set' : '· NOT SET' }}</span>
             <input v-model="webhookSecrets.telnyx" type="password" class="ad-input mono" :placeholder="cfg.telnyxWebhookSet ? '••••••••' : 'base64 public key from the Telnyx portal'" />
           </label>
-          <label class="ad-field">
-            <span>PBX shared secret {{ cfg.pbxWebhookSet ? '· set' : '· NOT SET' }}</span>
-            <input v-model="webhookSecrets.pbx" type="password" class="ad-input mono" :placeholder="cfg.pbxWebhookSet ? '••••••••' : 'shared secret'" />
-          </label>
         </div>
-        <p class="ad-hint">Saving a key starts enforcing it: requests without a valid signature are refused from then on. If the carrier isn't actually signing, calls will stop — so test an inbound call straight after saving, and clear the field to fall back if they do. Stripe's signing secret lives on the Billing tab.</p>
+        <p class="ad-hint">Saving a key starts enforcing it: requests without a valid signature are refused from then on. If the carrier isn't actually signing, calls will stop — so test an inbound call straight after saving, and clear the field to fall back if they do. Stripe's signing secret lives on the Billing tab. The PBX posts to us over ARI rather than HTTP, so it has no webhook to sign.</p>
 
         <div class="set-actions">
           <button class="btn btn-signal" :disabled="savingWebhooks" @click="saveWebhookSecrets">{{ savingWebhooks ? 'Saving…' : 'Save signing keys' }}</button>
