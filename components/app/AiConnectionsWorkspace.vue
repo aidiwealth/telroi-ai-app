@@ -271,17 +271,6 @@
 import { ref, reactive, onMounted } from 'vue';
 
 // Supported agent languages (BCP-47) — mirrors server/utils/voice/languages.ts.
-const AGENT_LANGUAGES = [
-  { code: 'en-NG', label: 'English (Nigeria)' }, { code: 'yo-NG', label: 'Yoruba' },
-  { code: 'ha-NG', label: 'Hausa' },
-  { code: 'sw-KE', label: 'Swahili' }, { code: 'am-ET', label: 'Amharic' },
-  { code: 'af-ZA', label: 'Afrikaans' },
-  { code: 'en-US', label: 'English (US)' }, { code: 'en-GB', label: 'English (UK)' },
-  { code: 'fr-FR', label: 'French' }, { code: 'ar-XA', label: 'Arabic' },
-  { code: 'pt-PT', label: 'Portuguese' }, { code: 'es-ES', label: 'Spanish' },
-  { code: 'de-DE', label: 'German' }, { code: 'hi-IN', label: 'Hindi' },
-  { code: 'zh', label: 'Chinese (Mandarin)' }
-];
 
 const props = withDefaults(defineProps<{ apiBase?: string; agentsBase?: string }>(), { apiBase: '/api/ai/connections', agentsBase: '/api/agents' });
 const api = useApi();
