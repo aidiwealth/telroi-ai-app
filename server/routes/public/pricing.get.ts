@@ -22,6 +22,12 @@ export default defineEventHandler(async (event) => {
     usdMinor: Number(usdMinor) || 0,
     ngnMinor: Math.round((Number(usdMinor) || 0) * rate)
   });
+  // AI accrues in billionths of a dollar, so cents would round most of it to
+  // nothing — the same mistake that had managed AI billing zero for months.
+  const nanoPair = (nano: number) => ({
+    usdNano: Number(nano) || 0,
+    ngnNano: Math.round((Number(nano) || 0) * rate)
+  });
 
   return {
     object: 'pricing',
@@ -34,6 +40,30 @@ export default defineEventHandler(async (event) => {
       voiceMinute: pair(p.voiceMinuteUsdMinor),
       channelMonthly: pair(p.channelMonthlyUsdMinor),
       numberMonthly: pair(p.didMonthlyUsdMinor)
+    },
+    // Managed AI is charged by what it actually uses, which is why the page says
+    // "included" today and a client discovers otherwise on their first invoice.
+    // The units are small enough to be meaningless on their own, so an indicative
+    // per-minute figure is given alongside them: a minute of conversation is
+    // roughly 60s of listening, 900 characters spoken and 1,200 tokens thought.
+    ai: {
+      note: 'Charged from your wallet when using Telroi-provided AI. Bring your own provider keys and you pay them directly instead.',
+      markupPct: Number(p.aiMarkupPct) || 0,
+      units: {
+        sttPerSecond: nanoPair(p.aiSttPerSecNano),
+        ttsPerCharacter: nanoPair(p.aiTtsPerCharNano),
+        llmInputPerToken: nanoPair(p.aiLlmInPerTokNano),
+        llmOutputPerToken: nanoPair(p.aiLlmOutPerTokNano)
+      },
+      indicativePerMinute: nanoPair(
+        Math.round(
+          ((Number(p.aiSttPerSecNano) || 0) * 60 +
+           (Number(p.aiTtsPerCharNano) || 0) * 900 +
+           (Number(p.aiLlmInPerTokNano) || 0) * 900 +
+           (Number(p.aiLlmOutPerTokNano) || 0) * 300) *
+          (1 + (Number(p.aiMarkupPct) || 0) / 100)
+        )
+      )
     }
   };
 });
