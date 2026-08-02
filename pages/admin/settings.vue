@@ -293,6 +293,35 @@
       </div>
     </section>
 
+    <!-- Webhook signing. Whether a carrier is verified was previously only
+         discoverable by reading the code and querying the database — an exposure
+         nobody could see. -->
+    <section v-show="activeTab === 'security'" class="set-card">
+      <div class="set-card-head">
+        <div>
+          <h2 class="set-card-title">Webhook signing</h2>
+          <p class="set-card-desc">Carriers sign the requests they send us so we can tell a real call from a forged one. Without a key we have nothing to check against, and anything claiming to be from them is accepted — enough to write call records, trigger AI calls billed to us, or ring our agents.</p>
+        </div>
+      </div>
+      <div class="set-card-body">
+        <div class="set-grid">
+          <label class="ad-field">
+            <span>Telnyx public key {{ cfg.telnyxWebhookSet ? '· set' : '· NOT SET' }}</span>
+            <input v-model="webhookSecrets.telnyx" type="password" class="ad-input mono" :placeholder="cfg.telnyxWebhookSet ? '••••••••' : 'base64 public key from the Telnyx portal'" />
+          </label>
+          <label class="ad-field">
+            <span>PBX shared secret {{ cfg.pbxWebhookSet ? '· set' : '· NOT SET' }}</span>
+            <input v-model="webhookSecrets.pbx" type="password" class="ad-input mono" :placeholder="cfg.pbxWebhookSet ? '••••••••' : 'shared secret'" />
+          </label>
+        </div>
+        <p class="ad-hint">Saving a key starts enforcing it: requests without a valid signature are refused from then on. If the carrier isn't actually signing, calls will stop — so test an inbound call straight after saving, and clear the field to fall back if they do. Stripe's signing secret lives on the Billing tab.</p>
+
+        <div class="set-actions">
+          <button class="btn btn-signal" :disabled="savingWebhooks" @click="saveWebhookSecrets">{{ savingWebhooks ? 'Saving…' : 'Save signing keys' }}</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Inbound call webhooks -->
     <section v-show="activeTab === 'voice'" class="set-card">
       <div class="set-card-head">
@@ -586,6 +615,8 @@ const sandboxAgentCap = ref(1);
 const trialAiAllowance = ref(5);
 const trialCallMinutes = ref(5);
 const savingLimits = ref(false);
+const webhookSecrets = ref({ telnyx: '', pbx: '' });
+const savingWebhooks = ref(false);
 async function loadSandboxLimits() {
   try {
     const r = await $fetch<any>('/api/admin/settings');
@@ -597,6 +628,20 @@ async function loadSandboxLimits() {
     if (r?.trialCallMaxSeconds != null) trialCallMinutes.value = r.trialCallMaxSeconds / 60;
   } catch { /* keep defaults */ }
 }
+async function saveWebhookSecrets() {
+  savingWebhooks.value = true;
+  try {
+    const body: any = {};
+    if (webhookSecrets.value.telnyx) body.telnyxWebhookSecret = webhookSecrets.value.telnyx;
+    if (webhookSecrets.value.pbx) body.pbxWebhookSecret = webhookSecrets.value.pbx;
+    await $fetch('/api/admin/settings', { method: 'POST', body });
+    webhookSecrets.value = { telnyx: '', pbx: '' };
+    // Reloaded so the set/not-set labels tell the truth without a refresh.
+    cfg.value = await $fetch<any>('/api/admin/settings');
+  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  finally { savingWebhooks.value = false; }
+}
+
 async function saveLimits() {
   savingLimits.value = true;
   try {

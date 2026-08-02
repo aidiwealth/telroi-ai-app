@@ -91,6 +91,8 @@ export default defineEventHandler(async (event) => {
     captchaSecretSet: !!(useRuntimeConfig() as any).captchaSecret,
     stripeLiveSet: !!s?.stripeLiveEnc,
     stripeTestSet: !!s?.stripeTestEnc,
+    telnyxWebhookSet: !!s?.telnyxWebhookSecretEnc,
+    pbxWebhookSet: !!s?.pbxWebhookSecretEnc,
     stripeWebhookLiveSet: !!s?.stripeWebhookLiveEnc,
     stripeWebhookTestSet: !!s?.stripeWebhookTestEnc,
     paystackLiveSet: !!s?.paystackLiveEnc,

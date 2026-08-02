@@ -62,6 +62,11 @@ const Body = z.object({
   // live have different ones — kept here rather than in an environment variable
   // so switching modes doesn't need a redeploy.
   stripeWebhook: KeyPair,
+  // Carrier webhook signing. Without these the verifier can't check anything, so
+  // a request that simply omits its signature has to be let through — which is
+  // the whole surface an attacker needs.
+  telnyxWebhookSecret: z.string().optional(),
+  pbxWebhookSecret: z.string().optional(),
   paystack: KeyPair,
   monnify: MonnifyPair,
   // ── Voice OTP + Speech vendor selection + policy ──
@@ -176,6 +181,8 @@ export default defineEventHandler(async (event) => {
   if (d.statusDomain !== undefined) patch.statusDomain = (d.statusDomain || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || null;
   if (d.stripe?.live) patch.stripeLiveEnc = encrypt(d.stripe.live);
   if (d.stripe?.test) patch.stripeTestEnc = encrypt(d.stripe.test);
+  if (d.telnyxWebhookSecret) patch.telnyxWebhookSecretEnc = encrypt(d.telnyxWebhookSecret);
+  if (d.pbxWebhookSecret) patch.pbxWebhookSecretEnc = encrypt(d.pbxWebhookSecret);
   if (d.stripeWebhook?.live) patch.stripeWebhookLiveEnc = encrypt(d.stripeWebhook.live);
   if (d.stripeWebhook?.test) patch.stripeWebhookTestEnc = encrypt(d.stripeWebhook.test);
   if (d.paystack?.live) patch.paystackLiveEnc = encrypt(d.paystack.live);
