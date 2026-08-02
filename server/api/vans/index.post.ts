@@ -45,6 +45,14 @@ export default defineEventHandler(async (event) => {
   // it: twilio/telnyx pass through; every other carrier is Telroi-provisioned.
   const providerKind = (sub.provider === 'twilio' || sub.provider === 'telnyx') ? sub.provider : 'telroi';
 
+  // One AI number per phone number: a call can only reach one agent, and two
+  // rows claiming the same line let a workspace keep listing a number it no
+  // longer owns. Checked here so the client is told plainly rather than meeting
+  // a constraint error from the database.
+  const [taken] = await db.select({ id: schema.vans.id, name: schema.vans.name })
+    .from(schema.vans).where(eq(schema.vans.telnum, p.data.telnum)).limit(1);
+  if (taken) throw apiError('number_in_use', `That number already answers as "${taken.name}". Edit or remove it first.`, 409);
+
   const [row] = await db.insert(schema.vans).values({
     tenantId: s.tenantId, ...p.data, provider: providerKind
   }).returning();

@@ -37,6 +37,12 @@ export default defineEventHandler(async (event) => {
       }).onConflictDoNothing();
     }
   }
+  // One AI number per phone number, checked here so an operator is told plainly
+  // rather than meeting a constraint error from the database.
+  const [taken] = await db.select({ name: schema.vans.name })
+    .from(schema.vans).where(eq(schema.vans.telnum, p.data.telnum)).limit(1);
+  if (taken) throw apiError('number_in_use', `That number already answers as "${taken.name}". Edit or remove it first.`, 409);
+
   const [row] = await db.insert(schema.vans).values({ tenantId: ws.tenantId, ...p.data, provider: provider as any }).returning();
   return row;
 });
