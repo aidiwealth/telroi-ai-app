@@ -63,6 +63,14 @@ export async function deleteContact(tenantId: string, id: string) {
 
 export async function addNote(tenantId: string, contactId: string, authorUserId: string, body: string, kind: string = 'note', callUid?: string) {
   const db = useDb();
+  // Check the contact is ours before writing against it. The ownership test was
+  // only on the lastContactedAt update below, which meant a note could be stored
+  // referencing a contact in another workspace — invisible to them, but not
+  // something we should be recording.
+  const [owned] = await db.select({ id: schema.crmContacts.id }).from(schema.crmContacts)
+    .where(and(eq(schema.crmContacts.id, contactId), eq(schema.crmContacts.tenantId, tenantId))).limit(1);
+  if (!owned) return null;
+
   const [row] = await db.insert(schema.crmContactNotes)
     .values({ tenantId, contactId, authorUserId, body, kind, callUid: callUid || null }).returning();
   await db.update(schema.crmContacts).set({ lastContactedAt: new Date(), updatedAt: new Date() })
