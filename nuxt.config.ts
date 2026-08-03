@@ -95,6 +95,15 @@ export default defineNuxtConfig({
           type: 'image/png',
           href: 'https://pub-f138f42d66b748108ebf7432c7314665.r2.dev/telroi-v1%20logo.png'
         },
+        // iOS asks for /apple-touch-icon.png by path unless told otherwise, and
+        // every one of those 404s came back a 500 — the error page can't render
+        // because Pinia fails to serialise one of its stores. Naming the icon here
+        // stops the request; the render fault behind it is still there for any
+        // genuine 404.
+        {
+          rel: 'apple-touch-icon',
+          href: 'https://pub-f138f42d66b748108ebf7432c7314665.r2.dev/telroi-v1%20logo.png'
+        },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {
