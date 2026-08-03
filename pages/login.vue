@@ -108,6 +108,10 @@ const cooldown = ref(0);
 // Surface magic-link errors passed back via query
 onMounted(() => {
   if (route.query.error) error.value = 'That link was invalid or expired. Try again.';
+  // A link can land somebody straight on account creation rather than making them
+  // find the toggle — which is what a link in an email or an advert wants to do.
+  const m = String(route.query.mode || '').toLowerCase();
+  if (m === 'signup' || route.query.signup !== undefined) mode.value = 'signup';
 });
 
 function startCooldown() {
