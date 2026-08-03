@@ -24,6 +24,13 @@ export default defineEventHandler(async (event) => {
     } catch { cached = { ...cached, at: Date.now() }; }
   }
 
+  // Temporary: this rewrite has been failing with the setting stored correctly,
+  // and guessing at what the host header carries through Cloudflare has cost more
+  // than logging it would have.
+  if (cached.docs || cached.status) {
+    console.log(`[docs-domain] host="${host}" docs="${cached.docs}" status="${cached.status}" match=${host === cached.docs}`);
+  }
+
   if (cached.docs && host === cached.docs) {
     if (path === '/' || !path.startsWith('/api/docs')) event.node.req.url = '/api/docs';
     return;
