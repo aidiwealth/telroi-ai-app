@@ -7,13 +7,20 @@ import { ref } from 'vue';
 
 type CallState = 'idle' | 'acquiring_mic' | 'connecting' | 'ringing' | 'in_call' | 'ended' | 'error';
 
-function loadScript(src: string): Promise<void> {
+// Resolving because a tag exists is not the same as the script having loaded: a
+// failed load leaves the tag behind, so every attempt after the first returned
+// success while the global it was fetching stayed undefined. Wait for the global.
+function loadScript(src: string, globalName?: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const ready = () => !globalName || (window as any)[globalName] !== undefined;
+    if (ready()) return resolve();
+    const existing = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
+    if (existing && !globalName) return resolve();
+    if (existing) existing.remove();   // a corpse from an earlier failure
     const s = document.createElement('script');
     s.src = src; s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load ' + src));
+    s.onload = () => ready() ? resolve() : reject(new Error(src + ' loaded but ' + globalName + ' is missing'));
+    s.onerror = () => { s.remove(); reject(new Error('Failed to load ' + src)); };
     document.head.appendChild(s);
   });
 }
@@ -64,7 +71,9 @@ export function useVoiceCall() {
       state.value = 'connecting';
 
       if (provider === 'twilio') {
-        await loadScript('https://sdk.twilio.com/js/voice/releases/2.11.0/twilio.min.js');
+        // 2.11.0 at that path returns 403 — the SDK is served from unpkg, which the
+        // CSP already allows, and the version is one that exists.
+        await loadScript('https://unpkg.com/@twilio/voice-sdk@2.12.4/dist/twilio.min.js', 'Twilio');
         const Twilio = (window as any).Twilio;
         device = new Twilio.Device(tok.token, { codecPreferences: ['opus', 'pcmu'] });
         await device.register();
@@ -74,7 +83,7 @@ export function useVoiceCall() {
         activeConn.on('disconnect', () => endCall(opts.onEnd));
         activeConn.on('error', (e: any) => { error.value = e?.message || 'Call error'; state.value = 'error'; });
       } else if (provider === 'telnyx') {
-        await loadScript('https://unpkg.com/@telnyx/webrtc@2.22.0/lib/bundle.js');
+        await loadScript('https://unpkg.com/@telnyx/webrtc@2.22.0/lib/bundle.js', 'TelnyxWebRTC');
         // The UMD bundle exposes the constructor as window.TelnyxWebRTC.TelnyxRTC
         // (per Telnyx docs). Fall back through the other shapes just in case.
         const w = window as any;
