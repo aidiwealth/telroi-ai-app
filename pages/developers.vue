@@ -39,7 +39,7 @@
           <span class="card-title">API documentation</span>
           <p class="dev-docs-sub">Full reference for every endpoint — Voice OTP, Speech, Calls, Numbers, AI Agents, CRM and webhooks — with examples and the OpenAPI spec.</p>
         </div>
-        <a :href="`${baseUrl}/api/docs`" target="_blank" rel="noopener" class="btn btn-signal btn-sm">View API docs →</a>
+        <a href="https://developers.telroi.ai" target="_blank" rel="noopener" class="btn btn-signal btn-sm">View API docs →</a>
       </div>
     </div>
 

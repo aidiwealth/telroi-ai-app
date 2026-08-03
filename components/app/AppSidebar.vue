@@ -49,7 +49,7 @@
 
     <!-- Pinned footer: docs + help (Column-style) -->
     <div class="sb-footer">
-      <a href="/api/docs" target="_blank" class="sb-link" title="API Documentation">
+      <a href="https://developers.telroi.ai" target="_blank" class="sb-link" title="API Documentation">
         <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2 2 0 0 1 6 4h5v15.5H6a2 2 0 0 0-2 1.5z"/><path d="M20 5.5A2 2 0 0 0 18 4h-5v15.5h5a2 2 0 0 1 2 1.5z"/><path d="M7.5 8h2M7.5 11h2M14.5 8h2M14.5 11h2"/></svg></span>
         <span v-if="!collapsed" class="sb-label">Documentation</span>
       </a>
@@ -57,7 +57,7 @@
         <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 9l-4 3 4 3"/><path d="M16 9l4 3-4 3"/><path d="M13 5l-2 14"/></svg></span>
         <span v-if="!collapsed" class="sb-label">Developers</span>
       </NuxtLink>
-      <a href="/status" target="_blank" class="sb-link" title="System Status">
+      <a href="https://status.telroi.ai" target="_blank" class="sb-link" title="System Status">
         <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg></span>
         <span v-if="!collapsed" class="sb-label">Status</span>
       </a>
