@@ -894,7 +894,8 @@ async function loadWallet() {
     const o = await $fetch<any>(`/api/admin/pricing/${tid}`);
     if (o.override) {
       priceOvr.value = {
-        voice: o.override.voiceMinuteUsdMinor != null ? (o.override.voiceMinuteUsdMinor / 100) : '',
+        voice: o.override.voiceMinuteUsdMicro != null ? (o.override.voiceMinuteUsdMicro / 1000000)
+             : o.override.voiceMinuteUsdMinor != null ? (o.override.voiceMinuteUsdMinor / 100) : '',
         did: o.override.didMonthlyUsdMinor != null ? (o.override.didMonthlyUsdMinor / 100) : '',
         channel: o.override.channelMonthlyUsdMinor != null ? (o.override.channelMonthlyUsdMinor / 100) : ''
       };
@@ -919,9 +920,9 @@ async function saveOverride() {
   priceBusy.value = true;
   try {
     await $fetch(`/api/admin/pricing/${tid}`, { method: 'POST', body: {
-      voiceMinuteUsdMinor: priceOvr.value.voice === '' ? null : Math.round(Number(ovr.value.voice) * 100),
-      didMonthlyUsdMinor: priceOvr.value.did === '' ? null : Math.round(Number(ovr.value.did) * 100),
-      channelMonthlyUsdMinor: priceOvr.value.channel === '' ? null : Math.round(Number(ovr.value.channel) * 100)
+      voiceMinuteUsdMicro: priceOvr.value.voice === '' ? null : Math.round(Number(priceOvr.value.voice) * 1000000),
+      didMonthlyUsdMinor: priceOvr.value.did === '' ? null : Math.round(Number(priceOvr.value.did) * 100),
+      channelMonthlyUsdMinor: priceOvr.value.channel === '' ? null : Math.round(Number(priceOvr.value.channel) * 100)
     } });
     alert('Override saved');
   } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }

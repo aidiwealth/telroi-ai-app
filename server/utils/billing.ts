@@ -28,6 +28,13 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
   const chUsd = pricing?.channelMonthlyUsdMinor ?? 200;
   const ngn = pricing?.ngnPerUsd ?? 1600;
 
+  // Per-tenant rate overrides, loaded once and layered per subscription below.
+  // This read only the global row, so a client on a negotiated DID or channel
+  // rate was charged it by numbers/purchase (which goes through getPricing with
+  // a tenant id) and then the global rate on every monthly renewal after.
+  const overrideRows = await db.select().from(schema.pricingOverrides);
+  const overrides = new Map<string, any>(overrideRows.map((o: any) => [o.tenantId, o]));
+
   const due = await db.select().from(schema.numberSubscriptions)
     .where(and(eq(schema.numberSubscriptions.status, 'active'), lte(schema.numberSubscriptions.nextBillingAt, now)));
   result.due = due.length;
@@ -38,8 +45,9 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
 
     const conv = (usdMinor: number) => wallet.currency === 'USD' ? usdMinor : Math.round(usdMinor * ngn);
     // Per-number DID price can be overridden on the inventory row; fall back to global.
-    const didMinor = conv(didUsd);
-    const amount = didMinor + conv(chUsd) * (sub.channels || 1);
+    const ov = overrides.get(sub.tenantId);
+    const didMinor = conv(ov?.didMonthlyUsdMinor ?? didUsd);
+    const amount = didMinor + conv(ov?.channelMonthlyUsdMinor ?? chUsd) * (sub.channels || 1);
     const cycleRef = `numbill_${sub.id}_${now.toISOString().slice(0, 10)}`;
 
     // Idempotency: already billed this cycle?
