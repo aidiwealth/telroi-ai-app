@@ -31,9 +31,12 @@
   --warn:       #b7791f;
 
   /* typography */
-  --font-display: "Fraunces", "Times New Roman", serif;
-  --font-sans:    "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-  --font-mono:    "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Sharp Grotesk", "Mabry Pro", Georgia, serif;
+  --font-sans:    "Mabry Pro", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  /* Deliberately not Mabry Pro, which the marketing site uses here — this app
+     has code samples in the API docs and columns of figures in the wallet and
+     call logs, and a proportional face makes both hard to read. */
+  --font-mono:    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 
   /* shape & motion */
   --radius:       12px;

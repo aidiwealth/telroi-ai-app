@@ -7,6 +7,7 @@ export default defineNuxtConfig({
   modules: ['@pinia/nuxt'],
 
   css: [
+    '~/assets/css/fonts.css',
     '~/assets/css/tokens.css',
     '~/assets/css/base.css',
     '~/assets/css/components.css'
@@ -104,12 +105,9 @@ export default defineNuxtConfig({
           rel: 'apple-touch-icon',
           href: 'https://pub-f138f42d66b748108ebf7432c7314665.r2.dev/telroi-v1%20logo.png'
         },
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        {
-          rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Geist:wght@300;400;500;600&display=swap'
-        }
+        // Fraunces and Geist came from Google; the faces are now Mabry Pro and
+        // Sharp Grotesk, served from /public/fonts as the marketing site does, so
+        // nothing reaches a third party at runtime.
       ]
     }
   },

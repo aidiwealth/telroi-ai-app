@@ -1,0 +1,31 @@
+/* Typefaces carried over from telroi.com. Mabry Pro for text, Sharp Grotesk
+   for headings. These are licensed commercial faces served from /public/fonts,
+   not Google fonts, so nothing here reaches out to a third party at runtime.
+   ascent-override values match telroi.com so the vertical rhythm lines up. */
+
+@font-face {
+  font-family: "Mabry Pro";
+  src: url("/fonts/MabryPro-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  ascent-override: 90%;
+}
+
+@font-face {
+  font-family: "Mabry Pro";
+  src: url("/fonts/MabryPro-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  ascent-override: 90%;
+}
+
+@font-face {
+  font-family: "Sharp Grotesk";
+  src: url("/fonts/SharpGrotesk-Medium.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  ascent-override: 100%;
+}
