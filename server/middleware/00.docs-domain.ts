@@ -31,11 +31,15 @@ export default defineEventHandler(async (event) => {
     console.log(`[docs-domain] host="${host}" docs="${cached.docs}" status="${cached.status}" match=${host === cached.docs}`);
   }
 
+  // Redirect rather than rewrite. Setting req.url mutates the raw request after
+  // Nuxt's router has already resolved the route from the original path, so the
+  // global auth guard saw '/' rather than '/api/docs', found no exemption, and
+  // sent every visitor to the login page.
   if (cached.docs && host === cached.docs) {
-    if (path === '/' || !path.startsWith('/api/docs')) event.node.req.url = '/api/docs';
+    if (!path.startsWith('/api/docs')) return sendRedirect(event, '/api/docs', 302);
     return;
   }
   if (cached.status && host === cached.status) {
-    if (path === '/' || !path.startsWith('/status')) event.node.req.url = '/status';
+    if (!path.startsWith('/status')) return sendRedirect(event, '/status', 302);
   }
 });
