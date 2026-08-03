@@ -45,8 +45,12 @@ export function useVoiceCall() {
   }
 
   // Fetch a token from the given endpoint (client dialer or admin support).
-  async function getToken(tokenEndpoint: string, from?: string) {
-    const r = await fetch(tokenEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: from || '' }) });
+  // Receiving always belongs on our own PBX, since that's where escalations and
+  // ring-all calls arrive; placing a call goes out through whichever carrier owns
+  // the number, which for Twilio and Telnyx means their own SDK rather than an
+  // Asterisk trunk. Which of the two this is belongs to the caller.
+  async function getToken(tokenEndpoint: string, from?: string, purpose: 'dial' | 'receive' = 'receive') {
+    const r = await fetch(tokenEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: from || '', purpose }) });
     if (!r.ok) throw new Error('Could not get a voice token. Provider may not be configured.');
     return await r.json();
   }
@@ -55,7 +59,7 @@ export function useVoiceCall() {
     error.value = null;
     try {
       await ensureMic();                       // mic prompt
-      const tok = await getToken(opts.tokenEndpoint, opts.from);
+      const tok = await getToken(opts.tokenEndpoint, opts.from, 'dial');
       provider = tok.provider;
       state.value = 'connecting';
 

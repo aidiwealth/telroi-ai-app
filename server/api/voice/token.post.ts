@@ -11,13 +11,15 @@ export default defineEventHandler(async (event) => {
   // so routing follows the number the customer chose to call from.
   const dial = await resolveLiveCallProvider({ tenantId: s.tenantId, configuredProvider: 'auto', preferredFromNumber: selectedFrom || null });
 
-  // Where an agent's browser REGISTERS is not the same question as which trunk a
-  // call leaves on. The resolver answers the second — the from-number's carrier —
-  // and using it for the first meant a client whose numbers are Twilio had their
-  // dashboard registered with Twilio, where our own PBX could never ring them:
-  // every escalation and ring-all call found nobody home. Agents live on our PBX
-  // whatever carries their numbers; the dial prefix below still routes outbound.
-  const registerOn = 'telroi';
+  // Receiving and placing are different questions and were being given one answer.
+  // Registering with the from-number's carrier meant our own PBX could never ring
+  // a Twilio workspace, so escalations found nobody home; forcing everyone onto
+  // the PBX then left those same workspaces unable to dial out, because their
+  // outbound goes through Twilio's own SDK rather than an Asterisk trunk. So the
+  // caller says which it wants: incoming always lands on our PBX, outgoing follows
+  // whichever carrier owns the number being dialled from.
+  const purpose = String(body?.purpose || 'receive');
+  const registerOn = purpose === 'dial' ? dial.provider : 'telroi';
   if (registerOn === 'telroi') {
     try {
       const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
