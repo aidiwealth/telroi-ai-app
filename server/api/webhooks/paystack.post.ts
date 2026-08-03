@@ -27,5 +27,24 @@ export default defineEventHandler(async (event) => {
   await credit(payment.tenantId, payment.amountMinor, 'topup', reference, { provider: 'paystack' });
   await db.update(schema.payments).set({ status: 'succeeded', creditedAt: new Date(), raw: body })
     .where(eq(schema.payments.id, payment.id));
+
+  // Paystack hands back a reusable authorization on every successful charge, and
+  // we were throwing it away — so "add a payment method" was a setup step nobody
+  // could ever complete, and auto-top-up had nothing to charge. Taking it here
+  // means a client's first top-up leaves a card on file as a by-product, with no
+  // separate form and no card number ever reaching us.
+  try {
+    const auth = body.data?.authorization;
+    if (auth?.authorization_code && auth?.reusable !== false) {
+      await db.delete(schema.paymentMethods).where(eq(schema.paymentMethods.tenantId, payment.tenantId));
+      await db.insert(schema.paymentMethods).values({
+        tenantId: payment.tenantId, provider: 'paystack', token: auth.authorization_code,
+        brand: auth.card_type || auth.brand || null, last4: auth.last4 || null,
+        expMonth: auth.exp_month ? Number(auth.exp_month) : null,
+        expYear: auth.exp_year ? Number(auth.exp_year) : null, isDefault: true
+      });
+    }
+  } catch { /* a card we couldn't keep shouldn't fail the payment that worked */ }
+
   return { ok: true };
 });
