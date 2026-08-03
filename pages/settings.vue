@@ -237,25 +237,37 @@
       </div>
     </div>
 
-    <!-- Card on file modal -->
+    <!-- Card on file. Not a form: the card is kept from the first wallet top-up,
+         because the payment provider hands us a reusable authorisation with the
+         charge and nothing useful can be typed here. It used to show a cardholder
+         field and an empty box waiting for an SDK that was never wired up. -->
     <div v-if="showCardModal" class="cmp-policy-overlay" @click.self="showCardModal = false">
       <div class="cmp-policy-modal card-modal">
         <div class="cmp-policy-head">
-          <div><h3>{{ card ? 'Change card on file' : 'Add a card' }}</h3></div>
+          <div><h3>{{ card ? 'Card on file' : 'No card on file yet' }}</h3></div>
           <button class="cmp-policy-x" @click="showCardModal = false">✕</button>
         </div>
+
         <div class="cmp-policy-body">
-          <div class="card-secure-note">🔒 Card details are handled securely by our payment provider. Telroi never sees or stores your full card number.</div>
-          <!-- PROVIDER ELEMENT MOUNT POINT.
-               Replace this block with Stripe Elements / Paystack inline. The SDK
-               returns a token + brand/last4 which we POST to /api/payment-method. -->
-          <div class="card-field"><label>Cardholder name</label><input v-model="cardName" class="input" placeholder="Name on card" /></div>
-          <div id="provider-card-element" class="card-element-placeholder">Secure card field mounts here once your payment provider key is configured.</div>
-          <p class="muted set-foot">You're charged $0 today — a card is kept on file for after your trial.</p>
+          <template v-if="card">
+            <div class="card-on-file">
+              <span class="card-brand">{{ card.brand || 'Card' }}</span>
+              <span class="card-digits">•••• {{ card.last4 }}</span>
+              <span v-if="card.expMonth && card.expYear" class="card-exp">
+                expires {{ String(card.expMonth).padStart(2, '0') }}/{{ String(card.expYear).slice(-2) }}
+              </span>
+            </div>
+            <p class="muted set-foot">Kept from your last top-up and used for automatic top-ups. Paying with a different card replaces it.</p>
+          </template>
+
+          <template v-else>
+            <p class="card-explainer">Your card is saved automatically the first time you top up your wallet — there's nothing to fill in here. We only ever hold a token from the payment provider, never the card number.</p>
+            <NuxtLink to="/wallet" class="btn btn-signal btn-sm" @click="showCardModal = false">Go to wallet</NuxtLink>
+          </template>
         </div>
+
         <div class="policy-modal-foot">
-          <button class="btn btn-ghost btn-sm" @click="showCardModal = false">Cancel</button>
-          <button class="btn btn-signal btn-sm" :disabled="savingCard || !cardName" @click="saveCardFromModal">{{ savingCard ? 'Saving…' : 'Save card' }}</button>
+          <button class="btn btn-ghost btn-sm" @click="showCardModal = false">Close</button>
         </div>
       </div>
     </div>
@@ -306,9 +318,7 @@ async function openPolicy() {
 // Billing
 const card = ref<any>(null);
 const walletState = ref<any>(null);
-const savingCard = ref(false);
 const showCardModal = ref(false);
-const cardName = ref('');
 const walletDisplay = computed(() => {
   const w = walletState.value;
   if (!w) return '—';
@@ -330,21 +340,6 @@ const recurringDisplay = computed(() => {
 const walletFunded = computed(() => (walletState.value?.balanceMinor || 0) > 0);
 function fmtBillDate(s: string) { try { return new Date(s).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return s; } }
 function openCardModal() { cardName.value = ''; showCardModal.value = true; }
-async function saveCardFromModal() {
-  // PLACEHOLDER tokenization. Replace the modal's provider element with Stripe
-  // Elements / Paystack inline; its SDK returns a token + brand/last4 which we
-  // POST here. Raw card numbers never touch our server.
-  savingCard.value = true;
-  try {
-    const demoToken = `tok_demo_${Date.now()}`;
-    await api.post('/api/payment-method', { provider: 'stripe', token: demoToken, brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 });
-    toast.ok('Card saved');
-    showCardModal.value = false;
-    await loadBilling();
-  } catch (e: any) { toast.err(e.message); }
-  finally { savingCard.value = false; }
-}
-
 // Account profile (display name + email change via OTP)
 const profile = reactive({ name: '', email: '' });
 const savingProfile = ref(false);
@@ -466,6 +461,11 @@ async function saveWs() {
 </script>
 
 <style scoped>
+.card-on-file { display: flex; align-items: baseline; gap: 10px; padding: 16px 18px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--paper-2); margin-bottom: 14px; }
+.card-brand { font-size: 14px; font-weight: 600; color: var(--ink); text-transform: capitalize; }
+.card-digits { font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.card-exp { font-size: 12.5px; color: var(--ink-soft); margin-left: auto; }
+.card-explainer { font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 16px; }
 .settings-layout { display: grid; grid-template-columns: 200px 1fr; gap: 24px; }
 .set-nav { display: flex; flex-direction: column; gap: 2px; }
 .set-nav-item { text-align: left; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 14px; color: var(--ink-soft); transition: background 0.12s, color 0.12s; }
