@@ -9,7 +9,7 @@ import { voiceCredentials } from './voice-credentials';
 // Twilio access tokens are HS256 JWTs signed with the API Key SECRET, with a
 // specific header (cty + the API key sid as `iss`/sub claims) and a `grants`
 // claim containing a voice grant referencing the TwiML App SID.
-export async function twilioVoiceToken(identity: string) {
+export async function twilioVoiceToken(identity: string, preferredCallerId?: string | null) {
   const { twilio } = await voiceCredentials();
   if (!twilio) throw new Error('Twilio Voice not configured');
   const now = Math.floor(Date.now() / 1000);
@@ -28,7 +28,12 @@ export async function twilioVoiceToken(identity: string) {
     .setExpirationTime(now + 3600)
     .setJti(`${twilio.apiKeySid}-${now}`)
     .sign(secret);
-  return { provider: 'twilio', token: jwt, identity, callerId: twilio.callerId, expiresIn: 3600 };
+  // The number the caller chose to dial from, as Telnyx has always done — a
+  // platform-wide caller id would put our number on every client's outbound
+  // calls, and the person answering could not tell who was ringing them. The
+  // caller was passed in and dropped here, so the TwiML came back with an empty
+  // callerId and Twilio refused every call.
+  return { provider: 'twilio', token: jwt, identity, callerId: preferredCallerId || twilio.callerId, expiresIn: 3600 };
 }
 
 // ── Telnyx WebRTC: on-demand JWT via Telnyx API using the SIP connection ──
@@ -92,7 +97,7 @@ export async function asteriskVoiceToken(identity: string) {
 
 
 export async function voiceTokenFor(provider: string, identity: string, preferredCallerId?: string | null) {
-  if (provider === 'twilio') return await twilioVoiceToken(identity);
+  if (provider === 'twilio') return await twilioVoiceToken(identity, preferredCallerId);
   if (provider === 'telnyx') return await telnyxVoiceToken(preferredCallerId);
   if (provider === 'telroi' || provider === 'asterisk') return await asteriskVoiceToken(identity);
   throw new Error(`Unknown voice provider: ${provider}`);
