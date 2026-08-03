@@ -688,13 +688,16 @@ onMounted(async () => {
   --d-bg: #fbfaf8; --d-panel: #ffffff; --d-ink: #14141a; --d-soft: #5b5b64; --d-mute: #8a8a93;
   --d-rule: #e7e5e0; --d-signal: #1a4b72; --d-code-bg: #0e1116; --d-code-ink: #e6edf3;
   --d-get: #1a7a4f; --d-post: #1a4b72; --d-radius: 12px;
-  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  /* The tokens, not a hardcoded stack — this page named Geist and Fraunces
+     directly, so it kept the old faces when they changed and then lost them
+     entirely when the Google stylesheet came out. */
+  font-family: var(--font-sans);
   color: var(--d-ink); background: var(--d-bg); min-height: 100vh;
 }
 .docs a { color: var(--d-signal); text-decoration: none; }
 .docs a:hover { text-decoration: underline; }
-.docs h1 { font-family: "Fraunces", Georgia, serif; font-size: 40px; letter-spacing: -0.02em; margin: 0 0 16px; }
-.docs h2 { font-family: "Fraunces", Georgia, serif; font-size: 26px; letter-spacing: -0.01em; margin: 0 0 12px; }
+.docs h1 { font-family: var(--font-display); font-size: 40px; letter-spacing: -0.02em; margin: 0 0 16px; }
+.docs h2 { font-family: var(--font-display); font-size: 26px; letter-spacing: -0.01em; margin: 0 0 12px; }
 .docs p { line-height: 1.7; color: var(--d-soft); margin: 0 0 14px; font-size: 15px; }
 
 .docs-top { position: sticky; top: 0; z-index: 20; background: rgba(251,250,248,0.85); backdrop-filter: blur(10px); border-bottom: 1px solid var(--d-rule); }
@@ -727,7 +730,7 @@ onMounted(async () => {
 .docs-ver-pill { font-family: var(--font-mono, monospace); font-size: 11px; font-weight: 600; color: var(--d-signal); background: rgba(26,75,114,0.08); padding: 2px 8px; border-radius: 999px; margin-left: auto; }
 /* Hero quickstart */
 .docs-quickstart { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 24px; align-items: center; background: var(--d-panel); border: 1px solid var(--d-rule); border-radius: 18px; padding: 28px; margin: 22px 0 28px; }
-.docs-qs-title { font-family: "Fraunces", Georgia, serif; font-size: 22px; margin: 0 0 8px; }
+.docs-qs-title { font-family: var(--font-display); font-size: 22px; margin: 0 0 8px; }
 .docs-qs-sub { font-size: 14px; color: var(--d-soft); line-height: 1.55; margin: 0 0 18px; }
 .docs-qs-cta { display: flex; gap: 10px; flex-wrap: wrap; }
 .docs a.docs-qs-btn { font-size: 13.5px; font-weight: 600; padding: 9px 18px; border-radius: 999px; border: 1px solid var(--d-rule); color: var(--d-ink); background: var(--d-panel); }
@@ -742,7 +745,7 @@ onMounted(async () => {
 .docs a.docs-cap-card:hover { text-decoration: none; }
 .docs a.docs-cap-card:hover .docs-cap-art { transform: translateY(-2px); box-shadow: 0 10px 28px -12px rgba(10,10,11,0.35); }
 .docs-cap-art { height: 130px; border-radius: 14px; display: flex; align-items: center; justify-content: center; transition: transform .18s, box-shadow .18s; margin-bottom: 12px; }
-.docs-cap-art span { color: #fff; font-family: "Fraunces", Georgia, serif; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; text-shadow: 0 1px 12px rgba(0,0,0,0.18); }
+.docs-cap-art span { color: #fff; font-family: var(--font-display); font-size: 26px; font-weight: 600; letter-spacing: -0.01em; text-shadow: 0 1px 12px rgba(0,0,0,0.18); }
 .docs-cap-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
 .docs-cap-desc { font-size: 13px; color: var(--d-soft); line-height: 1.5; margin: 0; }
 /* Start building task grid */
@@ -783,14 +786,14 @@ onMounted(async () => {
 .docs-lede { font-size: 17px; }
 .docs-callout { display: flex; align-items: center; gap: 12px; background: var(--d-panel); border: 1px solid var(--d-rule); border-radius: var(--d-radius); padding: 12px 16px; margin-top: 8px; }
 
-.docs-m { font-family: "Geist", monospace; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 5px; color: #fff; flex: none; }
+.docs-m { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 5px; color: #fff; flex: none; }
 .docs-m.get { background: var(--d-get); }
 .docs-m.post { background: var(--d-post); }
 .docs-m.event { background: #7a5af0; }
 
 .docs-endpoint { border-top: 1px solid var(--d-rule); padding-top: 36px; }
 .docs-ep-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.docs-path { font-family: "Geist", monospace; font-size: 14px; color: var(--d-ink); background: #f1efea; padding: 3px 10px; border-radius: 6px; }
+.docs-path { font-family: var(--font-mono); font-size: 14px; color: var(--d-ink); background: #f1efea; padding: 3px 10px; border-radius: 6px; }
 .docs-desc { font-size: 15px; }
 .docs-ep-grid { display: flex; flex-direction: column; gap: 20px; margin-top: 18px; }
 .docs-ep-left { min-width: 0; }
@@ -801,34 +804,34 @@ onMounted(async () => {
 .docs-ep-meta { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 22px; }
 .docs-ep-metarow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .docs-ep-metalabel { font-weight: 600; font-size: 13.5px; color: var(--d-ink); min-width: 104px; }
-.docs-ep-url { font-family: "Geist", monospace; font-size: 13px; color: var(--d-signal); background: rgba(26,75,114,0.07); padding: 4px 10px; border-radius: 6px; word-break: break-all; }
+.docs-ep-url { font-family: var(--font-mono); font-size: 13px; color: var(--d-signal); background: rgba(26,75,114,0.07); padding: 4px 10px; border-radius: 6px; word-break: break-all; }
 /* Params / returns table — the clear, scannable layout */
 .docs-ptable { width: 100%; border-collapse: collapse; margin-bottom: 24px; border: 1px solid var(--d-rule); border-radius: var(--d-radius); overflow: hidden; }
 .docs-ptable th { text-align: left; font-size: 12px; font-weight: 600; color: var(--d-soft); padding: 11px 14px; background: var(--d-bg); border-bottom: 1px solid var(--d-rule); }
 .docs-ptable td { padding: 12px 14px; border-bottom: 1px solid var(--d-rule); vertical-align: top; font-size: 13.5px; }
 .docs-ptable tr:last-child td { border-bottom: none; }
-.docs-param-name { font-family: "Geist", monospace; font-size: 13px; color: var(--d-ink); font-weight: 600; }
+.docs-param-name { font-family: var(--font-mono); font-size: 13px; color: var(--d-ink); font-weight: 600; }
 .docs-yn { font-size: 12.5px; color: var(--d-mute); }
 .docs-yn.yes { color: var(--d-get); font-weight: 600; }
-.docs-ptype { display: block; font-family: "Geist", monospace; font-size: 12px; font-style: italic; color: var(--d-mute); margin-bottom: 3px; }
+.docs-ptype { display: block; font-family: var(--font-mono); font-size: 12px; font-style: italic; color: var(--d-mute); margin-bottom: 3px; }
 .docs-pdesc { display: block; font-size: 13.5px; color: var(--d-soft); line-height: 1.5; }
 .docs-h3 { font-size: 16px; font-weight: 600; margin: 30px 0 10px; }
 .docs-errtable td { vertical-align: middle; }
-.docs-status { font-family: "Geist", monospace; font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 6px; display: inline-block; }
+.docs-status { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 6px; display: inline-block; }
 .docs-status.ok { background: rgba(58,125,90,0.12); color: #2f7d52; }
 .docs-status.err { background: rgba(192,57,43,0.1); color: #c0392b; }
 .docs-status.srv { background: rgba(122,90,240,0.12); color: #6243c4; }
-.docs-param-name { font-family: "Geist", monospace; font-size: 13px; color: var(--d-ink); font-weight: 600; }
-.docs-inline { font-family: "Geist", monospace; font-size: 0.9em; background: #f1efea; padding: 1px 6px; border-radius: 5px; color: var(--d-ink); }
+.docs-param-name { font-family: var(--font-mono); font-size: 13px; color: var(--d-ink); font-weight: 600; }
+.docs-inline { font-family: var(--font-mono); font-size: 0.9em; background: #f1efea; padding: 1px 6px; border-radius: 5px; color: var(--d-ink); }
 
 .docs-code { background: var(--d-code-bg); border-radius: var(--d-radius); overflow: hidden; margin: 0 0 16px; box-shadow: 0 8px 24px -12px rgba(10,10,11,0.3); }
 .docs-code.response { box-shadow: none; opacity: 0.97; }
 .docs-code-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-.docs-code-label { font-family: "Geist", monospace; font-size: 11.5px; color: #8b949e; letter-spacing: 0.02em; }
+.docs-code-label { font-family: var(--font-mono); font-size: 11.5px; color: #8b949e; letter-spacing: 0.02em; }
 .docs-code-copy { font-size: 11.5px; color: #8b949e; background: rgba(255,255,255,0.06); border: 0; padding: 3px 10px; border-radius: 6px; cursor: pointer; }
 .docs-code-copy:hover { color: #fff; background: rgba(255,255,255,0.12); }
 .docs-code pre { margin: 0; padding: 14px 16px; overflow-x: auto; }
-.docs-code code { font-family: "Geist", "SF Mono", Menlo, monospace; font-size: 12.5px; line-height: 1.6; color: var(--d-code-ink); white-space: pre; }
+.docs-code code { font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; color: var(--d-code-ink); white-space: pre; }
 
 .docs-foot { display: flex; gap: 20px; align-items: center; border-top: 1px solid var(--d-rule); padding-top: 24px; margin-top: 40px; font-size: 13px; color: var(--d-mute); }
 

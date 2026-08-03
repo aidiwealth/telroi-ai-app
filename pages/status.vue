@@ -156,7 +156,7 @@ onMounted(async () => {
   --s-warn: #b8860b; --s-warn-soft: rgba(184,134,11,0.13);
   --s-bad: #c0392b; --s-bad-soft: rgba(192,57,43,0.12);
   --s-maint: #1a4b72; --s-maint-soft: rgba(26,75,114,0.1);
-  font-family: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-sans);
   color: var(--s-ink); background: var(--s-bg); min-height: 100vh;
 }
 .st a { color: var(--s-signal); text-decoration: none; }
@@ -179,7 +179,7 @@ onMounted(async () => {
 .ov-degraded .st-hero-dot span, .ov-maintenance .st-hero-dot span { background: var(--s-warn); box-shadow: 0 0 0 6px var(--s-warn-soft); }
 .ov-partial_outage .st-hero-dot span, .ov-major_outage .st-hero-dot span { background: var(--s-bad); box-shadow: 0 0 0 6px var(--s-bad-soft); }
 @keyframes stPulse { 0%,100% { box-shadow: 0 0 0 5px var(--s-ok-soft); } 50% { box-shadow: 0 0 0 10px transparent; } }
-.st-hero-title { font-family: "Fraunces", Georgia, serif; font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.st-hero-title { font-family: var(--font-display); font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .st-hero-sub { font-size: 14px; color: var(--s-soft); margin: 0; }
 .st-hero-time { margin-left: auto; font-size: 12px; color: var(--s-mute); white-space: nowrap; align-self: flex-start; }
 
