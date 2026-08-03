@@ -31,6 +31,10 @@ export default defineEventHandler(async (event) => {
 
   return {
     object: 'pricing',
+    // Said plainly: a page reading ngnMinor as naira would advertise sixteen
+    // thousand times the price, and the field name alone hasn't stopped that
+    // mistake being made elsewhere.
+    units: 'Minor units — usdMinor is cents, ngnMinor is kobo. Nano fields are billionths.',
     ngnPerUsd: rate,
     plans: {
       startup: pair(p.planStartupUsdMinor),
@@ -43,9 +47,10 @@ export default defineEventHandler(async (event) => {
     },
     // Managed AI is charged by what it actually uses, which is why the page says
     // "included" today and a client discovers otherwise on their first invoice.
-    // The units are small enough to be meaningless on their own, so an indicative
-    // per-minute figure is given alongside them: a minute of conversation is
-    // roughly 60s of listening, 900 characters spoken and 1,200 tokens thought.
+    // The units are meaningless on their own, so an indicative per-minute figure
+    // is given alongside — drawn from what real calls actually consume rather
+    // than a guess: replies run about 50 characters and a minute holds six or
+    // seven turns, so far less speech than an unhurried estimate would suggest.
     ai: {
       note: 'Charged from your wallet when using Telroi-provided AI. Bring your own provider keys and you pay them directly instead.',
       markupPct: Number(p.aiMarkupPct) || 0,
@@ -58,9 +63,9 @@ export default defineEventHandler(async (event) => {
       indicativePerMinute: nanoPair(
         Math.round(
           ((Number(p.aiSttPerSecNano) || 0) * 60 +
-           (Number(p.aiTtsPerCharNano) || 0) * 900 +
-           (Number(p.aiLlmInPerTokNano) || 0) * 900 +
-           (Number(p.aiLlmOutPerTokNano) || 0) * 300) *
+           (Number(p.aiTtsPerCharNano) || 0) * 350 +
+           (Number(p.aiLlmInPerTokNano) || 0) * 700 +
+           (Number(p.aiLlmOutPerTokNano) || 0) * 120) *
           (1 + (Number(p.aiMarkupPct) || 0) / 100)
         )
       )
