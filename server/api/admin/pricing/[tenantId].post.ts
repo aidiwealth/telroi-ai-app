@@ -6,7 +6,8 @@ import { requirePlatformAdmin } from '~/server/utils/platform';
 import { apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 const Body = z.object({
-  voiceMinuteUsdMinor: z.number().int().positive().nullable().optional(),
+  voiceMinuteUsdMinor: z.number().int().positive().nullable().optional(),  // legacy, not billed
+  voiceMinuteUsdMicro: z.number().int().positive().nullable().optional(),  // micro-USD/min — this is what bills
   channelMonthlyUsdMinor: z.number().int().positive().nullable().optional(),
   didMonthlyUsdMinor: z.number().int().positive().nullable().optional()
 });

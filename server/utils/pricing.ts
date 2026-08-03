@@ -11,7 +11,8 @@ export async function getPricing(tenantId?: string) {
   const db = useDb();
   const [p] = await db.select().from(schema.pricing).where(eq(schema.pricing.id, 'singleton')).limit(1);
   const base = p || {
-    voiceMinuteUsdMinor: 1, channelMonthlyUsdMinor: 200, didMonthlyUsdMinor: 170,
+    voiceMinuteUsdMinor: 1, voiceMinuteUsdMicro: VOICE_MICRO_USD_PER_MIN,
+    channelMonthlyUsdMinor: 200, didMonthlyUsdMinor: 170,
     planStartupUsdMinor: 1000, planGrowthUsdMinor: 1500, ngnPerUsd: 1600
   } as any;
   if (!tenantId) return base;
@@ -21,6 +22,7 @@ export async function getPricing(tenantId?: string) {
   return {
     ...base,
     voiceMinuteUsdMinor: ov.voiceMinuteUsdMinor ?? base.voiceMinuteUsdMinor,
+    voiceMinuteUsdMicro: ov.voiceMinuteUsdMicro ?? base.voiceMinuteUsdMicro,
     channelMonthlyUsdMinor: ov.channelMonthlyUsdMinor ?? base.channelMonthlyUsdMinor,
     didMonthlyUsdMinor: ov.didMonthlyUsdMinor ?? base.didMonthlyUsdMinor
   };
@@ -34,9 +36,15 @@ export function toCurrencyMinor(usdMinor: number, currency: 'NGN' | 'USD', ngnPe
 }
 
 /** Cost of N seconds of airtime, in the wallet currency's minor units. */
-export function voiceCostMinor(seconds: number, currency: 'NGN' | 'USD', ngnPerUsd: number): number {
+export function voiceCostMinor(
+  seconds: number,
+  currency: 'NGN' | 'USD',
+  ngnPerUsd: number,
+  microUsdPerMin: number = VOICE_MICRO_USD_PER_MIN
+): number {
   const minutes = seconds / 60;
-  const microUsd = Math.ceil(minutes * VOICE_MICRO_USD_PER_MIN); // bill rounded-up partial minutes
+  const rate = Number(microUsdPerMin) > 0 ? Number(microUsdPerMin) : VOICE_MICRO_USD_PER_MIN;
+  const microUsd = Math.ceil(minutes * rate); // bill rounded-up partial minutes
   const usdMinor = microUsd / 10000; // micro-USD -> cents (1c = 10,000 micro)
   return currency === 'USD'
     ? Math.max(1, Math.round(usdMinor))

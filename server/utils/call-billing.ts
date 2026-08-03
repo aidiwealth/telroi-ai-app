@@ -24,7 +24,7 @@ export async function chargeCall(opts: {
 
   const wallet = await getOrCreateWallet(opts.tenantId);
   const pricing = await getPricing(opts.tenantId);
-  const amount = voiceCostMinor(seconds, wallet.currency as any, pricing.ngnPerUsd);
+  const amount = voiceCostMinor(seconds, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceMinuteUsdMicro);
   const reference = `call_${opts.callId}`;
   const meta = { provider: opts.provider, source: opts.source, seconds };
 

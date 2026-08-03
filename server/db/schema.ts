@@ -887,7 +887,10 @@ export const payments = pgTable('payments', {
 /* Configurable pricing (minor units in USD; NGN derived by fx). Single row. */
 export const pricing = pgTable('pricing', {
   id: text('id').primaryKey().default('singleton'),
-  voiceMinuteUsdMinor: integer('voice_minute_usd_minor').notNull().default(1),  // $0.0102 ≈ rounded per-min; see meta for precise
+  // Whole cents can't express $0.0102, so airtime is priced in MICRO-USD and
+  // voiceMinuteUsdMinor is kept only for display/back-compat. Billing reads micro.
+  voiceMinuteUsdMinor: integer('voice_minute_usd_minor').notNull().default(1),  // display only — do NOT bill from this
+  voiceMinuteUsdMicro: integer('voice_minute_usd_micro').notNull().default(10200),  // $0.0102
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor').notNull().default(200), // $2.00
   didMonthlyUsdMinor: integer('did_monthly_usd_minor').notNull().default(170),          // $1.70
   planStartupUsdMinor: integer('plan_startup_usd_minor').notNull().default(1000),       // $10
@@ -1017,7 +1020,8 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
    singleton pricing row. Lets the operator give a specific client custom rates. */
 export const pricingOverrides = pgTable('pricing_overrides', {
   tenantId: uuid('tenant_id').primaryKey().references(() => tenants.id, { onDelete: 'cascade' }),
-  voiceMinuteUsdMinor: integer('voice_minute_usd_minor'),
+  voiceMinuteUsdMinor: integer('voice_minute_usd_minor'),          // legacy, unused for billing
+  voiceMinuteUsdMicro: integer('voice_minute_usd_micro'),          // the one billing honours
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor'),
   didMonthlyUsdMinor: integer('did_monthly_usd_minor'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()

@@ -5,6 +5,7 @@ import { requireSuperAdmin } from '~/server/utils/platform';
 import { apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 const Body = z.object({
+  voiceMinuteUsdMicro: z.number().int().positive().optional(),  // micro-USD/min, e.g. 10200 = $0.0102
   channelMonthlyUsdMinor: z.number().int().positive().optional(),
   didMonthlyUsdMinor: z.number().int().positive().optional(),
   planStartupUsdMinor: z.number().int().positive().optional(),

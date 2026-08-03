@@ -41,7 +41,13 @@ export default defineEventHandler(async (event) => {
       growth: pair(p.planGrowthUsdMinor)
     },
     usage: {
-      voiceMinute: pair(p.voiceMinuteUsdMinor),
+      // Airtime is sub-cent: the whole-cent pair rounds $0.0102 down to $0.01 and
+      // under-quotes what we bill. usdMinor stays for anything already reading it,
+      // but the nano fields are the rate calls are actually charged at.
+      voiceMinute: {
+        ...pair(p.voiceMinuteUsdMinor),
+        ...nanoPair(Math.round((Number(p.voiceMinuteUsdMicro) || 10200) * 1000))
+      },
       channelMonthly: pair(p.channelMonthlyUsdMinor),
       numberMonthly: pair(p.didMonthlyUsdMinor)
     },

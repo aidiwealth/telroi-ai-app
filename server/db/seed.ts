@@ -49,7 +49,7 @@ console.log('✓ seeded platform admin boss@telroi.ai (operator console at /admi
 // Pricing config (real rates from the marketing site) + a funded demo wallet.
 await db.insert(schema.pricing).values({
   id: 'singleton',
-  voiceMinuteUsdMinor: 1, channelMonthlyUsdMinor: 200, didMonthlyUsdMinor: 170,
+  voiceMinuteUsdMinor: 1, voiceMinuteUsdMicro: 10200, channelMonthlyUsdMinor: 200, didMonthlyUsdMinor: 170,
   planStartupUsdMinor: 1000, planGrowthUsdMinor: 1500, ngnPerUsd: 1600
 });
 const [wallet] = await db.insert(schema.wallets).values({

@@ -69,8 +69,8 @@ export default defineEventHandler(async (event) => {
         const { getOrCreateWallet, debit } = await import('~/server/utils/wallet');
         const { getPricing, voiceCostMinor } = await import('~/server/utils/pricing');
         const wallet = await getOrCreateWallet(tenant.id);
-        const pricing = await getPricing();
-        const cost = voiceCostMinor(duration, wallet.currency as 'NGN' | 'USD', pricing.ngnPerUsd);
+        const pricing = await getPricing(tenant.id);
+        const cost = voiceCostMinor(duration, wallet.currency as 'NGN' | 'USD', pricing.ngnPerUsd, pricing.voiceMinuteUsdMicro);
         await debit({
           tenantId: tenant.id, amountMinor: cost, reason: 'voice_minute',
           reference: `call_${body.callid ?? body.uid}`,
