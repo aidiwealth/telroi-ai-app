@@ -19,6 +19,7 @@ export interface OtpCallOptions {
   code: string;
   trunk: string;
   prefix?: string;
+  host?: string;           // carrier SIP host, e.g. sip.ruach.ng
   callerId?: string;
   repeatCount?: number;
   timeoutSec?: number;
@@ -33,9 +34,13 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
   const digits = String(to).replace(/[^0-9]/g, '');
   const dial = `${opts.prefix || ''}${digits}`;
 
+  // The carrier dialplan uses PJSIP/<endpoint>/sip:<number>@<host> — endpoint
+  // first, then a full URI. PJSIP/<number>@<endpoint> is a different form and
+  // routes nowhere, which is why the first attempts originated cleanly and no
+  // phone rang.
   const chan = client.Channel();
   await chan.originate({
-    endpoint: `PJSIP/${dial}@${trunk}`,
+    endpoint: `PJSIP/${trunk}/sip:${dial}@${opts.host || 'sip.ruach.ng'}:5060`,
     context: 'otp-play',
     extension: 's',
     priority: 1,
