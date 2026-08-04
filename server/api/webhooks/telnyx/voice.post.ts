@@ -22,6 +22,36 @@ export default defineEventHandler(async (event) => {
   const to = payload.to;
   const from = payload.from;
 
+  // An OTP call we placed. Nothing below applies — there's no inbound number to
+  // match and no tenant to resolve from one — so this answers and returns before
+  // any of the routing logic runs. The code was never given to Telnyx: it's read
+  // from our own row now that they've told us somebody picked up.
+  if (eventType === 'call.answered' && payload.client_state) {
+    let state = '';
+    try { state = Buffer.from(String(payload.client_state), 'base64').toString('utf8'); } catch { /* not ours */ }
+    if (state.startsWith('otp:')) {
+      const otpId = state.slice(4);
+      try {
+        const { useDb, schema } = await import('~/server/db');
+        const { eq } = await import('drizzle-orm');
+        const db = useDb();
+        const [row] = await db.select({ code: schema.voiceOtps.pendingCode })
+          .from(schema.voiceOtps).where(eq(schema.voiceOtps.id, otpId)).limit(1);
+        if (row?.code) {
+          const cc = await import('~/server/utils/telnyx-cc');
+          await cc.telnyxSpeakCode(callId, row.code, 2);
+          // Cleared as soon as it's spoken: it has no further use here, and a
+          // live code sitting in a column is a code that can leak.
+          await db.update(schema.voiceOtps).set({ pendingCode: null })
+            .where(eq(schema.voiceOtps.id, otpId));
+        }
+      } catch (e) {
+        console.error('[telnyx-otp] could not speak the code:', (e as Error)?.message);
+      }
+      return { ok: true, otp: true };
+    }
+  }
+
   if (callId && eventType) {
     try {
       // Attribute to whichever leg is one of OUR numbers. Telnyx flips the

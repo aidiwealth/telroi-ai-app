@@ -111,9 +111,16 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
     status: 'calling', maxAttempts: p.maxAttempts, expiresAt
   }).returning({ id: schema.voiceOtps.id });
 
+  // Stored against the row before dialling: a carrier that speaks the code over
+  // its own API tells us when the call is answered, and we read it back then
+  // rather than handing a live one-time code to them up front.
+  if (!sandboxed) {
+    await db.update(schema.voiceOtps).set({ pendingCode: code }).where(eq(schema.voiceOtps.id, row.id));
+  }
+
   const placed = sandboxed
     ? { ok: true as const, providerRef: `sbx_otp_${row.id}` }
-    : await placeOtpCall({ toNumber, code, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec });
+    : await placeOtpCall({ toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec });
   if (!placed.ok) {
     await db.update(schema.voiceOtps).set({ status: 'failed', reason: placed.reason }).where(eq(schema.voiceOtps.id, row.id));
     return { ok: false, id: row.id, status: 'failed', error: placed.reason };

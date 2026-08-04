@@ -130,7 +130,11 @@ export const platformSettings = pgTable('platform_settings', {
   // voice infra (the configured carrier gateway); other values name an external
   // integration whose creds live in the *VendorCredsEnc fields below. Operators
   // pick these in admin Settings; the adapter layer routes accordingly.
-  otpVoiceVendor: text('otp_voice_vendor').notNull().default('telroi'),   // telroi | twilio | telnyx | vonage | custom
+  otpVoiceVendor: text('otp_voice_vendor').notNull().default('telroi'),
+  // Who carries OTP calls we can't reach ourselves. Nigerian numbers always go
+  // over our own carrier — one global vendor would have sent them abroad at
+  // somebody else's price.
+  otpIntlVendor: text('otp_intl_vendor'),   // telroi | twilio | telnyx | vonage | custom
   ttsVendor: text('tts_vendor').notNull().default('telroi'),              // telroi | elevenlabs | openai | google | azure | custom
   sttVendor: text('stt_vendor').notNull().default('telroi'),             // telroi | deepgram | openai | google | azure | custom
   otpVoiceVendorCredsEnc: text('otp_voice_vendor_creds_enc'),            // AES-256-GCM vendor creds blob
@@ -789,7 +793,11 @@ export const voiceOtps = pgTable('voice_otps', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   toNumber: text('to_number').notNull(),          // E.164 destination
-  codeHash: text('code_hash').notNull(),           // sha256(code) — never store plaintext
+  codeHash: text('code_hash').notNull(),
+  // Held only between placing the call and speaking the code, then cleared. The
+  // alternative was round-tripping it through the carrier's client_state, which
+  // puts a live one-time code in a third party's system for the same window.
+  pendingCode: text('pending_code'),           // sha256(code) — never store plaintext
   codeLength: integer('code_length').notNull(),
   status: text('status').notNull().default('pending'), // pending | calling | delivered | verified | failed | expired
   attempts: integer('attempts').notNull().default(0),

@@ -19,6 +19,7 @@ export interface PlaceOtpCallInput {
   language?: string;          // e.g. 'en-US'
   repeatCount: number;        // times to read the code
   callTimeoutSec: number;
+  otpId?: string;          // ours, so the answered webhook can find the code
 }
 export interface PlaceOtpCallResult { ok: boolean; providerRef?: string; reason?: string; }
 
@@ -59,7 +60,15 @@ async function http(url: string, init: RequestInit & { timeoutMs?: number } = {}
 // Places the call that reads the OTP aloud, via the admin-selected vendor.
 export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCallResult> {
   const v = await loadVendorSettings();
-  const vendor = v.otpVoiceVendor;
+
+  // Routed by destination rather than by a single platform-wide setting.
+  // Nigerian calls go out over our own carrier, where the rate is ours and the
+  // code is read from local sound files; everything else goes to a vendor that
+  // reaches those countries. One global vendor would have sent Nigerian traffic
+  // abroad at somebody else's price.
+  const dest = String(input.toNumber || '').replace(/[^0-9]/g, '');
+  const isNigeria = dest.startsWith('234') || dest.startsWith('0');
+  const vendor = isNigeria ? 'telroi' : (v.otpIntlVendor || v.otpVoiceVendor);
   const speech = `Your verification code is. ${input.code.split('').join(', ')}. I repeat. ${input.code.split('').join(', ')}.`;
 
   if (vendor === 'telroi') {
@@ -88,7 +97,16 @@ export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCa
     const res = await http('https://api.telnyx.com/v2/calls', {
       method: 'POST',
       headers: { Authorization: `Bearer ${v.otpCreds.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ connection_id: v.otpCreds.connectionId, to: input.toNumber, from: v.otpCreds.from, timeout_secs: input.callTimeoutSec })
+      // client_state carries only the OTP id — the code itself stays with us and
+      // is read from our own store when Telnyx tells us the call was answered.
+      // This call places the leg; nothing is spoken until that webhook arrives.
+      body: JSON.stringify({
+        connection_id: v.otpCreds.connectionId,
+        to: input.toNumber,
+        from: v.otpCreds.from,
+        timeout_secs: input.callTimeoutSec,
+        client_state: Buffer.from(`otp:${input.otpId || ''}`).toString('base64')
+      })
     });
     if (!res.ok) return { ok: false, reason: `Telnyx error ${res.status}` };
     const d: any = await res.json();

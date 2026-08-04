@@ -62,6 +62,24 @@ export const telnyxHangup = (callId: string) => cmd(callId, 'hangup', {});
 export const telnyxSpeak = (callId: string, text: string, nextNodeId: string | null) =>
   cmd(callId, 'speak', { payload: text, voice: 'female', language: 'en-US', client_state: encodeState(nextNodeId) });
 
+// Read a one-time code aloud. Its own command rather than telnyxSpeak because a
+// code needs saying digit by digit with pauses — handed over as a plain string,
+// "472913" is read as four hundred seventy-two thousand and the caller learns
+// nothing. SSML gives the pacing and the repetition the OTP contract asks for.
+export const telnyxSpeakCode = (callId: string, code: string, repeats: number = 2) => {
+  const digits = code.split('').join('<break time="350ms"/>');
+  const once = `Your verification code is<break time="400ms"/>${digits}`;
+  const body = Array.from({ length: Math.max(1, Math.min(repeats, 5)) })
+    .map(() => once).join('<break time="900ms"/>');
+  return cmd(callId, 'speak', {
+    payload: `<speak>${body}</speak>`,
+    payload_type: 'ssml',
+    voice: 'female',
+    language: 'en-US',
+    client_state: encodeState('otp-done')
+  });
+};
+
 // Speak a menu prompt and gather one digit; Telnyx fires call.gather.ended.
 export const telnyxGather = (callId: string, prompt: string, menuNodeId: string) =>
   cmd(callId, 'gather_using_speak', {
