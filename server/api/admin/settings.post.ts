@@ -71,6 +71,12 @@ const Body = z.object({
   monnify: MonnifyPair,
   // ── Voice OTP + Speech vendor selection + policy ──
   otpVoiceVendor: z.enum(['telroi', 'twilio', 'telnyx', 'vonage', 'custom']).optional(),
+  // Nigerian OTP goes over our own carrier; only the rest needs a vendor. Which
+  // trunk and which presenting number were hardcoded, so moving traffic off a
+  // faltering carrier meant a deploy.
+  otpIntlVendor: z.enum(['telroi', 'twilio', 'telnyx', 'vonage', 'custom']).optional(),
+  otpNgTrunk: z.string().max(64).optional(),
+  otpNgCallerId: z.string().max(32).optional(),
   ttsVendor: z.enum(['telroi', 'elevenlabs', 'openai', 'google', 'azure', 'custom']).optional(),
   sttVendor: z.enum(['telroi', 'deepgram', 'openai', 'google', 'azure', 'custom']).optional(),
   otpVoiceVendorCreds: z.record(z.any()).optional(),
@@ -191,6 +197,9 @@ export default defineEventHandler(async (event) => {
   if (d.monnify?.test && d.monnify.test.apiKey && d.monnify.test.secretKey) patch.monnifyTestEnc = encrypt(JSON.stringify(d.monnify.test));
   // Voice OTP + Speech vendor selection
   if (d.otpVoiceVendor) patch.otpVoiceVendor = d.otpVoiceVendor;
+  if (d.otpIntlVendor) patch.otpIntlVendor = d.otpIntlVendor;
+  if (d.otpNgTrunk) patch.otpNgTrunk = d.otpNgTrunk;
+  if (d.otpNgCallerId !== undefined) patch.otpNgCallerId = d.otpNgCallerId || null;
   if (d.ttsVendor) patch.ttsVendor = d.ttsVendor;
   if (d.sttVendor) patch.sttVendor = d.sttVendor;
   if (d.otpVoiceVendorCreds && Object.keys(d.otpVoiceVendorCreds).length) patch.otpVoiceVendorCredsEnc = encrypt(JSON.stringify(d.otpVoiceVendorCreds));

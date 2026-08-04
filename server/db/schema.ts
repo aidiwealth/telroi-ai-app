@@ -134,7 +134,11 @@ export const platformSettings = pgTable('platform_settings', {
   // Who carries OTP calls we can't reach ourselves. Nigerian numbers always go
   // over our own carrier — one global vendor would have sent them abroad at
   // somebody else's price.
-  otpIntlVendor: text('otp_intl_vendor'),   // telroi | twilio | telnyx | vonage | custom
+  otpIntlVendor: text('otp_intl_vendor'),
+  // Which trunk Nigerian OTP leaves on and what number it presents. Both were
+  // hardcoded, so moving traffic off a faltering carrier meant a deploy.
+  otpNgTrunk: text('otp_ng_trunk').notNull().default('ruach-endpoint'),
+  otpNgCallerId: text('otp_ng_caller_id'),   // telroi | twilio | telnyx | vonage | custom
   ttsVendor: text('tts_vendor').notNull().default('telroi'),              // telroi | elevenlabs | openai | google | azure | custom
   sttVendor: text('stt_vendor').notNull().default('telroi'),             // telroi | deepgram | openai | google | azure | custom
   otpVoiceVendorCredsEnc: text('otp_voice_vendor_creds_enc'),            // AES-256-GCM vendor creds blob

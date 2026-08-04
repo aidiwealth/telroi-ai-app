@@ -73,6 +73,9 @@ export default defineEventHandler(async (event) => {
     statusDomain: s?.statusDomain || '',
     // Voice OTP + Speech vendor selection (vendor names + creds-set booleans, never secrets)
     otpVoiceVendor: (s?.otpVoiceVendor as string) || 'telroi',
+    otpIntlVendor: (s?.otpIntlVendor as string) || '',
+    otpNgTrunk: (s?.otpNgTrunk as string) || 'ruach-endpoint',
+    otpNgCallerId: (s?.otpNgCallerId as string) || '',
     ttsVendor: (s?.ttsVendor as string) || 'telroi',
     sttVendor: (s?.sttVendor as string) || 'telroi',
     otpVoiceVendorCredsSet: !!s?.otpVoiceVendorCredsEnc,

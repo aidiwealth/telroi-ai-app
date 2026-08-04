@@ -14,6 +14,11 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
   // that the service isn't available (rather than pretending a call placed).
   const all = await voiceCredentials().catch(() => null);
   const creds = all?.digidite || all?.asterisk || all?.telnyx || null;
+  // Which trunk Nigerian OTP leaves on and what it presents are operator
+  // settings, not constants — a carrier having a bad afternoon shouldn't need a
+  // deploy to route around.
+  const { platformSettings } = await import('../platform');
+  const ps: any = await platformSettings().catch(() => ({}));
   if (!creds) {
     return { ok: false, reason: 'No Telroi voice gateway is configured for OTP. Configure a carrier in admin Settings, or select an external OTP vendor.' };
   }
@@ -39,9 +44,9 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
       body: JSON.stringify({
         to: input.toNumber,
         code: input.code,
-        trunk: cfg.otpTrunk || 'ruach-endpoint',
+        trunk: ps?.otpNgTrunk || 'ruach-endpoint',
         host: cfg.otpHost || 'sip.ruach.ng',
-        callerId: cfg.otpCallerId || '',
+        callerId: ps?.otpNgCallerId || '',
         repeatCount: input.repeatCount,
         timeoutSec: input.callTimeoutSec
       }),

@@ -100,8 +100,30 @@
         </div>
       </div>
 
+      <!-- Nigerian OTP goes over our own carrier rather than a vendor: the rate is
+           ours, the digits are read from local sound files, and the code never
+           leaves the machine. Which trunk and which number it presents were
+           hardcoded, so there was no way to move traffic if a carrier faltered. -->
       <div class="sp-vendor">
-        <label class="ad-field"><span>Voice OTP vendor</span>
+        <label class="ad-field"><span>Nigerian calls — carrier</span>
+          <select v-model="sp.otpNgTrunk" class="ad-input">
+            <option value="ruach-endpoint">Ruach</option>
+            <option value="kasooko-endpoint">Kasooko</option>
+            <option value="sotel-endpoint">Sotel</option>
+          </select>
+          <span class="ad-hint">Calls to +234 numbers leave on this trunk, whatever the vendor below is set to.</span>
+        </label>
+        <label class="ad-field"><span>Nigerian calls — presenting number</span>
+          <select v-model="sp.otpNgCallerId" class="ad-input">
+            <option value="">Carrier default</option>
+            <option v-for="n in ngNumbers" :key="n" :value="n">{{ n }}</option>
+          </select>
+          <span class="ad-hint">What the recipient sees. Somebody who can't tell who is calling is unlikely to answer a verification call.</span>
+        </label>
+      </div>
+
+      <div class="sp-vendor">
+        <label class="ad-field"><span>International calls — vendor</span>
           <select v-model="sp.otpVoiceVendor" class="ad-input">
             <option value="telroi">Telroi (own voice infra)</option>
             <option value="twilio">Twilio</option>
@@ -721,9 +743,24 @@ const integ = ref<any>(null);
 // ── Speech & OTP vendor selection + policy ──
 const sp = reactive<any>({
   otpVoiceVendor: 'telroi', ttsVendor: 'telroi', sttVendor: 'telroi',
+  // Nigerian OTP route. Defaults match what was hardcoded before, so saving
+  // without touching them changes nothing.
+  otpIntlVendor: '', otpNgTrunk: 'ruach-endpoint', otpNgCallerId: '',
   otpCreds: {}, ttsCreds: {}, sttCreds: {},
   otpPolicy: { codeLength: 6, ttlSeconds: 300, maxAttempts: 3, callTimeoutSeconds: 45, repeatCount: 2, rateCooldownSeconds: 60, rateMaxPerHour: 5, rateMaxPerDay: 20 }
 });
+// Numbers we actually hold, so the presenting number can't be one we don't own.
+const ngNumbers = ref<string[]>([]);
+onMounted(async () => {
+  try {
+    const r = await $fetch<any>('/api/admin/inventory');
+    const rows = r?.items || r?.numbers || r || [];
+    ngNumbers.value = (Array.isArray(rows) ? rows : [])
+      .map((n: any) => n.telnum || n.number || '')
+      .filter((n: string) => n.startsWith('+234'));
+  } catch { /* the field falls back to carrier default */ }
+});
+
 const savingSpeech = ref(false);
 const savedSpeech = ref(false);
 // Developer docs subdomain
@@ -757,6 +794,11 @@ async function saveDocsDomain() {
 function hydrateSpeech(s: any) {
   if (!s) return;
   sp.otpVoiceVendor = s.otpVoiceVendor || 'telroi';
+  // Loaded, not assumed: a form showing defaults over saved values writes those
+  // defaults back the moment somebody saves anything else on the page.
+  sp.otpIntlVendor = s.otpIntlVendor || '';
+  sp.otpNgTrunk = s.otpNgTrunk || 'ruach-endpoint';
+  sp.otpNgCallerId = s.otpNgCallerId || '';
   sp.ttsVendor = s.ttsVendor || 'telroi';
   sp.sttVendor = s.sttVendor || 'telroi';
   if (s.otpPolicy) Object.assign(sp.otpPolicy, s.otpPolicy);
