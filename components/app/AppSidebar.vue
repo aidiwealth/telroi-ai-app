@@ -98,6 +98,9 @@ const sections = [
   {
     label: 'Voice', icon: I.voice, tour: 'nav-voice', children: [
       { label: 'Calls', to: '/calls' },
+      // Kept apart from Calls: at a few million a month verification calls would
+      // bury the conversations somebody actually needs to review.
+      { label: 'Verification', to: '/otp' },
       { label: 'Numbers', to: '/numbers' },
       { label: 'Connect', to: '/connect' },
       { label: 'SIP', to: '/sip' },

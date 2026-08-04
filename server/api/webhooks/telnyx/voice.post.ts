@@ -26,6 +26,23 @@ export default defineEventHandler(async (event) => {
   // match and no tenant to resolve from one — so this answers and returns before
   // any of the routing logic runs. The code was never given to Telnyx: it's read
   // from our own row now that they've told us somebody picked up.
+  // The code has been read; there's nothing else this call is for. Left alone it
+  // sits open until the carrier times it out, and a minute of silence bills the
+  // same as a minute of speech.
+  if (eventType === 'call.speak.ended' && payload.client_state) {
+    let st = '';
+    try { st = Buffer.from(String(payload.client_state), 'base64').toString('utf8'); } catch { /* not ours */ }
+    if (st.includes('otp-done')) {
+      try {
+        const cc = await import('~/server/utils/telnyx-cc');
+        await cc.telnyxHangup(callId);
+      } catch (e) {
+        console.error('[telnyx-otp] could not hang up:', (e as Error)?.message);
+      }
+      return { ok: true, otp: 'hungup' };
+    }
+  }
+
   if (eventType === 'call.answered' && payload.client_state) {
     let state = '';
     try { state = Buffer.from(String(payload.client_state), 'base64').toString('utf8'); } catch { /* not ours */ }
