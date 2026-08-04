@@ -137,12 +137,18 @@
           <template v-if="sp.otpVoiceVendor === 'twilio'">
             <input v-model="sp.otpCreds.accountSid" class="ad-input mono" placeholder="Account SID" />
             <input v-model="sp.otpCreds.authToken" type="password" class="ad-input mono" placeholder="Auth token" />
-            <input v-model="sp.otpCreds.from" class="ad-input mono" placeholder="From number +1…" />
+            <select v-model="sp.otpCreds.from" class="ad-input">
+              <option value="">Select a Twilio number…</option>
+              <option v-for="n in intlNumbers.twilio" :key="n" :value="n">{{ n }}</option>
+            </select>
           </template>
           <template v-else-if="sp.otpVoiceVendor === 'telnyx'">
             <input v-model="sp.otpCreds.apiKey" type="password" class="ad-input mono" placeholder="API key" />
             <input v-model="sp.otpCreds.connectionId" class="ad-input mono" placeholder="Connection ID" />
-            <input v-model="sp.otpCreds.from" class="ad-input mono" placeholder="From number +1…" />
+            <select v-model="sp.otpCreds.from" class="ad-input">
+              <option value="">Select a Telnyx number…</option>
+              <option v-for="n in intlNumbers.telnyx" :key="n" :value="n">{{ n }}</option>
+            </select>
           </template>
           <template v-else-if="sp.otpVoiceVendor === 'vonage'">
             <input v-model="sp.otpCreds.apiKey" class="ad-input mono" placeholder="API key" />
@@ -751,14 +757,20 @@ const sp = reactive<any>({
 });
 // Numbers we actually hold, so the presenting number can't be one we don't own.
 const ngNumbers = ref<string[]>([]);
+// Grouped by provider, because a from-number has to belong to whoever places the
+// call — Twilio can't present a Telnyx number, and a call that tries is refused
+// with an error nobody reads until the OTPs stop arriving.
+const intlNumbers = ref<{ twilio: string[]; telnyx: string[] }>({ twilio: [], telnyx: [] });
 onMounted(async () => {
   try {
     const r = await $fetch<any>('/api/admin/inventory');
-    const rows = r?.items || r?.numbers || r || [];
-    ngNumbers.value = (Array.isArray(rows) ? rows : [])
-      .map((n: any) => n.telnum || n.number || '')
-      .filter((n: string) => n.startsWith('+234'));
-  } catch { /* the field falls back to carrier default */ }
+    const rows: any[] = Array.isArray(r) ? r : (r?.items || r?.numbers || []);
+    ngNumbers.value = rows.map((n) => n.telnum || '').filter((n: string) => n.startsWith('+234'));
+    intlNumbers.value = {
+      twilio: rows.filter((n) => n.provider === 'twilio' && !String(n.telnum || '').startsWith('+234')).map((n) => n.telnum),
+      telnyx: rows.filter((n) => n.provider === 'telnyx' && !String(n.telnum || '').startsWith('+234')).map((n) => n.telnum)
+    };
+  } catch { /* the fields fall back to carrier default */ }
 });
 
 const savingSpeech = ref(false);
