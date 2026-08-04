@@ -45,7 +45,11 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
   log(`originating to ${dial} via ${trunk} callerId ${opts.callerId || '(none)'}`);
   const chan = client.Channel();
   await chan.originate({
-    endpoint: `PJSIP/${dial}@${trunk}`,
+    // PJSIP/<number>@<endpoint> is what originate.ts uses and it does not route
+    // here — the channel is created and destroyed without ever connecting, which
+    // is why browser dials to Nigerian numbers have been failing too. The carrier
+    // dialplan's form is the one that rings.
+    endpoint: `PJSIP/${trunk}/sip:${dial}@${opts.host || 'sip.ruach.ng'}:5060`,
     app: 'telroi',
     appArgs: `otp,${code},${repeats}`,
     callerId: opts.callerId || 'Telroi',
