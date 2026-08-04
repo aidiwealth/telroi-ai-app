@@ -38,6 +38,7 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
   // first, then a full URI. PJSIP/<number>@<endpoint> is a different form and
   // routes nowhere, which is why the first attempts originated cleanly and no
   // phone rang.
+  log(`originating to ${dial} via ${trunk} host ${opts.host || 'sip.ruach.ng'} callerId ${opts.callerId || '(none)'}`);
   const chan = client.Channel();
   await chan.originate({
     endpoint: `PJSIP/${trunk}/sip:${dial}@${opts.host || 'sip.ruach.ng'}:5060`,
@@ -49,6 +50,10 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
     variables: { CODE: code, REPEATS: String(repeats) }
   });
 
+  // ARI resolves as soon as it accepts the request; the channel can still fail
+  // afterwards, which is why success here has meant silent phones.
+  chan.on('StasisStart' as any, () => log(`channel ${chan.id} entered Stasis`));
+  chan.on('ChannelDestroyed' as any, (_e: any, c: any) => log(`channel ${chan.id} destroyed: ${c?.cause_txt || 'unknown'}`));
   log(`placed to ${dial} via ${trunk} (channel ${chan.id})`);
   return { callid: chan.id };
 }
