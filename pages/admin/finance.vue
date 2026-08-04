@@ -83,7 +83,10 @@ const view = ref<'usd' | 'native'>('usd');
 const pending = ref(true);
 const kind = ref<'all' | 'credit' | 'debit'>('all');
 const category = ref<string>('all');
-const sandboxFilter = ref<'all' | 'exclude' | 'only'>('all');
+// Opens on real money. Simulated top-ups and calls are badged and still
+// reachable from the dropdown, but a total that quietly mixes the two is the
+// kind of figure somebody quotes in a meeting.
+const sandboxFilter = ref<'all' | 'exclude' | 'only'>('exclude');
 const exportUrl = computed(() => {
   const p = new URLSearchParams();
   if (kind.value !== 'all') p.set('kind', kind.value);
