@@ -21,12 +21,36 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
   // Kamailio or the carrier API) executes the dial + plays the TTS prompt.
   // The request shape below is what our gateway bridge consumes.
   try {
-    const ref = `otp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-    // NOTE: the live bridge call happens here against `creds.gateway`. In this
-    // build we construct the intent and return its ref; the bridge picks it up.
-    // (Audio cannot be synthesized/dialed without the live gateway + IP allowlist.)
-    void speech; void input;
-    return { ok: true, providerRef: ref, reason: 'queued_on_telroi_gateway' };
+    // This used to build a reference, discard the code and the destination, and
+    // report success — so every OTP was marked delivered and no phone rang. The
+    // control app now dials through our own carrier and the dialplan reads the
+    // digits from Asterisk's sound files, so the code never leaves the machine.
+    void speech;
+    // The same route and secret the SIP provisioning already uses — the control
+    // app listens on localhost, so it's reachable only through the nginx proxy.
+    const cfg = useRuntimeConfig() as any;
+    const base = (cfg.provisionAgentUrl || '').replace(/\/+$/, '');
+    const secret = cfg.provisionAgentSecret || '';
+    if (!base || !secret) return { ok: false, reason: 'The PBX provisioning agent is not configured, so OTP calls cannot be placed.' };
+
+    const res = await fetch(`${base}/otp-call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({
+        to: input.toNumber,
+        code: input.code,
+        trunk: cfg.otpTrunk || 'ruach-endpoint',
+        host: cfg.otpHost || 'sip.ruach.ng',
+        callerId: cfg.otpCallerId || '',
+        repeatCount: input.repeatCount,
+        timeoutSec: input.callTimeoutSec
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!res.ok) return { ok: false, reason: `Gateway returned ${res.status}` };
+    const d: any = await res.json().catch(() => ({}));
+    if (!d?.ok) return { ok: false, reason: d?.error || 'Gateway refused the call' };
+    return { ok: true, providerRef: d.callid || null };
   } catch (e: any) {
     return { ok: false, reason: e?.message || 'Telroi gateway error' };
   }
