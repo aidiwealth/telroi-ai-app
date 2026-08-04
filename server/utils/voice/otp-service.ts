@@ -81,6 +81,27 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
   const rate = await checkRate(tenantId, toNumber, p);
   if (!rate.ok) return { ok: false, error: `rate_limited:${rate.reason}`, retryAfterSeconds: rate.retryAfter };
 
+  // A sandbox workspace never dials. Every OTP call costs us a full carrier
+  // minute whatever its length, and a trial account with a live key would have
+  // run that up uncapped and unbilled — the endpoint's own sandbox branch only
+  // catches test keys, not sandbox workspaces.
+  const { isSandbox } = await import('../sandbox');
+  const sandboxed = await isSandbox(tenantId).catch(() => false);
+
+  // Live calls are charged per call, and refused before dialling rather than
+  // after: placing a call we can't bill for means paying a carrier out of pocket.
+  let chargeMinor = 0;
+  if (!sandboxed) {
+    const { getPricing, otpCostMinor } = await import('../pricing');
+    const { getOrCreateWallet } = await import('../wallet');
+    const pricing = await getPricing(tenantId);
+    const wallet = await getOrCreateWallet(tenantId);
+    chargeMinor = otpCostMinor(wallet.currency as any, pricing.ngnPerUsd, pricing.voiceOtpUsdMicro);
+    if (wallet.balanceMinor < chargeMinor) {
+      return { ok: false, error: 'insufficient_funds' };
+    }
+  }
+
   const code = genCode(len);
   const expiresAt = new Date(Date.now() + p.ttlSeconds * 1000);
   const [row] = await db.insert(schema.voiceOtps).values({
@@ -88,12 +109,25 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
     status: 'calling', maxAttempts: p.maxAttempts, expiresAt
   }).returning({ id: schema.voiceOtps.id });
 
-  const placed = await placeOtpCall({ toNumber, code, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec });
+  const placed = sandboxed
+    ? { ok: true as const, providerRef: `sbx_otp_${row.id}` }
+    : await placeOtpCall({ toNumber, code, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec });
   if (!placed.ok) {
     await db.update(schema.voiceOtps).set({ status: 'failed', reason: placed.reason }).where(eq(schema.voiceOtps.id, row.id));
     return { ok: false, id: row.id, status: 'failed', error: placed.reason };
   }
-  await db.update(schema.voiceOtps).set({ status: 'delivered', provider: placed.providerRef ? undefined : undefined, providerRef: placed.providerRef }).where(eq(schema.voiceOtps.id, row.id));
+  await db.update(schema.voiceOtps).set({ status: 'delivered', providerRef: placed.providerRef }).where(eq(schema.voiceOtps.id, row.id));
+
+  // Charged only once the call actually went out, keyed on the OTP id so a retry
+  // can't bill twice.
+  if (!sandboxed && chargeMinor > 0) {
+    try {
+      const { debit } = await import('../wallet');
+      await debit({ tenantId, amountMinor: chargeMinor, reason: 'voice_otp', reference: `otp_${row.id}`, meta: { to: toNumber } });
+    } catch (e) {
+      console.error('[otp] call placed but not charged:', (e as Error)?.message);
+    }
+  }
   return { ok: true, id: row.id, status: 'delivered', expiresAt: expiresAt.toISOString() };
 }
 

@@ -12,6 +12,7 @@ export async function getPricing(tenantId?: string) {
   const [p] = await db.select().from(schema.pricing).where(eq(schema.pricing.id, 'singleton')).limit(1);
   const base = p || {
     voiceMinuteUsdMinor: 1, voiceMinuteUsdMicro: VOICE_MICRO_USD_PER_MIN,
+    voiceOtpUsdMicro: 10000,
     channelMonthlyUsdMinor: 200, didMonthlyUsdMinor: 170,
     planStartupUsdMinor: 1000, planGrowthUsdMinor: 1500, ngnPerUsd: 1600
   } as any;
@@ -23,6 +24,9 @@ export async function getPricing(tenantId?: string) {
     ...base,
     voiceMinuteUsdMinor: ov.voiceMinuteUsdMinor ?? base.voiceMinuteUsdMinor,
     voiceMinuteUsdMicro: ov.voiceMinuteUsdMicro ?? base.voiceMinuteUsdMicro,
+    // Per OTP call rather than per minute — the carriers bill a whole minute for
+    // a fifteen-second call, so duration billing would lose money on every one.
+    voiceOtpUsdMicro: ov.voiceOtpUsdMicro ?? base.voiceOtpUsdMicro,
     channelMonthlyUsdMinor: ov.channelMonthlyUsdMinor ?? base.channelMonthlyUsdMinor,
     didMonthlyUsdMinor: ov.didMonthlyUsdMinor ?? base.didMonthlyUsdMinor
   };
@@ -46,6 +50,16 @@ export function voiceCostMinor(
   const rate = Number(microUsdPerMin) > 0 ? Number(microUsdPerMin) : VOICE_MICRO_USD_PER_MIN;
   const microUsd = Math.ceil(minutes * rate); // bill rounded-up partial minutes
   const usdMinor = microUsd / 10000; // micro-USD -> cents (1c = 10,000 micro)
+  return currency === 'USD'
+    ? Math.max(1, Math.round(usdMinor))
+    : Math.max(1, Math.round(usdMinor * ngnPerUsd));
+}
+
+/** What one OTP call costs the client, in their wallet's minor units. Flat per
+ *  call rather than per minute: the carriers bill a whole minute for a fifteen
+ *  second call, so charging by duration would lose money on every one. */
+export function otpCostMinor(currency: 'NGN' | 'USD', ngnPerUsd: number, microUsdPerCall: number): number {
+  const usdMinor = (Number(microUsdPerCall) > 0 ? Number(microUsdPerCall) : 10000) / 10000;
   return currency === 'USD'
     ? Math.max(1, Math.round(usdMinor))
     : Math.max(1, Math.round(usdMinor * ngnPerUsd));

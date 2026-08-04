@@ -889,6 +889,10 @@ export const pricing = pgTable('pricing', {
   id: text('id').primaryKey().default('singleton'),
   // Whole cents can't express $0.0102, so airtime is priced in MICRO-USD and
   // voiceMinuteUsdMinor is kept only for display/back-compat. Billing reads micro.
+  // Charged per CALL rather than per minute: an OTP call runs fifteen seconds but
+  // the carriers bill a full minute, so charging by duration would lose money on
+  // every one. Micro like the airtime rate, since that's what billing reads.
+  voiceOtpUsdMicro: integer('voice_otp_usd_micro').notNull().default(10000),   // $0.01 ≈ ₦16
   voiceMinuteUsdMinor: integer('voice_minute_usd_minor').notNull().default(1),  // display only — do NOT bill from this
   voiceMinuteUsdMicro: integer('voice_minute_usd_micro').notNull().default(10200),  // $0.0102
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor').notNull().default(200), // $2.00
@@ -1022,6 +1026,7 @@ export const pricingOverrides = pgTable('pricing_overrides', {
   tenantId: uuid('tenant_id').primaryKey().references(() => tenants.id, { onDelete: 'cascade' }),
   voiceMinuteUsdMinor: integer('voice_minute_usd_minor'),          // legacy, unused for billing
   voiceMinuteUsdMicro: integer('voice_minute_usd_micro'),          // the one billing honours
+  voiceOtpUsdMicro: integer('voice_otp_usd_micro'),               // per OTP call, not per minute
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor'),
   didMonthlyUsdMinor: integer('did_monthly_usd_minor'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
