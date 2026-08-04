@@ -135,7 +135,10 @@ async function reload() {
   pending.value = true;
   try {
     const res = await api.get<{ calls: TelroiCall[] }>('/api/voice/calls', { period: filters.period, limit: 500 });
-    calls.value = res.calls || [];
+    // Verification calls count towards the dashboard's volume but don't belong
+    // here — a few million of them would bury the conversations this page is
+    // for, and they have their own view under Voice.
+    calls.value = (res.calls || []).filter((c: any) => !c.otp);
   } catch (e: any) { toast.err(e.message); }
   finally { pending.value = false; }
 }

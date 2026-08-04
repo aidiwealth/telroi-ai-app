@@ -85,7 +85,33 @@ export default defineEventHandler(async (event) => {
         reason: (e.raw as any)?.reason || undefined,
         local: true
       }));
-    const merged = [...localCalls, ...(calls as any[])]
+    // Verification calls count as calls. A workspace sending nothing but OTP was
+    // showing an empty dashboard while its wallet drained — the traffic was real,
+    // it just lived in another table. Marked so the call log can leave them out:
+    // a few million of these would bury the conversations somebody reviews.
+    let otpCalls: any[] = [];
+    try {
+      const otps = await db.select().from(schema.voiceOtps)
+        .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since)))
+        .orderBy(desc(schema.voiceOtps.createdAt)).limit(500);
+      otpCalls = otps.map((o) => ({
+        uid: `otp_${o.id}`,
+        type: 'out',
+        status: o.status === 'failed' ? 'Failed' : 'Delivered',
+        client: o.toNumber,
+        destination: o.toNumber,
+        user: undefined,
+        start: (o.createdAt as Date)?.toISOString?.() || String(o.createdAt),
+        wait: 0,
+        duration: 0,
+        failed: o.status === 'failed',
+        reason: o.reason || undefined,
+        local: true,
+        otp: true
+      }));
+    } catch { /* the log is still worth showing without them */ }
+
+    const merged = [...otpCalls, ...localCalls, ...(calls as any[])]
       .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
     await resolveAgentNames(merged);
     return { calls: merged };
