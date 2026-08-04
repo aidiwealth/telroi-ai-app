@@ -108,8 +108,15 @@ export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCa
         client_state: Buffer.from(`otp:${input.otpId || ''}`).toString('base64')
       })
     });
-    if (!res.ok) return { ok: false, reason: `Telnyx error ${res.status}` };
+    if (!res.ok) {
+      // The body says what they objected to — a bad connection id or a from-number
+      // that isn't on the app. Without it this was just a number.
+      const body = await res.text().catch(() => '');
+      console.error(`[otp-telnyx] ${res.status}: ${body.slice(0, 300)}`);
+      return { ok: false, reason: `Telnyx error ${res.status}` };
+    }
     const d: any = await res.json();
+    console.log(`[otp-telnyx] placed ${d?.data?.call_control_id || '(no id)'}`);
     return { ok: true, providerRef: d?.data?.call_control_id };
   }
   if (vendor === 'vonage') {
