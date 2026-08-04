@@ -21,6 +21,12 @@ export default defineNuxtConfig({
     encryptionKey: process.env.ENCRYPTION_KEY || '', // 32-byte base64
     provisionAgentUrl: process.env.PROVISION_AGENT_URL || '',
     provisionAgentSecret: process.env.PROVISION_AGENT_SECRET || '',
+    // Voice OTP: which trunk the calls leave on and what number they present.
+    // Ruach's own dialplan refuses a call with no caller id, and a recipient
+    // seeing nothing is unlikely to answer a verification call.
+    otpTrunk: process.env.OTP_TRUNK || 'ruach-endpoint',
+    otpHost: process.env.OTP_HOST || 'sip.ruach.ng',
+    otpCallerId: process.env.OTP_CALLER_ID || '',
     internalSecret: process.env.TELROI_INTERNAL_SECRET || process.env.PROVISION_AGENT_SECRET || '',
     emailProvider: process.env.EMAIL_PROVIDER || 'resend', // resend (default) | console | termii
     resendApiKey: process.env.RESEND_API_KEY || '',
