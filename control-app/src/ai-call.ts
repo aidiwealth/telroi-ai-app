@@ -130,10 +130,7 @@ export interface AiCallOptions {
   callId?: string;
   escalateAfterSec?: number; // >0 = auto-escalate to a human after this many seconds
   log: Logger;
-  // The second argument is a department the caller named — the AI knows which
-  // teams exist and hands one back when it's clear, so the handoff can ring that
-  // team rather than whatever single target the VAN is configured with.
-  onTransfer?: (transferTo: string | null, department?: string | null) => Promise<void>;
+  onTransfer?: (transferTo: string | null) => Promise<void>;
   onEnd?: (turns: number) => void;
 }
 
@@ -198,9 +195,9 @@ export async function runAiCall(opts: AiCallOptions): Promise<void> {
     }
 
     if (turn.action === 'transfer') {
-      log(`ai: transfer requested -> ${(turn as any).transferDepartment ? 'department ' + (turn as any).transferDepartment : (turn.transferTo || 'default')}`);
+      log(`ai: transfer requested -> ${turn.transferTo || 'default'}`);
       await finalizeCall(tenantId, callId);
-      if (opts.onTransfer) { await opts.onTransfer(turn.transferTo || null, (turn as any).transferDepartment || null); return; }
+      if (opts.onTransfer) { await opts.onTransfer(turn.transferTo || null); return; }
       break;
     }
     if (turn.action === 'hangup') { log('ai: hangup requested'); break; }

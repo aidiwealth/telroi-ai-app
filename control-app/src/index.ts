@@ -16,7 +16,7 @@
 
 import Ari from 'ari-client';
 import { config } from './config.ts';
-import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveTenantEndpoints, resolveDepartmentEndpoints, resolveDepartmentByName, cacheReady, cacheStats } from './cache.ts';
+import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveTenantEndpoints, resolveDepartmentEndpoints, cacheReady, cacheStats } from './cache.ts';
 import { logCall } from './call-log.ts';
 import { installLogCapture } from './log-buffer.ts';
 import { closeDb } from './db.ts';
@@ -484,34 +484,7 @@ async function main() {
             callId: chId,
             escalateAfterSec: route.routeEscalateAfter || 0,
             log: (m: string) => log(`  [ai ${chId}] ${m}`),
-            onTransfer: async (transferTo: string | null, department?: string | null) => {
-              // A named department wins over the configured escalation: the caller
-              // said what they needed, and ringing everyone instead is a worse
-              // answer than the one they asked for.
-              if (department) {
-                const members = resolveDepartmentByName(route.tenantId, department);
-                if (members.length) {
-                  const live = await filterLiveEndpoints(client, members, log);
-                  log(`  [ai ${chId}] transfer to department "${department}" - ${live.length} live of ${members.length}`);
-                  if (live.length) {
-                    let dr: { answered: boolean } = { answered: false };
-                    try {
-                      dr = await bridgeToDepartment({
-                        client, caller: channel, endpoints: live.map((u) => `PJSIP/${u}`),
-                        callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
-                        onStatus: () => { /* the bridge logs its own */ }
-                      });
-                    } catch (err) {
-                      log(`  [ai ${chId}] department bridge failed: ${(err as Error)?.message}`);
-                    }
-                    if (dr.answered) return;
-                  }
-                  log(`  [ai ${chId}] department "${department}" unavailable - falling back`);
-                } else {
-                  log(`  [ai ${chId}] no department matched "${department}" - falling back`);
-                }
-              }
-
+            onTransfer: async (transferTo: string | null) => {
               // Escalation is CLIENT-CONFIGURED via route.routeEscalateMode:
               //   none      -> graceful message, no handoff (never a bare drop)
               //   endpoint  -> ring one connected endpoint (route.routeEscalateTo = endpoint id)

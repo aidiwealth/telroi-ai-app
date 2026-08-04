@@ -47,8 +47,6 @@ interface CacheState {
   tenantEndpoints: Map<string, string[]>;  // tenantId -> [sip_username] for ring_all
   // departmentId -> [sip_username, ...]  (members who can take calls; ring-all)
   departmentEndpoints: Map<string, string[]>;
-  // Tenant -> its departments, so a name from the AI can find an id.
-  departmentNames: Map<string, { id: string; name: string }[]>;
   // tenantIds that reject anonymous (no caller-id) inbound calls
   blockAnonymous: Set<string>;
   loadedAt: number;
@@ -62,7 +60,6 @@ let state: CacheState = {
   sipEndpoints: new Map(),
   tenantEndpoints: new Map(),
   departmentEndpoints: new Map(),
-  departmentNames: new Map(),
   blockAnonymous: new Set(),
   loadedAt: 0,
   ok: false
@@ -205,24 +202,12 @@ export async function refreshCache(): Promise<void> {
       deptEndpoints.set(m.departmentId, arr);
     }
 
-    // Department names, so a transfer can name a team rather than an id. The AI
-    // is told the names and hands one back; without this the id is the only key
-    // and the model has no way to know it.
-    const deptNames = new Map<string, { id: string; name: string }[]>();
-    const depts = await db.select({ id: schema.departments.id, name: schema.departments.name, tenantId: schema.departments.tenantId })
-      .from(schema.departments);
-    for (const d of depts) {
-      const arr = deptNames.get(d.tenantId) || [];
-      arr.push({ id: d.id, name: d.name });
-      deptNames.set(d.tenantId, arr);
-    }
-
     // tenants that block anonymous (no caller-id) inbound calls.
     const blockAnonymous = new Set<string>();
     const tenantRows = await db.select({ id: schema.tenants.id, blockAnonymous: schema.tenants.blockAnonymous }).from(schema.tenants);
     for (const t of tenantRows) { if (t.blockAnonymous) blockAnonymous.add(t.id); }
 
-    state = { numbers, blacklist, agentGreetings, sipEndpoints, tenantEndpoints, departmentEndpoints: deptEndpoints, departmentNames: deptNames, blockAnonymous, loadedAt: Date.now(), ok: true };
+    state = { numbers, blacklist, agentGreetings, sipEndpoints, tenantEndpoints, departmentEndpoints: deptEndpoints, blockAnonymous, loadedAt: Date.now(), ok: true };
     log(`refreshed: ${numbers.size} numbers, ${blacklist.size} blacklist entries, ${agentGreetings.size} agent greetings, ${sipEndpoints.size} sip endpoints, ${deptEndpoints.size} departments`);
   } catch (err) {
     // On failure, keep the previous (stale) cache rather than wiping it — a brief
@@ -275,22 +260,6 @@ export function resolveDepartmentEndpoints(departmentId: string | null): string[
   if (!departmentId) return [];
   const logins = state.departmentEndpoints.get(departmentId) || [];
   return logins.map((u) => `PJSIP/${u}`);
-}
-
-/** Endpoints for a department named by the AI rather than by id. Matching is
- *  forgiving because a model given "Billing" may hand back "billing team" or
- *  "the Billing department" — refusing those would send the caller to the
- *  default escalation for a spelling difference. */
-export function resolveDepartmentByName(tenantId: string | null, name: string | null): string[] {
-  if (!tenantId || !name) return [];
-  const tidy = (v: string) => v.toLowerCase().replace(/\b(the|team|department|dept|support)\b/g, '').replace(/[^a-z0-9]/g, '');
-  const want = tidy(name);
-  if (!want) return [];
-  const list = state.departmentNames.get(tenantId) || [];
-  const hit = list.find((d) => tidy(d.name) === want)
-    || list.find((d) => tidy(d.name).includes(want) || want.includes(tidy(d.name)));
-  if (!hit) return [];
-  return state.departmentEndpoints.get(hit.id) || [];
 }
 
 export function cacheReady(): boolean {
