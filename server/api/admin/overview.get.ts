@@ -69,11 +69,16 @@ export default defineEventHandler(async (event) => {
   const [numSold] = await db.select({ c: sql<number>`count(*)::int` }).from(schema.numberSubscriptions).where(eq(schema.numberSubscriptions.status, 'active'));
   const [numAvail] = await db.select({ c: sql<number>`count(*)::int` }).from(schema.numberInventory).where(eq(schema.numberInventory.status, 'available'));
 
-  // Wallet float (sum of balances) by currency.
+  // Wallet float (sum of balances) by currency — live workspaces only. A sandbox
+  // wallet holds simulated top-ups nobody paid for, and summing those alongside
+  // real balances gave a float figure roughly twice what we actually hold.
   const floatRows = await db.select({
     currency: schema.wallets.currency,
     total: sql<number>`coalesce(sum(${schema.wallets.balanceMinor}),0)::bigint`
-  }).from(schema.wallets).groupBy(schema.wallets.currency);
+  }).from(schema.wallets)
+    .innerJoin(schema.tenants, eq(schema.tenants.id, schema.wallets.tenantId))
+    .where(eq(schema.tenants.sandboxMode, false))
+    .groupBy(schema.wallets.currency);
   const walletFloat: Record<string, number> = {};
   for (const r of floatRows) walletFloat[r.currency] = Number(r.total);
 
