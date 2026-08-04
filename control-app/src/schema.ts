@@ -70,6 +70,18 @@ export const memberships = pgTable('memberships', {
   pbxLogin: text('pbx_login')
 });
 
+// Minimal: the department itself. Only the name is needed here — the AI is told
+// which teams exist and hands one back by name, so the cache needs to turn that
+// name into an id. Its absence is what broke the refresh: a query against a
+// table this schema didn't declare threw, and one catch around the whole refresh
+// meant numbers and endpoints went with it.
+export const departments = pgTable('departments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description')
+});
+
 // Minimal: a user's membership in a department, with the can-take-calls flag.
 export const departmentMembers = pgTable('department_members', {
   id: uuid('id').primaryKey().defaultRandom(),

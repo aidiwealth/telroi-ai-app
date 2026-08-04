@@ -47,6 +47,7 @@ interface CacheState {
   tenantEndpoints: Map<string, string[]>;  // tenantId -> [sip_username] for ring_all
   // departmentId -> [sip_username, ...]  (members who can take calls; ring-all)
   departmentEndpoints: Map<string, string[]>;
+  departmentNames: Map<string, { id: string; name: string }[]>;
   // tenantIds that reject anonymous (no caller-id) inbound calls
   blockAnonymous: Set<string>;
   loadedAt: number;
@@ -60,6 +61,7 @@ let state: CacheState = {
   sipEndpoints: new Map(),
   tenantEndpoints: new Map(),
   departmentEndpoints: new Map(),
+  departmentNames: new Map(),
   blockAnonymous: new Set(),
   loadedAt: 0,
   ok: false
@@ -92,6 +94,15 @@ export async function refreshCache(): Promise<void> {
     const agentGreetings = new Map<string, string>();
     const sipEndpoints = new Map<string, string>();
     const tenantEndpoints = new Map<string, string[]>();
+
+    // Each optional lookup runs through this: one bad query then costs the thing
+    // it was for, not the whole cache. A missing table in a department query took
+    // numbers, greetings and endpoints down with it, and calls were rejected for
+    // a feature nobody was using yet.
+    const optional = async <T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> => {
+      try { return await fn(); }
+      catch (e) { console.error(`[cache] ${label} failed (continuing without it):`, (e as Error)?.message || e); return fallback; }
+    };
 
     // number_subscriptions — DID -> client + routing. Only active subs matter.
     const subs = await db.select({
@@ -202,12 +213,27 @@ export async function refreshCache(): Promise<void> {
       deptEndpoints.set(m.departmentId, arr);
     }
 
+    // Department names, so a transfer can name a team rather than an id: the AI
+    // is told the names and hands one back. Through `optional` because this is a
+    // nicety — losing it should cost department transfers, nothing else.
+    const deptNames = await optional('departments', async () => {
+      const m = new Map<string, { id: string; name: string }[]>();
+      const rows = await db.select({ id: schema.departments.id, name: schema.departments.name, tenantId: schema.departments.tenantId })
+        .from(schema.departments);
+      for (const d of rows) {
+        const arr = m.get(d.tenantId) || [];
+        arr.push({ id: d.id, name: d.name });
+        m.set(d.tenantId, arr);
+      }
+      return m;
+    }, new Map<string, { id: string; name: string }[]>());
+
     // tenants that block anonymous (no caller-id) inbound calls.
     const blockAnonymous = new Set<string>();
     const tenantRows = await db.select({ id: schema.tenants.id, blockAnonymous: schema.tenants.blockAnonymous }).from(schema.tenants);
     for (const t of tenantRows) { if (t.blockAnonymous) blockAnonymous.add(t.id); }
 
-    state = { numbers, blacklist, agentGreetings, sipEndpoints, tenantEndpoints, departmentEndpoints: deptEndpoints, blockAnonymous, loadedAt: Date.now(), ok: true };
+    state = { numbers, blacklist, agentGreetings, sipEndpoints, tenantEndpoints, departmentEndpoints: deptEndpoints, departmentNames: deptNames, blockAnonymous, loadedAt: Date.now(), ok: true };
     log(`refreshed: ${numbers.size} numbers, ${blacklist.size} blacklist entries, ${agentGreetings.size} agent greetings, ${sipEndpoints.size} sip endpoints, ${deptEndpoints.size} departments`);
   } catch (err) {
     // On failure, keep the previous (stale) cache rather than wiping it — a brief
@@ -260,6 +286,20 @@ export function resolveDepartmentEndpoints(departmentId: string | null): string[
   if (!departmentId) return [];
   const logins = state.departmentEndpoints.get(departmentId) || [];
   return logins.map((u) => `PJSIP/${u}`);
+}
+
+/** Endpoints for a department the AI named. Matching is forgiving: a model told
+ *  "Billing" may hand back "billing team", and sending the caller to the default
+ *  escalation over a word is a worse answer than the one they asked for. */
+export function resolveDepartmentByName(tenantId: string | null, name: string | null): string[] {
+  if (!tenantId || !name) return [];
+  const tidy = (v: string) => v.toLowerCase().replace(/\b(the|team|department|dept)\b/g, '').replace(/[^a-z0-9]/g, '');
+  const want = tidy(name);
+  if (!want) return [];
+  const list = state.departmentNames.get(tenantId) || [];
+  const hit = list.find((d) => tidy(d.name) === want)
+    || list.find((d) => tidy(d.name).includes(want) || want.includes(tidy(d.name)));
+  return hit ? (state.departmentEndpoints.get(hit.id) || []) : [];
 }
 
 export function cacheReady(): boolean {
