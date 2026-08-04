@@ -124,8 +124,8 @@
 
       <div class="sp-vendor">
         <label class="ad-field"><span>International calls — vendor</span>
-          <select v-model="sp.otpVoiceVendor" class="ad-input">
-            <option value="telroi">Telroi (own voice infra)</option>
+          <select v-model="sp.otpIntlVendor" class="ad-input">
+            <option value="">Not set — international OTP unavailable</option>
             <option value="twilio">Twilio</option>
             <option value="telnyx">Telnyx</option>
             <option value="vonage">Vonage Verify</option>
@@ -133,8 +133,8 @@
           </select>
           <span class="ad-hint">{{ cfg.otpVoiceVendorCredsSet ? '✓ Credentials stored' : 'Telroi uses your carrier gateway; external vendors need credentials below.' }}</span>
         </label>
-        <div v-if="sp.otpVoiceVendor !== 'telroi'" class="sp-creds">
-          <template v-if="sp.otpVoiceVendor === 'twilio'">
+        <div v-if="sp.otpIntlVendor && sp.otpIntlVendor !== 'telroi'" class="sp-creds">
+          <template v-if="sp.otpIntlVendor === 'twilio'">
             <input v-model="sp.otpCreds.accountSid" class="ad-input mono" placeholder="Account SID" />
             <input v-model="sp.otpCreds.authToken" type="password" class="ad-input mono" placeholder="Auth token" />
             <select v-model="sp.otpCreds.from" class="ad-input">
@@ -142,7 +142,7 @@
               <option v-for="n in intlNumbers.twilio" :key="n" :value="n">{{ n }}</option>
             </select>
           </template>
-          <template v-else-if="sp.otpVoiceVendor === 'telnyx'">
+          <template v-else-if="sp.otpIntlVendor === 'telnyx'">
             <input v-model="sp.otpCreds.apiKey" type="password" class="ad-input mono" placeholder="API key" />
             <input v-model="sp.otpCreds.connectionId" class="ad-input mono" placeholder="Connection ID" />
             <select v-model="sp.otpCreds.from" class="ad-input">
@@ -150,11 +150,11 @@
               <option v-for="n in intlNumbers.telnyx" :key="n" :value="n">{{ n }}</option>
             </select>
           </template>
-          <template v-else-if="sp.otpVoiceVendor === 'vonage'">
+          <template v-else-if="sp.otpIntlVendor === 'vonage'">
             <input v-model="sp.otpCreds.apiKey" class="ad-input mono" placeholder="API key" />
             <input v-model="sp.otpCreds.apiSecret" type="password" class="ad-input mono" placeholder="API secret" />
           </template>
-          <template v-else-if="sp.otpVoiceVendor === 'custom'">
+          <template v-else-if="sp.otpIntlVendor === 'custom'">
             <input v-model="sp.otpCreds.webhookUrl" class="ad-input mono" placeholder="https://your-otp-service/call" />
             <input v-model="sp.otpCreds.authHeader" type="password" class="ad-input mono" placeholder="Authorization header (optional)" />
           </template>
@@ -820,6 +820,10 @@ async function saveSpeech() {
   try {
     const body: any = {
       otpVoiceVendor: sp.otpVoiceVendor, ttsVendor: sp.ttsVendor, sttVendor: sp.sttVendor,
+      // Named here too: this payload lists its fields by hand, so anything added
+      // to the form, the schema and the column still saves as nothing until it
+      // appears on this line. Third time on this page.
+      otpIntlVendor: sp.otpIntlVendor, otpNgTrunk: sp.otpNgTrunk, otpNgCallerId: sp.otpNgCallerId,
       otpPolicy: { ...sp.otpPolicy }
     };
     // Only send creds blobs that were actually filled in (so a blank form never wipes stored creds).
