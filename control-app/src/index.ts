@@ -154,6 +154,7 @@ async function main() {
 
   // -- Handle each call entering Stasis --
   client.on('StasisStart', async (event, channel) => {
+    console.log(new Date().toISOString(), '[stasis] entered:', channel.id, 'args:', JSON.stringify(event.args || []));
     // Outbound bridge legs we originate (the callee side) enter Stasis too,
     // marked with appArgs 'dialed'. The bridge module handles those — do NOT
     // re-route them as if they were inbound callers.
