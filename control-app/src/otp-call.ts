@@ -38,22 +38,26 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
   // first, then a full URI. PJSIP/<number>@<endpoint> is a different form and
   // routes nowhere, which is why the first attempts originated cleanly and no
   // phone rang.
-  // Into Stasis, as originate.ts does — a dialplan context works from the CLI
-  // but originating into one through ARI accepted the request and did nothing.
-  // The prompt and digits are played here instead, which also means the code
-  // never needs to reach the dialplan as a channel variable.
   log(`originating to ${dial} via ${trunk} callerId ${opts.callerId || '(none)'}`);
   const chan = client.Channel();
   await chan.originate({
-    // PJSIP/<number>@<endpoint> is what originate.ts uses and it does not route
-    // here — the channel is created and destroyed without ever connecting, which
-    // is why browser dials to Nigerian numbers have been failing too. The carrier
-    // dialplan's form is the one that rings.
+    // The form the carrier dialplan uses, which is the one that routes — and the
+    // answered leg lands in otp-out rather than Stasis, because an originated
+    // channel with app=telroi never arrived there.
     endpoint: `PJSIP/${trunk}/sip:${dial}@${opts.host || 'sip.ruach.ng'}:5060`,
-    app: 'telroi',
-    appArgs: `otp,${code},${repeats}`,
+    context: 'otp-out',
+    extension: 's',
+    priority: 1,
     callerId: opts.callerId || 'Telroi',
-    timeout
+    timeout,
+    variables: {
+      CODE: code,
+      REPEATS: String(repeats),
+      OTP_DEST: dial,
+      OTP_TRUNK: trunk,
+      OTP_HOST: opts.host || 'sip.ruach.ng',
+      OTP_CID: opts.callerId || ''
+    }
   });
 
   // ARI resolves as soon as it accepts the request; the channel can still fail
