@@ -157,6 +157,31 @@ async function main() {
     // Outbound bridge legs we originate (the callee side) enter Stasis too,
     // marked with appArgs 'dialed'. The bridge module handles those — do NOT
     // re-route them as if they were inbound callers.
+    // A voice OTP: answer, read the code, hang up. Nothing to bridge and nobody
+    // to route to — the whole call is the announcement. Digits are spoken from
+    // Asterisk's own sound files, so the code never reaches a third party.
+    if (event.args?.[0] === 'otp') {
+      const code = String(event.args?.[1] || '');
+      const repeats = Math.max(1, Math.min(Number(event.args?.[2]) || 2, 5));
+      log(`  [otp ${chId}] answered — reading ${code.length} digits, ${repeats}x`);
+      try {
+        await channel.answer();
+        await new Promise((r) => setTimeout(r, 800));
+        for (let i = 0; i < repeats; i++) {
+          const p1 = await channel.play({ media: 'sound:telroi-vcode' });
+          await new Promise<void>((done) => p1.once('PlaybackFinished' as any, () => done()));
+          const p2 = await channel.play({ media: `digits:${code.split('').join('')}` });
+          await new Promise<void>((done) => p2.once('PlaybackFinished' as any, () => done()));
+          await new Promise((r) => setTimeout(r, 600));
+        }
+      } catch (e) {
+        log(`  [otp ${chId}] failed: ${(e as Error)?.message}`);
+      } finally {
+        try { await channel.hangup(); } catch { /* already gone */ }
+      }
+      return;
+    }
+
     if (event.args?.[0] === 'dialed' || event.args?.[0] === 'agent') {
       return;
     }

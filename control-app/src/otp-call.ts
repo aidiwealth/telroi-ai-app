@@ -38,16 +38,18 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
   // first, then a full URI. PJSIP/<number>@<endpoint> is a different form and
   // routes nowhere, which is why the first attempts originated cleanly and no
   // phone rang.
-  log(`originating to ${dial} via ${trunk} host ${opts.host || 'sip.ruach.ng'} callerId ${opts.callerId || '(none)'}`);
+  // Into Stasis, as originate.ts does — a dialplan context works from the CLI
+  // but originating into one through ARI accepted the request and did nothing.
+  // The prompt and digits are played here instead, which also means the code
+  // never needs to reach the dialplan as a channel variable.
+  log(`originating to ${dial} via ${trunk} callerId ${opts.callerId || '(none)'}`);
   const chan = client.Channel();
   await chan.originate({
-    endpoint: `PJSIP/${trunk}/sip:${dial}@${opts.host || 'sip.ruach.ng'}:5060`,
-    context: 'otp-play',
-    extension: 's',
-    priority: 1,
+    endpoint: `PJSIP/${dial}@${trunk}`,
+    app: 'telroi',
+    appArgs: `otp,${code},${repeats}`,
     callerId: opts.callerId || 'Telroi',
-    timeout,
-    variables: { CODE: code, REPEATS: String(repeats) }
+    timeout
   });
 
   // ARI resolves as soon as it accepts the request; the channel can still fail
