@@ -137,7 +137,30 @@ export default defineEventHandler(async (event) => {
     '- End your turn. Do not ask multiple questions or stack a question onto a long answer.',
     'A caller cannot skim audio. Long replies waste their time and feel robotic. Be brief.'
   ].join('\n');
-  const groundedPrompt = (agent.systemPrompt || '') + flowInstructions + kbContext + voiceStyle;
+  // The departments this workspace actually has, so a caller asking about their
+  // bill reaches billing without being read a menu. Naming them in the marker
+  // means the handoff knows where to ring rather than falling to one default.
+  let deptContext = '';
+  try {
+    const { eq } = await import('drizzle-orm');
+    const { useDb, schema } = await import('~/server/db');
+    const rows = await useDb().select({ name: schema.departments.name, desc: schema.departments.description })
+      .from(schema.departments).where(eq(schema.departments.tenantId, tenantId));
+    if (rows.length) {
+      deptContext = [
+        '',
+        'TRANSFERRING TO A DEPARTMENT:',
+        'These teams can take the call:',
+        ...rows.map((d) => `- ${d.name}${d.desc ? ': ' + d.desc : ''}`),
+        'If what they need clearly belongs to one, end your reply with [transfer:NAME]',
+        'using the exact name above — do not ask which team, you already know.',
+        'If they ask for a person generally and it is not clear which team, ask once',
+        'which of these they need, then transfer. If still unclear, use [transfer].'
+      ].join('\n');
+    }
+  } catch { /* no departments — the plain [transfer] path still works */ }
+
+  const groundedPrompt = (agent.systemPrompt || '') + flowInstructions + kbContext + deptContext + voiceStyle;
   const _llmT0 = Date.now();
   // Hard cap for voice: prompt rules alone weren't holding (replies still ran
   // 180+ chars / 12s of speech). ~80 tokens is roughly 60 words — enough for a
@@ -148,7 +171,16 @@ export default defineEventHandler(async (event) => {
 
   let action: 'continue' | 'hangup' | 'transfer' = 'continue';
   let clean = reply;
-  if (/\[transfer\]/i.test(reply)) { action = 'transfer'; clean = reply.replace(/\[transfer\]/ig, '').trim(); }
+  // [transfer:billing] names a team; [transfer] alone falls back to the VAN's
+  // configured target as before.
+  let transferDept: string | null = null;
+  const deptMatch = reply.match(/\[transfer:([^\]]+)\]/i);
+  if (deptMatch) {
+    action = 'transfer';
+    transferDept = deptMatch[1].trim();
+    clean = reply.replace(/\[transfer:[^\]]+\]/ig, '').trim();
+  }
+  else if (/\[transfer\]/i.test(reply)) { action = 'transfer'; clean = reply.replace(/\[transfer\]/ig, '').trim(); }
   else if (/\[end\]/i.test(reply)) { action = 'hangup'; clean = reply.replace(/\[end\]/ig, '').trim(); }
 
   // Always announce a handoff so the caller isn't transferred in silence. If the
@@ -170,5 +202,16 @@ export default defineEventHandler(async (event) => {
     managed: llm.managed || !agent.ttsConnId || !agent.sttConnId,
     usage: { sttSeconds, llmInputTokens: inputTokens, llmOutputTokens: outputTokens, ttsChars: clean.length }
   });
-  return { reply: clean, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [...nextHistory, { role: 'assistant', content: clean }], action, transferTo: action === 'transfer' ? ((agent.fallback as any)?.transferTo || null) : undefined };
+  return {
+    reply: clean,
+    audioBase64: tts ? tts.audio.toString('base64') : null,
+    audioContentType: tts?.contentType || null,
+    history: [...nextHistory, { role: 'assistant', content: clean }],
+    action,
+    transferTo: action === 'transfer' ? ((agent.fallback as any)?.transferTo || null) : undefined,
+    // Which team, when the caller made it clear. The bridge rings that
+    // department's members by its own strategy; without one it falls back to
+    // whatever the VAN's escalation is set to.
+    transferDepartment: action === 'transfer' ? transferDept : undefined
+  };
 });

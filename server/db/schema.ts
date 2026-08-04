@@ -245,6 +245,12 @@ export const tenants = pgTable('tenants', {
   // What this workspace may spend on AI during its trial before the wallet takes
   // over. Null falls back to the platform default.
   trialAiAllowanceUsdMinor: integer('trial_ai_allowance_usd_minor'),
+  // OTP frequency, per tenant. One policy can't fit both a consumer app
+  // protecting its users and a reseller whose customers legitimately re-request
+  // a code after mistyping their number twice.
+  otpRateMaxPerHour: integer('otp_rate_max_per_hour'),
+  otpRateMaxPerDay: integer('otp_rate_max_per_day'),
+  otpRateCooldownSeconds: integer('otp_rate_cooldown_seconds'),
   trialCallMaxSeconds: integer('trial_call_max_seconds'),
   sandboxAgentCap: integer('sandbox_agent_cap'),
   // Internal Telroi workspaces (e.g. the support/CS calling workspace) are NOT

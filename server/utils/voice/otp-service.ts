@@ -16,18 +16,29 @@ export interface OtpPolicy {
   rateMaxPerHour: number; rateMaxPerDay: number; rateCooldownSeconds: number;
 }
 
-export async function otpPolicy(): Promise<OtpPolicy> {
+export async function otpPolicy(tenantId?: string): Promise<OtpPolicy> {
   const db = useDb();
   const [s] = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+  // The frequency caps are the tenant's if they have them: the platform default
+  // is set for consumers being protected, not for a reseller whose users
+  // legitimately ask for another code.
+  let ov: any = null;
+  if (tenantId) {
+    [ov] = await db.select({
+      h: schema.tenants.otpRateMaxPerHour,
+      d: schema.tenants.otpRateMaxPerDay,
+      c: schema.tenants.otpRateCooldownSeconds
+    }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  }
   return {
     codeLength: s?.otpCodeLength ?? 6,
     ttlSeconds: s?.otpTtlSeconds ?? 300,
     maxAttempts: s?.otpMaxAttempts ?? 3,
     callTimeoutSec: s?.otpCallTimeoutSeconds ?? 45,
     repeatCount: s?.otpRepeatCount ?? 2,
-    rateMaxPerHour: s?.otpRateMaxPerHour ?? 5,
-    rateMaxPerDay: s?.otpRateMaxPerDay ?? 20,
-    rateCooldownSeconds: s?.otpRateCooldownSeconds ?? 60
+    rateMaxPerHour: ov?.h ?? s?.otpRateMaxPerHour ?? 5,
+    rateMaxPerDay: ov?.d ?? s?.otpRateMaxPerDay ?? 20,
+    rateCooldownSeconds: ov?.c ?? s?.otpRateCooldownSeconds ?? 60
   };
 }
 
@@ -73,7 +84,7 @@ async function checkRate(tenantId: string, toNumber: string, p: OtpPolicy): Prom
 
 // Send a voice OTP: generate, rate-check, place the call, persist (hashed).
 export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string } = {}): Promise<SendResult> {
-  const p = await otpPolicy();
+  const p = await otpPolicy(tenantId);
   const db = useDb();
 
   // A client may request a SHORTER-or-equal nothing; length is clamped to the
