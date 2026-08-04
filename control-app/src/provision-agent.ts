@@ -129,6 +129,35 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
       // POST /originate { agentEndpoint, to, trunk, callerId } -> { callid }
       // Click-to-call: ring the agent's device, then dial the destination out
       // through the named trunk and bridge them.
+      // POST /otp-call { to, code, trunk, prefix?, callerId?, repeatCount?, timeoutSec? }
+      // Dials a number and reads a code to whoever answers. No agent, no bridge.
+      if (req.method === 'POST' && req.url === '/otp-call') {
+        if (!ari) return send(res, 503, { ok: false, error: 'ARI not connected' });
+        const body = await readJson(req);
+        const to = String(body.to || '').trim();
+        const code = String(body.code || '').trim();
+        const trunk = String(body.trunk || '').trim();
+        if (!to || !code || !trunk) {
+          return send(res, 400, { ok: false, error: 'to, code and trunk are required' });
+        }
+        try {
+          const { placeOtpCall } = await import('./otp-call.ts');
+          const result = await placeOtpCall({
+            client: ari, to, code, trunk,
+            prefix: body.prefix ? String(body.prefix) : undefined,
+            callerId: body.callerId ? String(body.callerId).slice(0, 64) : undefined,
+            repeatCount: Number(body.repeatCount) || undefined,
+            timeoutSec: Number(body.timeoutSec) || undefined
+          });
+          // The code is deliberately absent from this line.
+          log(`otp placed to ${to} via ${trunk} (callid ${result.callid})`);
+          return send(res, 200, { ok: true, ...result });
+        } catch (e) {
+          log(`otp-call failed: ${(e as Error).message}`);
+          return send(res, 502, { ok: false, error: (e as Error).message });
+        }
+      }
+
       if (req.method === 'POST' && req.url === '/originate') {
         if (!ari) return send(res, 503, { ok: false, error: 'ARI not connected' });
         const body = await readJson(req);
