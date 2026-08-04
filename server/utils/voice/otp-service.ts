@@ -8,6 +8,7 @@ import { and, eq, gt, gte, sql } from 'drizzle-orm';
 import { useDb, schema } from '../../db';
 import { sha256 } from '../crypto';
 import { placeOtpCall } from './vendors';
+import { randomInt } from 'node:crypto';
 
 export interface OtpPolicy {
   codeLength: number; ttlSeconds: number; maxAttempts: number;
@@ -33,8 +34,9 @@ export async function otpPolicy(): Promise<OtpPolicy> {
 function genCode(len: number): string {
   // Cryptographically-random numeric code, no leading-zero bias avoidance needed
   // (leading zeros are fine for OTP — they're read digit by digit).
+  // Imported at the top rather than required here: the build is an ES module, so
+  // require threw at runtime and every OTP request came back a 500.
   let out = '';
-  const { randomInt } = require('node:crypto');
   for (let i = 0; i < len; i++) out += String(randomInt(0, 10));
   return out;
 }
