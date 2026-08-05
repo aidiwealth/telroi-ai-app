@@ -768,7 +768,13 @@ function syncOtpHost() {
   sp.otpNgHost = OTP_TRUNK_HOSTS[sp.otpNgTrunk] || '';
 }
 
-const ngNumbers = ref<string[]>([]);
+const ngRows = ref<any[]>([]);
+// Presenting a number from another carrier is refused, so the list follows the
+// trunk: choose Kasooko and only Kasooko numbers are offered.
+const ngNumbers = computed(() => {
+  const want = sp.otpNgTrunk === 'kasooko-endpoint' ? 'kasooko' : 'ruach';
+  return ngRows.value.filter((n) => n.provider === want).map((n) => n.telnum);
+});
 // Grouped by provider, because a from-number has to belong to whoever places the
 // call — Twilio can't present a Telnyx number, and a call that tries is refused
 // with an error nobody reads until the OTPs stop arriving.
@@ -777,7 +783,12 @@ onMounted(async () => {
   try {
     const r = await $fetch<any>('/api/admin/inventory');
     const rows: any[] = Array.isArray(r) ? r : (r?.items || r?.numbers || []);
-    ngNumbers.value = rows.map((n) => n.telnum || '').filter((n: string) => n.startsWith('+234'));
+    // Only numbers we currently hold on the chosen carrier. Inventory includes
+    // numbers returned to stock, and presenting one of those is refused —
+    // Kasooko answers "403 Source number blacklisted" directly and cause 41
+    // through its normal path, which reads like a carrier outage and isn't one.
+    ngRows.value = rows.filter((n: any) =>
+      String(n.telnum || '').startsWith('+234') && n.status === 'sold');
     intlNumbers.value = {
       twilio: rows.filter((n) => n.provider === 'twilio' && !String(n.telnum || '').startsWith('+234')).map((n) => n.telnum),
       telnyx: rows.filter((n) => n.provider === 'telnyx' && !String(n.telnum || '').startsWith('+234')).map((n) => n.telnum)
