@@ -23,6 +23,35 @@ export default defineEventHandler(async (event) => {
   }
 
   await db.delete(schema.platformAdmins).where(eq(schema.platformAdmins.id, id));
+
+  // Their calling goes with their access. Deleting only the admin row left the
+  // SIP endpoint registered and the person still in whatever departments they
+  // belonged to — so somebody who had left kept receiving support calls, and any
+  // softphone they'd configured kept working indefinitely.
+  try {
+    const { ensureSupportWorkspace } = await import('~/server/utils/support');
+    const { agentDeprovision } = await import('~/server/utils/provision-agent');
+    const ws = await ensureSupportWorkspace();
+
+    await db.delete(schema.departmentMembers)
+      .where(and(eq(schema.departmentMembers.tenantId, ws.tenantId), eq(schema.departmentMembers.userId, id)));
+
+    // Both halves matter: the row is what our routing reads, and the Asterisk
+    // endpoint is what a softphone registers against. Removing only the row
+    // leaves working credentials behind.
+    const eps = await db.select().from(schema.sipEndpoints)
+      .where(eq(schema.sipEndpoints.tenantId, ws.tenantId));
+    for (const ep of eps) {
+      if ((ep.meta as any)?.userId !== id || !ep.sipUsername) continue;
+      try { await agentDeprovision(ep.sipUsername); } catch (e: any) {
+        console.error(`[team.remove] ${ep.sipUsername} still on the PBX:`, e?.message);
+      }
+      await db.delete(schema.sipEndpoints).where(eq(schema.sipEndpoints.id, ep.id));
+    }
+  } catch (e: any) {
+    console.error('[team.remove] access revoked but calling not fully removed:', e?.message);
+  }
+
   await logEvent({ kind: 'system', action: 'team.remove', summary: `${admin.email} removed operator ${target.email}` });
   return { ok: true };
 });
