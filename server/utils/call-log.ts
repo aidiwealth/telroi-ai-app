@@ -4,6 +4,7 @@
 // -> completed/failed) updates ONE row instead of creating duplicates.
 import { and, eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
+import { normalizePhone } from './phone';
 
 export interface CallEventInput {
   tenantId: string;
@@ -38,7 +39,7 @@ export async function upsertCallEvent(input: CallEventInput) {
       }
       if (input.duration != null) patch.duration = input.duration;
       if (input.recordingUrl) patch.recordingUrl = input.recordingUrl;
-      if (input.phone) patch.phone = input.phone;
+      if (input.phone) patch.phone = normalizePhone(input.phone);
       if (input.raw) patch.raw = { ...(existing.raw as any), ...input.raw };
       await db.update(schema.callEvents).set(patch).where(eq(schema.callEvents.id, existing.id));
       return existing.id;
@@ -46,7 +47,10 @@ export async function upsertCallEvent(input: CallEventInput) {
     const [row] = await db.insert(schema.callEvents).values({
       tenantId: input.tenantId, callid: input.callid, carrier: input.carrier || null,
       type: input.direction || 'in', direction: input.direction || 'in',
-      phone: input.phone || null, user: input.user || null,
+      // Canonical, so a call record and the contact it belongs to are the same
+      // number. Our carrier presents inbound callers as 00 plus the national
+      // number, which matched nothing we already held.
+      phone: input.phone ? normalizePhone(input.phone) : null, user: input.user || null,
       status: input.status || 'ringing',
       startedAt: input.startedAt || new Date(),
       duration: input.duration ?? 0, wait: 0,

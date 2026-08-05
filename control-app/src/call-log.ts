@@ -10,6 +10,7 @@
 // the same call (ringing -> answered -> ended) upsert instead of duplicating.
 import { db, schema } from './db.ts';
 import { sql, and, eq, like, desc } from 'drizzle-orm';
+import { normalizePhone } from './phone.ts';
 
 export interface CallLogInput {
   tenantId: string;
@@ -53,7 +54,7 @@ export function logCall(input: CallLogInput): void {
         tenantId: input.tenantId,
         callid,
         direction: input.direction ?? 'in',
-        phone: input.phone ?? null,
+        phone: input.phone ? normalizePhone(input.phone) : null,
         status: input.status ?? null,
         carrier: input.carrier ?? null,
         startedAt: input.startedAt ?? new Date(),
@@ -149,7 +150,7 @@ export function logOutbound(input: OutboundLogInput): void {
         tenantId: ep.tenantId,
         callid,
         direction: 'out',
-        phone: input.dialed || null,
+        phone: input.dialed ? normalizePhone(input.dialed) : null,
         status,
         carrier: input.carrier || null,
         startedAt,

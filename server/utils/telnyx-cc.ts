@@ -67,10 +67,18 @@ export const telnyxSpeak = (callId: string, text: string, nextNodeId: string | n
 // "472913" is read as four hundred seventy-two thousand and the caller learns
 // nothing. SSML gives the pacing and the repetition the OTP contract asks for.
 export const telnyxSpeakCode = (callId: string, code: string, repeats: number = 2) => {
+  // Same script the Nigerian path plays, so a caller hears the same thing
+  // whichever carrier reached them. The second reading is signposted rather than
+  // simply repeated: somebody writing a code down needs to know another go is
+  // coming, not wonder whether the recording has looped.
   const digits = code.split('').join('<break time="350ms"/>');
-  const once = `Your verification code is<break time="400ms"/>${digits}`;
-  const body = Array.from({ length: Math.max(1, Math.min(repeats, 5)) })
-    .map(() => once).join('<break time="900ms"/>');
+  const parts = Array.from({ length: Math.max(1, Math.min(repeats, 5)) }).map((_, i) =>
+    i === 0
+      ? `Hi. Your O T P code is<break time="400ms"/>${digits}`
+      : `Let me repeat that.<break time="300ms"/>Your O T P code is<break time="400ms"/>${digits}`
+  );
+  parts.push('Please do not share this code with anyone.<break time="300ms"/>Goodbye.');
+  const body = parts.join('<break time="900ms"/>');
   return cmd(callId, 'speak', {
     payload: `<speak>${body}</speak>`,
     payload_type: 'ssml',

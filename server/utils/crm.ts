@@ -80,8 +80,14 @@ export async function addNote(tenantId: string, contactId: string, authorUserId:
 
 // Auto-link an inbound web/phone call to a contact: find by phone or create a
 // lightweight contact. Used by the Live Call widget + inbound webhooks.
-export async function upsertContactByPhone(tenantId: string, phone: string, extra: Partial<typeof schema.crmContacts.$inferInsert> = {}) {
+export async function upsertContactByPhone(tenantId: string, rawPhone: string, extra: Partial<typeof schema.crmContacts.$inferInsert> = {}) {
   const db = useDb();
+  // One way to write a number, or the same person becomes several contacts. Our
+  // Nigerian carrier presents inbound callers as 00 plus the national number with
+  // the trunk zero stripped, so 008027016644 never matched the +2348027016644 we
+  // already held for them.
+  const { normalizePhone } = await import('./phone');
+  const phone = normalizePhone(rawPhone);
   const [existing] = await db.select().from(schema.crmContacts)
     .where(and(eq(schema.crmContacts.tenantId, tenantId), eq(schema.crmContacts.phone, phone))).limit(1);
   if (existing) {
