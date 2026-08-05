@@ -69,6 +69,7 @@ export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCa
   const dest = String(input.toNumber || '').replace(/[^0-9]/g, '');
   const isNigeria = dest.startsWith('234') || dest.startsWith('0');
   const vendor = isNigeria ? 'telroi' : (v.otpIntlVendor || v.otpVoiceVendor);
+  console.log(`[otp-route] to=${input.toNumber} dest=${dest} nigeria=${isNigeria} vendor=${vendor}`);
   const speech = `Your verification code is. ${input.code.split('').join(', ')}. I repeat. ${input.code.split('').join(', ')}.`;
 
   if (vendor === 'telroi') {
