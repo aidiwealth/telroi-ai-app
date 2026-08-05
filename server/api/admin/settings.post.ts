@@ -76,6 +76,7 @@ const Body = z.object({
   // faltering carrier meant a deploy.
   otpIntlVendor: z.enum(['telroi', 'twilio', 'telnyx', 'vonage', 'custom']).optional(),
   otpNgTrunk: z.string().max(64).optional(),
+  otpNgHost: z.string().max(120).optional(),
   otpNgCallerId: z.string().max(32).optional(),
   ttsVendor: z.enum(['telroi', 'elevenlabs', 'openai', 'google', 'azure', 'custom']).optional(),
   sttVendor: z.enum(['telroi', 'deepgram', 'openai', 'google', 'azure', 'custom']).optional(),
@@ -199,6 +200,7 @@ export default defineEventHandler(async (event) => {
   if (d.otpVoiceVendor) patch.otpVoiceVendor = d.otpVoiceVendor;
   if (d.otpIntlVendor) patch.otpIntlVendor = d.otpIntlVendor;
   if (d.otpNgTrunk) patch.otpNgTrunk = d.otpNgTrunk;
+  if (d.otpNgHost !== undefined) patch.otpNgHost = d.otpNgHost || null;
   if (d.otpNgCallerId !== undefined) patch.otpNgCallerId = d.otpNgCallerId || null;
   if (d.ttsVendor) patch.ttsVendor = d.ttsVendor;
   if (d.sttVendor) patch.sttVendor = d.sttVendor;

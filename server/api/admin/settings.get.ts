@@ -75,6 +75,7 @@ export default defineEventHandler(async (event) => {
     otpVoiceVendor: (s?.otpVoiceVendor as string) || 'telroi',
     otpIntlVendor: (s?.otpIntlVendor as string) || '',
     otpNgTrunk: (s?.otpNgTrunk as string) || 'ruach-endpoint',
+    otpNgHost: (s?.otpNgHost as string) || '',
     otpNgCallerId: (s?.otpNgCallerId as string) || '',
     ttsVendor: (s?.ttsVendor as string) || 'telroi',
     sttVendor: (s?.sttVendor as string) || 'telroi',

@@ -106,10 +106,9 @@
            hardcoded, so there was no way to move traffic if a carrier faltered. -->
       <div class="sp-vendor">
         <label class="ad-field"><span>Nigerian calls — carrier</span>
-          <select v-model="sp.otpNgTrunk" class="ad-input">
+          <select v-model="sp.otpNgTrunk" class="ad-input" @change="syncOtpHost">
             <option value="ruach-endpoint">Ruach</option>
             <option value="kasooko-endpoint">Kasooko</option>
-            <option value="sotel-endpoint">Sotel</option>
           </select>
           <span class="ad-hint">Calls to +234 numbers leave on this trunk, whatever the vendor below is set to.</span>
         </label>
@@ -751,11 +750,24 @@ const sp = reactive<any>({
   otpVoiceVendor: 'telroi', ttsVendor: 'telroi', sttVendor: 'telroi',
   // Nigerian OTP route. Defaults match what was hardcoded before, so saving
   // without touching them changes nothing.
-  otpIntlVendor: '', otpNgTrunk: 'ruach-endpoint', otpNgCallerId: '',
+  otpIntlVendor: '', otpNgTrunk: 'ruach-endpoint', otpNgHost: 'sip.ruach.ng', otpNgCallerId: '',
   otpCreds: {}, ttsCreds: {}, sttCreds: {},
   otpPolicy: { codeLength: 6, ttlSeconds: 300, maxAttempts: 3, callTimeoutSeconds: 45, repeatCount: 2, rateCooldownSeconds: 60, rateMaxPerHour: 5, rateMaxPerDay: 20 }
 });
 // Numbers we actually hold, so the presenting number can't be one we don't own.
+// The carrier's SIP host travels with the trunk. Ruach answers on a hostname and
+// Kasooko on an IP, so choosing a trunk without setting the host dialled the new
+// carrier at the old one's address — the switch that was meant to route around an
+// outage couldn't complete. Sotel is absent because it has no dialplan: offering
+// it was offering a route that doesn't exist.
+const OTP_TRUNK_HOSTS: Record<string, string> = {
+  'ruach-endpoint': 'sip.ruach.ng',
+  'kasooko-endpoint': '96.0.46.249'
+};
+function syncOtpHost() {
+  sp.otpNgHost = OTP_TRUNK_HOSTS[sp.otpNgTrunk] || '';
+}
+
 const ngNumbers = ref<string[]>([]);
 // Grouped by provider, because a from-number has to belong to whoever places the
 // call — Twilio can't present a Telnyx number, and a call that tries is refused
@@ -810,6 +822,7 @@ function hydrateSpeech(s: any) {
   // defaults back the moment somebody saves anything else on the page.
   sp.otpIntlVendor = s.otpIntlVendor || '';
   sp.otpNgTrunk = s.otpNgTrunk || 'ruach-endpoint';
+  sp.otpNgHost = s.otpNgHost || OTP_TRUNK_HOSTS[sp.otpNgTrunk] || '';
   sp.otpNgCallerId = s.otpNgCallerId || '';
   sp.ttsVendor = s.ttsVendor || 'telroi';
   sp.sttVendor = s.sttVendor || 'telroi';
@@ -823,7 +836,7 @@ async function saveSpeech() {
       // Named here too: this payload lists its fields by hand, so anything added
       // to the form, the schema and the column still saves as nothing until it
       // appears on this line. Third time on this page.
-      otpIntlVendor: sp.otpIntlVendor, otpNgTrunk: sp.otpNgTrunk, otpNgCallerId: sp.otpNgCallerId,
+      otpIntlVendor: sp.otpIntlVendor, otpNgTrunk: sp.otpNgTrunk, otpNgHost: sp.otpNgHost, otpNgCallerId: sp.otpNgCallerId,
       otpPolicy: { ...sp.otpPolicy }
     };
     // Only send creds blobs that were actually filled in (so a blank form never wipes stored creds).

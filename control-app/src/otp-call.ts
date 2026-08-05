@@ -8,6 +8,7 @@
 // so a hundred thousand calls a day cost nothing beyond the carrier minutes.
 // The code never leaves the machine — it is spoken from local sound files.
 import type Ari from 'ari-client';
+import { reportOtpStatus } from './call-log.ts';
 
 function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[otp-call]', ...args);
@@ -67,7 +68,35 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
   // ARI resolves as soon as it accepts the request; the channel can still fail
   // afterwards, which is why success here has meant silent phones.
   chan.on('StasisStart' as any, () => log(`channel ${chan.id} entered Stasis`));
-  chan.on('ChannelDestroyed' as any, (_e: any, c: any) => log(`channel ${chan.id} destroyed: ${c?.cause_txt || 'unknown'}`));
+
+  // Report how the call actually ended. The row was marked delivered the moment
+  // we dialled, so a number that rang unanswered read the same as one where
+  // somebody wrote the code down — and delivery rate is the figure a client
+  // judges an OTP service by.
+  //
+  // This lives here rather than in the dialplan because neither an h extension
+  // nor a pushed hangup handler fires on a channel originated this way: both were
+  // registered, both were silent. Whether the code was heard is inferred from
+  // duration — the script runs about twenty-five seconds, so anything past
+  // fifteen has had a full reading. That errs towards understating delivery,
+  // which is the safer direction for a number a client checks against their own.
+  const placedAt = Date.now();
+  chan.on('ChannelDestroyed' as any, (_e: any, c: any) => {
+    const seconds = Math.round((Date.now() - placedAt) / 1000);
+    const cause = Number(c?.cause || 0);
+    const causeTxt = c?.cause_txt || 'unknown';
+    const status = seconds >= 15 ? 'delivered'
+      : cause === 17 ? 'busy'
+      : cause === 18 || cause === 19 ? 'no_answer'
+      : cause === 21 ? 'rejected'
+      : cause === 16 ? 'no_answer'
+      : 'failed';
+    log(`channel ${chan.id} destroyed after ${seconds}s: ${causeTxt} -> ${status}`);
+    if (opts.otpId) {
+      void reportOtpStatus(opts.otpId, status, seconds)
+        .catch((e) => log(`otp ${opts.otpId} status not recorded: ${(e as Error)?.message}`));
+    }
+  });
   log(`placed to ${dial} via ${trunk} (channel ${chan.id})`);
   return { callid: chan.id };
 }
