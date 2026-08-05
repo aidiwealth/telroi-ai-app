@@ -75,6 +75,16 @@ export const memberships = pgTable('memberships', {
 // name into an id. Its absence is what broke the refresh: a query against a
 // table this schema didn't declare threw, and one catch around the whole refresh
 // meant numbers and endpoints went with it.
+// Minimal: enough to record how an OTP call actually ended. The row was marked
+// delivered the moment the call was placed, so an unanswered number read the same
+// as one where somebody heard the code — and delivery rate is what a client
+// judges an OTP service by.
+export const voiceOtps = pgTable('voice_otps', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  status: text('status').notNull().default('pending'),
+  reason: text('reason')
+});
+
 export const departments = pgTable('departments', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull(),

@@ -165,3 +165,15 @@ export function logOutbound(input: OutboundLogInput): void {
     }
   })();
 }
+
+
+/** Record how an OTP call actually ended. Called from the dialplan's h extension
+ *  via /otp-status. A verified code is left alone: if the caller entered it
+ *  before the hangup event landed, overwriting that with "delivered" would lose
+ *  the more useful fact. */
+export async function reportOtpStatus(otpId: string, status: string, seconds: number): Promise<void> {
+  const { eq, and, ne } = await import('drizzle-orm');
+  await db.update(schema.voiceOtps)
+    .set({ status, reason: `${status} after ${seconds}s` })
+    .where(and(eq(schema.voiceOtps.id, otpId), ne(schema.voiceOtps.status, 'verified')));
+}

@@ -42,6 +42,9 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
       body: JSON.stringify({
+        // So the hangup can be reported against this row rather than the call
+        // simply ending unrecorded.
+        otpId: input.otpId || null,
         to: input.toNumber,
         code: input.code,
         trunk: ps?.otpNgTrunk || 'ruach-endpoint',

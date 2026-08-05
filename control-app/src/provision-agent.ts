@@ -14,7 +14,7 @@ import type Ari from 'ari-client';
 import { provisionEndpoint, deprovisionEndpoint } from './provision-core.ts';
 import { upsertCarrier, removeCarrier, type CarrierInput } from './carrier-core.ts';
 import { originateCall } from './originate.ts';
-import { logOutbound } from './call-log.ts';
+import { logOutbound, reportOtpStatus } from './call-log.ts';
 import { endpointStatus } from './endpoint-status.ts';
 
 import { getLines, latestSeq } from './log-buffer.ts';
@@ -69,6 +69,36 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
 
   const server = http.createServer(async (req, res) => {
     try {
+      // GET /otp-status?id=&heard=&cause=&seconds= — the OTP dialplan's h
+      // extension reports how the call actually ended. The row said "delivered"
+      // the moment the call was placed, so an unanswered number looked identical
+      // to one where somebody heard the code, and delivery rate is exactly the
+      // figure an OTP client judges the service by. Localhost only, like
+      // log-outbound: the dialplan curls it from this machine.
+      if (req.method === 'GET' && (req.url || '').startsWith('/otp-status')) {
+        const ip = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+        if (ip !== '127.0.0.1' && ip !== '::1') return send(res, 403, { ok: false, error: 'forbidden' });
+        const q = new URL(req.url || '', 'http://127.0.0.1').searchParams;
+        const otpId = q.get('id') || '';
+        if (otpId) {
+          const heard = q.get('heard') === '1';
+          const cause = Number(q.get('cause') || 0);
+          // 16 normal, 17 busy, 19 no answer, 21 rejected. Heard beats the cause:
+          // a caller who hangs up after the second reading still got the code.
+          const status = heard ? 'delivered'
+            : cause === 17 ? 'busy'
+            : cause === 19 || cause === 18 ? 'no_answer'
+            : cause === 21 ? 'rejected'
+            : 'failed';
+          void reportOtpStatus(otpId, status, Number(q.get('seconds') || 0)).catch((e) =>
+            log(`otp-status ${otpId} not recorded: ${(e as Error)?.message}`));
+          log(`otp ${otpId} ended -> ${status} (heard=${heard} cause=${cause})`);
+        }
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('ok');
+        return;
+      }
+
       if (req.method === 'GET' && (req.url || '').startsWith('/log-outbound')) {
         const ip = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
         if (ip !== '127.0.0.1' && ip !== '::1') return send(res, 403, { ok: false, error: 'forbidden' });
@@ -147,7 +177,8 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
             prefix: body.prefix ? String(body.prefix) : undefined,
             callerId: body.callerId ? String(body.callerId).slice(0, 64) : undefined,
             repeatCount: Number(body.repeatCount) || undefined,
-            timeoutSec: Number(body.timeoutSec) || undefined
+            timeoutSec: Number(body.timeoutSec) || undefined,
+            otpId: body.otpId ? String(body.otpId) : undefined
           });
           // The code is deliberately absent from this line.
           log(`otp placed to ${to} via ${trunk} (callid ${result.callid})`);

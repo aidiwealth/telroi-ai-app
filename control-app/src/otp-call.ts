@@ -23,6 +23,7 @@ export interface OtpCallOptions {
   callerId?: string;
   repeatCount?: number;
   timeoutSec?: number;
+  otpId?: string;          // ours, so the hangup can be reported against the row
 }
 
 export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: string }> {
@@ -51,6 +52,9 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
     callerId: opts.callerId || 'Telroi',
     timeout,
     variables: {
+      // The h extension reports the outcome against this, so the row can say
+      // whether anyone actually heard the code rather than only that we dialled.
+      OTP_ID: opts.otpId || '',
       CODE: code,
       REPEATS: String(repeats),
       OTP_DEST: dial,
