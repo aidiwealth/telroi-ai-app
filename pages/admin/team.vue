@@ -36,6 +36,61 @@
 
     <p class="team-foot ad-dim">Operators sign in at the operator login with a one-time code sent to their email — no password needed. Add someone here first, then they can sign in.</p>
 
+    <!-- Departments. Every client workspace could group its people into teams and
+         route calls to them; our own desk could not, so the AI could send a caller
+         to the right team anywhere except here. The description matters more than
+         it looks: it's what the AI matches a caller's problem against. -->
+    <div class="ad-head dept-head">
+      <div>
+        <h2 class="ad-title dept-title">Departments</h2>
+        <p class="ad-sub">Groups the AI can transfer a caller to. It reads the description to decide, so describe the problems each team handles rather than their job titles.</p>
+      </div>
+      <button class="btn btn-signal btn-sm" @click="openDept()">+ New department</button>
+    </div>
+
+    <div v-if="deptPending" class="ad-loading">Loading…</div>
+    <EmptyState v-else-if="!departments.length" icon="agents" title="No departments yet" description="Without one, a caller asking for a particular team reaches whatever the AI number's escalation is set to." />
+    <div v-else class="set-card ad-table-wrap">
+      <table class="ad-data-table">
+        <thead>
+          <tr><th>Team</th><th>Handles</th><th>Members</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="d in departments" :key="d.id">
+            <td>{{ d.name }}</td>
+            <td class="ad-dim">{{ d.description || '— nothing for the AI to route on' }}</td>
+            <td>
+              <span v-if="!(d.members || []).length" class="ad-dim">nobody</span>
+              <span v-else>{{ (d.members || []).map((m) => m.user?.name || m.user?.email || m.email).join(', ') }}</span>
+            </td>
+            <td class="ad-r dept-actions">
+              <select :value="''" class="team-role-select" @change="addDeptMember(d, $event)">
+                <option value="">Add…</option>
+                <option v-for="p in deptAvailable(d)" :key="p.userId" :value="p.userId">{{ p.name || p.email }}</option>
+              </select>
+              <button class="btn btn-ghost btn-xs" @click="openDept(d)">Edit</button>
+              <button class="btn btn-ghost btn-xs" @click="removeDept(d)">Remove</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div v-if="showDept" class="ad-modal-overlay" @click.self="showDept = false">
+      <div class="ad-modal">
+        <div class="ad-modal-head"><h3>{{ deptEditing ? 'Edit department' : 'New department' }}</h3><button class="ad-x" @click="showDept = false">✕</button></div>
+        <div class="ad-field">
+          <label>Name</label>
+          <input v-model="deptDraft.name" class="ad-input" placeholder="Billing" />
+        </div>
+        <div class="ad-field">
+          <label>What they handle</label>
+          <input v-model="deptDraft.description" class="ad-input" placeholder="invoices, payments and refunds" />
+        </div>
+        <button class="btn btn-signal btn-block" :disabled="deptSaving || !deptDraft.name" @click="saveDept">{{ deptSaving ? 'Saving…' : 'Save' }}</button>
+      </div>
+    </div>
+
     <!-- Add member modal -->
     <div v-if="showAdd" class="ad-modal-overlay" @click.self="showAdd = false">
       <div class="ad-modal">
@@ -70,6 +125,64 @@ const showAdd = ref(false);
 const adding = ref(false);
 const busy = ref<string | null>(null);
 const draft = reactive({ email: '', role: 'staff' });
+
+const departments = ref<any[]>([]);
+const deptMembers = ref<any[]>([]);
+const deptPending = ref(true);
+const showDept = ref(false);
+const deptSaving = ref(false);
+const deptEditing = ref<any>(null);
+const deptDraft = reactive({ name: '', description: '' });
+
+function deptAvailable(d: any) {
+  const inTeam = new Set((d.members || []).map((m: any) => m.userId || m.user?.id));
+  return deptMembers.value.filter((p) => !inTeam.has(p.userId));
+}
+
+async function loadDepts() {
+  deptPending.value = true;
+  try {
+    const [dr, mr] = await Promise.all([
+      $fetch<any>('/api/admin/support/departments'),
+      $fetch<any>('/api/admin/support/members').catch(() => ({ members: [] }))
+    ]);
+    departments.value = dr.departments || [];
+    deptMembers.value = mr.members || [];
+  } catch { departments.value = []; }
+  finally { deptPending.value = false; }
+}
+
+function openDept(d?: any) {
+  deptEditing.value = d || null;
+  deptDraft.name = d?.name || '';
+  deptDraft.description = d?.description || '';
+  showDept.value = true;
+}
+
+async function saveDept() {
+  deptSaving.value = true;
+  try {
+    if (deptEditing.value) await $fetch(`/api/admin/support/departments/${deptEditing.value.id}`, { method: 'PUT', body: { name: deptDraft.name, description: deptDraft.description } });
+    else await $fetch('/api/admin/support/departments', { method: 'POST', body: { name: deptDraft.name, description: deptDraft.description } });
+    showDept.value = false;
+    await loadDepts();
+  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  finally { deptSaving.value = false; }
+}
+
+async function removeDept(d: any) {
+  if (!confirm(`Remove ${d.name}? Callers asking for it will fall back to the number's escalation.`)) return;
+  try { await $fetch(`/api/admin/support/departments/${d.id}`, { method: 'DELETE' }); await loadDepts(); }
+  catch (e: any) { alert(e?.data?.error?.message || 'Could not remove'); }
+}
+
+async function addDeptMember(d: any, ev: Event) {
+  const userId = (ev.target as HTMLSelectElement).value;
+  if (!userId) return;
+  (ev.target as HTMLSelectElement).value = '';
+  try { await $fetch(`/api/admin/support/departments/${d.id}/members`, { method: 'POST', body: { userId } }); await loadDepts(); }
+  catch (e: any) { alert(e?.data?.error?.message || 'Could not add'); }
+}
 
 function fmt(d: string) { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
 
@@ -110,10 +223,14 @@ async function remove(a: any) {
   catch (e: any) { alert(e?.data?.error?.message || 'Could not remove'); }
   finally { busy.value = null; }
 }
-onMounted(load);
+onMounted(() => { load(); loadDepts(); });
 </script>
 
 <style scoped>
+.dept-head { margin-top: 40px; }
+.dept-title { font-size: 20px; }
+.dept-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.dept-actions .team-role-select { max-width: 130px; }
 .ad-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
 .team-email { font-weight: 500; }
 .team-you { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-mute); margin-left: 8px; border: 1px solid var(--rule); padding: 1px 6px; border-radius: 4px; }
