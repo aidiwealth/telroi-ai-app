@@ -15,6 +15,18 @@ export default defineEventHandler(async (event) => {
   // never receive one from us. Callers still arrive over whichever carrier suits
   // them; the PBX is where the two meet.
   const dial = await resolveLiveCallProvider({ tenantId: ws.tenantId, configuredProvider: 'telroi' });
+
+  // Make sure this operator actually has an endpoint. The client token endpoint
+  // does this and the support one didn't, so an operator could open the console,
+  // get a token and still have nothing to ring — four of five had no endpoint at
+  // all, and none of them could be added to a department.
+  try {
+    const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
+    await ensureUserWebrtcEndpoint(ws.tenantId, String((admin as any).id));
+  } catch (e: any) {
+    throw apiError('voice_not_configured', e?.message || 'Browser calling could not be set up. Try again.', 503);
+  }
+
   try {
     // asteriskVoiceToken reads the identity as tenant_<tenantId>_<userId> to find
     // this person's own endpoint — a bare 'support_x' left it looking up a tenant
