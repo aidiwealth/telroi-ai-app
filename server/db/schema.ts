@@ -138,7 +138,15 @@ export const platformSettings = pgTable('platform_settings', {
   // Which trunk Nigerian OTP leaves on and what number it presents. Both were
   // hardcoded, so moving traffic off a faltering carrier meant a deploy.
   otpNgTrunk: text('otp_ng_trunk').notNull().default('ruach-endpoint'),
-  otpNgCallerId: text('otp_ng_caller_id'),   // telroi | twilio | telnyx | vonage | custom
+  otpNgCallerId: text('otp_ng_caller_id'),
+  // The carrier's SIP host travels with the trunk: Ruach answers on a hostname
+  // and Kasooko on an IP, so switching trunks without it dialled the new carrier
+  // at the old one's address.
+  otpNgHost: text('otp_ng_host'),
+  // The carrier's SIP host travels with the trunk: Ruach answers on a hostname
+  // and Kasooko on an IP, so switching trunks without it dialled the new carrier
+  // at the old one's address.
+  otpNgHost: text('otp_ng_host'),   // telroi | twilio | telnyx | vonage | custom
   ttsVendor: text('tts_vendor').notNull().default('telroi'),              // telroi | elevenlabs | openai | google | azure | custom
   sttVendor: text('stt_vendor').notNull().default('telroi'),             // telroi | deepgram | openai | google | azure | custom
   otpVoiceVendorCredsEnc: text('otp_voice_vendor_creds_enc'),            // AES-256-GCM vendor creds blob

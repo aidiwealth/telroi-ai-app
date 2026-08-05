@@ -48,7 +48,7 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
         to: input.toNumber,
         code: input.code,
         trunk: ps?.otpNgTrunk || 'ruach-endpoint',
-        host: cfg.otpHost || 'sip.ruach.ng',
+        host: ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng',
         // Digits only. The settings dropdown offers numbers in E.164, and the
         // carrier's switch returned 500 on a caller id with a leading plus while
         // accepting the same number without one.
