@@ -108,6 +108,16 @@
       </template>
     </template>
 
+    <div v-if="removingEp" class="modal-overlay" @click.self="removingEp = null">
+      <div class="modal card">
+        <div class="card-head"><span class="card-title">Remove this endpoint?</span><button class="modal-x" @click="removingEp = null">✕</button></div>
+        <div class="card-pad">
+          <p class="sipip-modal-p">Any device using <strong class="mono">{{ removingEp.sipUsername }}</strong> will stop connecting. You can set up a new endpoint afterwards, but it will have different credentials.</p>
+          <button class="btn btn-danger btn-block" @click="confirmRemoveEp">Remove it</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Withdrawing an address. Worth a proper modal: for an approved one this
          is the only way access ends, and a browser dialog understates that. -->
     <div v-if="removingIp" class="modal-overlay" @click.self="removingIp = null">
@@ -273,10 +283,17 @@ async function provision() {
   finally { provisioning.value = false; }
 }
 
-async function remove(e: any) {
-  if (!confirm('Remove this SIP endpoint? Devices using it will stop connecting.')) return;
-  try { await api.del(`/api/voice/sip/endpoints/${encodeURIComponent(e.id)}`); toast.ok('Endpoint removed'); await load(); }
-  catch (e2: any) { toast.err(e2.message); }
+const removingEp = ref<any>(null);
+function remove(e: any) { removingEp.value = e; }
+
+async function confirmRemoveEp() {
+  const e = removingEp.value;
+  try {
+    await api.del(`/api/voice/sip/endpoints/${encodeURIComponent(e.id)}`);
+    toast.ok('Endpoint removed');
+    removingEp.value = null;
+    await load();
+  } catch (e2: any) { toast.err(e2.message); }
 }
 
 async function openAttach(e: any) {
