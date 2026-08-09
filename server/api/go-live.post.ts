@@ -65,6 +65,18 @@ export default defineEventHandler(async (event) => {
     summary: `Went live on ${p.data.plan}`
   });
 
+  // The moment that actually earns something, as distinct from a signup. Sent
+  // after activation rather than before, so the channel never announces a
+  // go-live that then failed.
+  import('~/server/utils/slack').then(({ slackWentLive }) =>
+    slackWentLive({
+      name: tenant?.name || s.tenantId,
+      slug: (tenant as any)?.slug || '',
+      plan: p.data.plan,
+      email: s.email
+    })
+  ).catch((e) => console.error('slack go-live notice failed', e));
+
   return {
     ok: true, plan: p.data.plan, live: true, provisioning,
     // So the client can be told when their plan actually starts charging.

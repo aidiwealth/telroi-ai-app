@@ -321,6 +321,31 @@
       </div>
     </section>
 
+    <!-- Slack. A workspace being created is the one event nobody is watching a
+         dashboard for, and an email to a shared inbox gets read tomorrow. -->
+    <section v-show="activeTab === 'security'" class="set-card">
+      <div class="set-card-head">
+        <div>
+          <h2 class="set-card-title">Slack notifications</h2>
+          <p class="set-card-desc">Posts to a channel when somebody creates a workspace and when one goes live. An incoming webhook from Slack — anyone holding the URL can post to that channel, so it is stored encrypted and never shown again.</p>
+        </div>
+      </div>
+      <div class="set-card-body">
+        <div class="set-grid">
+          <label class="ad-field">
+            <span>Incoming webhook URL {{ cfg.slackWebhookSet ? '· set' : '· not set' }}</span>
+            <input v-model="slackWebhook" type="password" class="ad-input mono" :placeholder="cfg.slackWebhookSet ? '•••••••• (blank to keep)' : 'https://hooks.slack.com/services/...'" />
+          </label>
+        </div>
+        <p class="ad-hint">Create it in Slack under your app's Incoming Webhooks, pointed at the channel you want. Test it after saving — a wrong URL fails silently, and the first you would know is a signup that never announced itself.</p>
+
+        <div class="set-actions">
+          <button class="btn btn-signal" :disabled="savingSlack" @click="saveSlack">{{ savingSlack ? 'Saving…' : 'Save webhook' }}</button>
+          <button class="btn btn-ghost" :disabled="testingSlack || !cfg.slackWebhookSet" @click="testSlack">{{ testingSlack ? 'Sending…' : 'Send a test message' }}</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Webhook signing. Whether a carrier is verified was previously only
          discoverable by reading the code and querying the database — an exposure
          nobody could see. -->
@@ -652,6 +677,33 @@ async function loadSandboxLimits() {
     if (r?.trialCallMaxSeconds != null) trialCallMinutes.value = r.trialCallMaxSeconds / 60;
   } catch { /* keep defaults */ }
 }
+const slackWebhook = ref('');
+const savingSlack = ref(false);
+const testingSlack = ref(false);
+
+async function saveSlack() {
+  savingSlack.value = true;
+  try {
+    // Blank means keep what's there — the field can't show the current value,
+    // so an empty box has to mean "unchanged" rather than "clear it".
+    if (slackWebhook.value.trim()) {
+      await $fetch('/api/admin/settings', { method: 'POST', body: { slackWebhook: slackWebhook.value.trim() } });
+      slackWebhook.value = '';
+      cfg.value = await $fetch<any>('/api/admin/settings');
+    }
+  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  finally { savingSlack.value = false; }
+}
+
+async function testSlack() {
+  testingSlack.value = true;
+  try {
+    await $fetch('/api/admin/settings/slack-test', { method: 'POST' });
+    alert('Sent — check the channel. If nothing arrived, the URL is wrong or the channel was deleted.');
+  } catch (e: any) { alert(e?.data?.error?.message || 'Could not send'); }
+  finally { testingSlack.value = false; }
+}
+
 async function saveWebhookSecrets() {
   savingWebhooks.value = true;
   try {

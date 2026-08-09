@@ -52,6 +52,16 @@ export default defineEventHandler(async (event) => {
     }).catch((e) => console.error('support CRM mirror failed', e));
   }
 
+  // Tell Slack. A workspace being created is the one event nobody is watching a
+  // dashboard for, and an email to a shared inbox gets read tomorrow.
+  import('~/server/utils/slack').then(({ slackNewWorkspace }) =>
+    slackNewWorkspace({
+      name: tenant.name, slug: tenant.slug, email: s.email,
+      country: parsed.data.country, sector: parsed.data.sector,
+      phone: parsed.data.businessPhone || null
+    })
+  ).catch((e) => console.error('slack notice failed', e));
+
   // Email the accepted policy copy (best-effort; never blocks signup).
   sendPolicyEmail(s.email, tenant.name).catch((e) => console.error('policy email failed', e));
   // Warm welcome + guided setup checklist (best-effort).

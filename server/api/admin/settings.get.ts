@@ -76,6 +76,7 @@ export default defineEventHandler(async (event) => {
     otpIntlVendor: (s?.otpIntlVendor as string) || '',
     otpNgTrunk: (s?.otpNgTrunk as string) || 'ruach-endpoint',
     otpNgHost: (s?.otpNgHost as string) || '',
+    slackWebhookSet: !!s?.slackWebhookEnc,
     otpNgCallerId: (s?.otpNgCallerId as string) || '',
     ttsVendor: (s?.ttsVendor as string) || 'telroi',
     sttVendor: (s?.sttVendor as string) || 'telroi',
