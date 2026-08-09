@@ -54,3 +54,33 @@ export async function availableSipVendors(tenantId: string): Promise<{ vendors: 
     overridden
   };
 }
+
+/** Withdraw trust in an address, from either side.
+ *
+ *  An approved request has a live PJSIP endpoint behind it, and with no password
+ *  involved, removing that endpoint is the only way to stop trusting the
+ *  address. The PBX is changed first: a row saying revoked while Asterisk still
+ *  trusts it would be worse than no record at all.
+ */
+export async function revokeSipIpRequest(row: any, by: string): Promise<void> {
+  const { useDb, schema } = await import('~/server/db');
+  const { eq } = await import('drizzle-orm');
+  const { logEvent } = await import('~/server/utils/logs');
+  const db = useDb();
+
+  if (row.status === 'approved' && row.endpointId) {
+    const [ep] = await db.select().from(schema.sipEndpoints).where(eq(schema.sipEndpoints.id, row.endpointId)).limit(1);
+    if (ep?.sipUsername) {
+      const { agentDeprovision } = await import('~/server/utils/provision-agent');
+      await agentDeprovision(ep.sipUsername);
+      await db.delete(schema.sipEndpoints).where(eq(schema.sipEndpoints.id, ep.id));
+    }
+  }
+
+  await db.delete(schema.sipIpRequests).where(eq(schema.sipIpRequests.id, row.id));
+
+  await logEvent({
+    tenantId: row.tenantId, kind: 'system', action: 'sip.ip_revoked',
+    summary: `${by} withdrew SIP access for ${row.ipAddress}${row.status === 'approved' ? ' (endpoint removed)' : ' (was pending)'}`
+  });
+}

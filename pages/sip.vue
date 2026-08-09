@@ -4,6 +4,10 @@
       <h1 class="page-title">SIP connectivity</h1>
     </div>
 
+    <nav class="sip-tabs">
+      <button v-for="t in sipTabs" :key="t.id" class="sip-tab" :class="{ on: tab === t.id }" @click="tab = t.id">{{ t.label }}</button>
+    </nav>
+
     <div v-if="pending" class="loading-pad"><div v-for="i in 2" :key="i" class="skeleton skel-row" /></div>
 
     <template v-else>
@@ -14,7 +18,7 @@
 
       <template v-else>
         <!-- Set up (self-serve carriers only: twilio/telnyx) -->
-        <div v-if="data.selfServe" class="card sip-setup card-pad">
+        <div v-if="tab === 'auth' && data.selfServe" class="card sip-setup card-pad">
           <div>
             <h3 class="sip-setup-h">Set up a SIP endpoint</h3>
             <p class="sip-setup-note">We'll create a secure SIP login for your devices. You'll get a server, username and password to configure your softphone or PBX.</p>
@@ -23,7 +27,7 @@
         </div>
 
         <!-- Endpoints (generic, no vendor identity) -->
-        <div class="card sip-card">
+        <div v-if="tab === 'auth'" class="card sip-card">
           <div class="card-head">
             <span class="card-title">Your SIP endpoints</span>
             <button class="btn btn-ghost btn-sm" :disabled="statusLoading" @click="loadStatus">{{ statusLoading ? 'Checking…' : 'Refresh status' }}</button>
@@ -50,12 +54,12 @@
           <div v-else class="card-pad"><EmptyState icon="generic" title="No endpoints yet" :description="data.selfServe ? 'Set up a SIP endpoint above to connect your devices.' : 'SIP is arranged by our team for your account. Contact support to have your SIP endpoint set up.'" /></div>
         </div>
 
-        <p class="sip-help muted">Point your SIP device at the server above using the username and password. Need help configuring a specific device? Contact support.</p>
+        <p v-if="tab === 'auth'" class="sip-help muted">Point your SIP device at the server above using the username and password. Need help configuring a specific device? Contact support.</p>
 
         <!-- IP authentication. At volume, a password on every call is the thing
              that breaks first — carriers interconnect by address instead. Both
              halves are shown, because half a firewall rule is a day lost. -->
-        <div class="card sip-card">
+        <div v-if="tab === 'ip'" class="card sip-card">
           <div class="card-head"><span class="card-title">SIP via IP address</span></div>
           <div class="card-pad">
             <p class="sip-setup-note">For higher volumes you can connect without a username and password: we trust traffic from your address, you trust ours. Nothing to register, nothing to expire.</p>
@@ -81,7 +85,7 @@
             </div>
 
             <table v-if="ipData?.requests?.length" class="table sipip-table">
-              <thead><tr><th>Address</th><th>Status</th><th>Requested</th></tr></thead>
+              <thead><tr><th>Address</th><th>Status</th><th>Requested</th><th></th></tr></thead>
               <tbody>
                 <tr v-for="r in ipData.requests" :key="r.id">
                   <td class="mono">{{ r.ipAddress }}</td>
@@ -90,6 +94,11 @@
                     <span v-if="r.rejectReason" class="muted"> — {{ r.rejectReason }}</span>
                   </td>
                   <td class="muted">{{ new Date(r.createdAt).toLocaleDateString() }}</td>
+                  <td class="ta-r">
+                    <button class="btn btn-ghost btn-sm" :disabled="ipRemoving === r.id" @click="removeIp(r)">
+                      {{ ipRemoving === r.id ? 'Removing…' : (r.status === 'approved' ? 'Revoke' : 'Withdraw') }}
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -189,9 +198,30 @@ async function load() {
   loadIp();
 }
 
+const sipTabs = [
+  { id: 'auth', label: 'SIP endpoints' },
+  { id: 'ip', label: 'SIP via IP address' }
+];
+const tab = ref('auth');
+
 const ipData = ref<any>(null);
 const ipForm = reactive({ ipAddress: '', note: '' });
 const ipSubmitting = ref(false);
+const ipRemoving = ref<string | null>(null);
+
+async function removeIp(r: any) {
+  const msg = r.status === 'approved'
+    ? `Stop trusting ${r.ipAddress}? Calls from that address will be refused straight away — there is no password here, so removing it is how access ends.`
+    : `Withdraw the request for ${r.ipAddress}?`;
+  if (!confirm(msg)) return;
+  ipRemoving.value = r.id;
+  try {
+    await api.del(`/api/voice/sip/ip/${encodeURIComponent(r.id)}`);
+    toast.ok(r.status === 'approved' ? 'Access withdrawn' : 'Request withdrawn');
+    await loadIp();
+  } catch (e: any) { toast.err(e.message); }
+  finally { ipRemoving.value = null; }
+}
 
 async function loadIp() {
   try { ipData.value = await api.get('/api/voice/sip/ip'); }
@@ -251,6 +281,10 @@ onMounted(load);
 </script>
 
 <style scoped>
+.sip-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 22px; flex-wrap: wrap; }
+.sip-tab { padding: 10px 16px; font-size: 14px; color: var(--ink-soft); border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; border-left: 0; border-right: 0; border-top: 0; cursor: pointer; transition: color .14s, border-color .14s; }
+.sip-tab:hover { color: var(--ink); }
+.sip-tab.on { color: var(--signal); border-bottom-color: var(--signal); font-weight: 500; }
 .sipip-h { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin: 20px 0 8px; }
 .sipip-table td:first-child { color: var(--ink-soft); width: 160px; }
 .sipip-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -259,6 +293,7 @@ onMounted(load);
 .sipip-badge.approved { background: rgba(34,139,84,.12); color: #1c7a49; }
 .sipip-badge.rejected { background: rgba(180,45,45,.12); color: #a33; }
 .sipip-empty { font-size: 13px; padding: 6px 0; }
+.ta-r { text-align: right; }
 .sip-setup { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .sip-setup-h { font-size: 16px; margin-bottom: 4px; }
 .sip-setup-note { font-size: 13px; color: var(--ink-soft); line-height: 1.5; max-width: 60ch; }

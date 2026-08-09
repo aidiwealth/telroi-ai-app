@@ -33,7 +33,7 @@
       <h2 class="ad-title sec-h">Decided</h2>
       <div v-if="data.decided?.length" class="set-card ad-table-wrap">
         <table class="ad-data-table">
-          <thead><tr><th>Workspace</th><th>Address</th><th>Outcome</th><th>By</th><th>When</th></tr></thead>
+          <thead><tr><th>Workspace</th><th>Address</th><th>Outcome</th><th>By</th><th>When</th><th></th></tr></thead>
           <tbody>
             <tr v-for="r in data.decided" :key="r.id">
               <td>{{ r.workspace }}</td>
@@ -44,12 +44,40 @@
               </td>
               <td class="ad-dim">{{ r.decidedBy || '—' }}</td>
               <td class="ad-dim mono">{{ r.decidedAt ? fmt(r.decidedAt) : '—' }}</td>
+              <td class="ad-r">
+                <button v-if="r.status === 'approved'" class="btn btn-ghost btn-xs" :disabled="busy === r.id" @click="revoke(r)">Revoke</button>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
       <p v-else class="ad-dim">Nothing decided yet.</p>
     </template>
+
+    <!-- Approving grants call origination with no password behind it. A browser
+         confirm is too casual for that; this says what it means. -->
+    <div v-if="confirming" class="ad-modal-overlay" @click.self="confirming = null">
+      <div class="ad-modal">
+        <div class="ad-modal-head"><h3>Trust this address?</h3><button class="ad-x" @click="confirming = null">✕</button></div>
+        <p class="req-modal-p">
+          Anyone sending from <strong class="mono">{{ confirming.ipAddress }}</strong> will be able to place calls billed to
+          <strong>{{ confirming.workspace }}</strong>, without a password.
+        </p>
+        <p class="req-modal-p ad-dim">There is nothing to rotate afterwards — withdrawing access means removing the endpoint, which you can do from this page.</p>
+        <button class="btn btn-signal btn-block" :disabled="busy === confirming.id" @click="doApprove">{{ busy === confirming.id ? 'Approving…' : 'Approve' }}</button>
+      </div>
+    </div>
+
+    <div v-if="declining" class="ad-modal-overlay" @click.self="declining = null">
+      <div class="ad-modal">
+        <div class="ad-modal-head"><h3>Decline {{ declining.ipAddress }}</h3><button class="ad-x" @click="declining = null">✕</button></div>
+        <div class="ad-field">
+          <label>Why — the client sees this</label>
+          <textarea v-model="declineReason" class="ad-input" rows="3" placeholder="e.g. that address is a dynamic residential IP; send us a static one"></textarea>
+        </div>
+        <button class="btn btn-signal btn-block" :disabled="busy === declining.id || declineReason.trim().length < 3" @click="doReject">{{ busy === declining.id ? 'Declining…' : 'Decline' }}</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -61,6 +89,7 @@ useHead({ title: 'SIP access requests — Telroi' });
 const data = ref<any>({ pending: [], decided: [] });
 const pending = ref(true);
 const busy = ref<string | null>(null);
+const toast = useToast();
 
 function fmt(d: string) { return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
 
@@ -71,20 +100,47 @@ async function load() {
   finally { pending.value = false; }
 }
 
-async function approve(r: any) {
-  if (!confirm(`Trust ${r.ipAddress} for ${r.workspace}? Anyone at that address will be able to place calls billed to them, with no password.`)) return;
+const confirming = ref<any>(null);
+const declining = ref<any>(null);
+const declineReason = ref('');
+
+function approve(r: any) { confirming.value = r; }
+function reject(r: any) { declining.value = r; declineReason.value = ''; }
+
+async function doApprove() {
+  const r = confirming.value;
   busy.value = r.id;
-  try { await $fetch(`/api/admin/sip-requests/${r.id}/approve`, { method: 'POST' }); await load(); }
-  catch (e: any) { alert(e?.data?.error?.message || 'Could not approve'); }
+  try {
+    await $fetch(`/api/admin/sip-requests/${r.id}/approve`, { method: 'POST' });
+    toast.ok(`Now trusting ${r.ipAddress}`);
+    confirming.value = null;
+    await load();
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not approve'); }
   finally { busy.value = null; }
 }
 
-async function reject(r: any) {
-  const reason = prompt(`Why are you declining ${r.ipAddress}? The client sees this.`);
-  if (!reason) return;
+async function doReject() {
+  const r = declining.value;
   busy.value = r.id;
-  try { await $fetch(`/api/admin/sip-requests/${r.id}/reject`, { method: 'POST', body: { reason } }); await load(); }
-  catch (e: any) { alert(e?.data?.error?.message || 'Could not decline'); }
+  try {
+    await $fetch(`/api/admin/sip-requests/${r.id}/reject`, { method: 'POST', body: { reason: declineReason.value.trim() } });
+    toast.ok('Declined — the client sees your reason');
+    declining.value = null;
+    await load();
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not decline'); }
+  finally { busy.value = null; }
+}
+
+async function revoke(r: any) {
+  // Deliberately blunt: this is the only way access ends, since there is no
+  // password to rotate.
+  if (!confirm(`Stop trusting ${r.ipAddress} for ${r.workspace}? Calls from that address will be refused immediately.`)) return;
+  busy.value = r.id;
+  try {
+    await $fetch(`/api/admin/sip-requests/${r.id}`, { method: 'DELETE' });
+    toast.ok('Access withdrawn');
+    await load();
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not revoke'); }
   finally { busy.value = null; }
 }
 
@@ -97,4 +153,5 @@ onMounted(load);
 .req-badge { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); text-transform: capitalize; }
 .req-badge.approved { background: rgba(34,139,84,.12); color: #1c7a49; }
 .req-badge.rejected { background: rgba(180,45,45,.12); color: #a33; }
+.req-modal-p { font-size: 14px; line-height: 1.5; margin: 0 0 12px; }
 </style>
