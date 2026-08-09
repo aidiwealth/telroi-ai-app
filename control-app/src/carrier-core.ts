@@ -148,7 +148,17 @@ exten => ${dialRoutine},1,NoOp(${c.displayName || c.name} out -> \${DEST})
  same => n,Set(CALLERID(name)=Telroi)
  same => n,Set(TELROI_START=\${EPOCH})
  same => n,Dial(PJSIP/${c.name}-endpoint/sip:\${DEST}@${useAuthDomain},60)
- same => n,Set(TELROI_LOG=\${CURL(http://127.0.0.1:8090/log-outbound?callid=\${UNIQUEID}&agent=\${CHANNEL(endpoint)}&dialed=\${DEST}&carrier=${c.name}&dialstatus=\${DIALSTATUS}&hangupcause=\${HANGUPCAUSE}&duration=\${CDR(billsec)}&start=\${TELROI_START})})
+${c.sipGateway2 ? ` ; The carrier's second SBC. Their maintenance windows move traffic to it, and
+ ; a trunk that only knows the primary fails at exactly the moment failover was
+ ; meant to help. Only retried when the first was unreachable — a busy or
+ ; rejected call is an answer, and dialling again would double the attempt.
+ same => n,GotoIf($["\${DIALSTATUS}"="CHANUNAVAIL"]?second)
+ same => n,GotoIf($["\${DIALSTATUS}"="CONGESTION"]?second)
+ same => n,Goto(logit)
+ same => n(second),NoOp(${c.displayName || c.name} primary unreachable — trying secondary)
+ same => n,Dial(PJSIP/${c.name}-endpoint/sip:\${DEST}@${c.sipGateway2}:${port},60)
+ same => n(logit),NoOp(dial finished: \${DIALSTATUS})
+` : ''} same => n,Set(TELROI_LOG=\${CURL(http://127.0.0.1:8090/log-outbound?callid=\${UNIQUEID}&agent=\${CHANNEL(endpoint)}&dialed=\${DEST}&carrier=${c.name}&dialstatus=\${DIALSTATUS}&hangupcause=\${HANGUPCAUSE}&duration=\${CDR(billsec)}&start=\${TELROI_START})})
  same => n,Hangup()
  same => n(nodid),NoOp(Rejected: caller owns no DID on ${c.name} — buy/select a DID or contact support)
  same => n,Hangup(21)
