@@ -147,6 +147,11 @@ export const platformSettings = pgTable('platform_settings', {
   // channel, and a setting rather than an env var so the channel can change
   // without a deploy.
   slackWebhookEnc: text('slack_webhook_enc'),
+  // What we tell a client to point their PBX at. A setting rather than a source
+  // constant: moving the PBX shouldn't need a deploy, and a client reading a
+  // stale address would spend a day on a firewall rule that was never wrong.
+  sipPublicHost: text('sip_public_host'),
+  sipPublicIp: text('sip_public_ip'),
   // The carrier's SIP host travels with the trunk: Ruach answers on a hostname
   // and Kasooko on an IP, so switching trunks without it dialled the new carrier
   // at the old one's address.
@@ -768,6 +773,25 @@ export const liveCallSessions = pgTable('live_call_sessions', {
    Elastic SIP Trunk, Telnyx credential connection, or a Digidite inbound
    registration). secretEnc holds any vendor-issued device password (AES-256-GCM,
    shown to the client once, never logged). */
+// A client asking us to trust an IP address for SIP. Kept as a request rather
+// than applied directly: an IP-authenticated endpoint has no password to revoke,
+// so a mistyped octet quietly grants a stranger the ability to place calls
+// billed to this workspace. One operator glance costs a client an hour and
+// prevents that.
+export const sipIpRequests = pgTable('sip_ip_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  ipAddress: text('ip_address').notNull(),
+  note: text('note'),
+  status: text('status').notNull().default('pending'),  // pending | approved | rejected
+  decidedBy: text('decided_by'),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+  rejectReason: text('reject_reason'),
+  endpointId: uuid('endpoint_id'),
+  requestedBy: text('requested_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const sipEndpoints = pgTable('sip_endpoints', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),

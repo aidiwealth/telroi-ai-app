@@ -51,6 +51,51 @@
         </div>
 
         <p class="sip-help muted">Point your SIP device at the server above using the username and password. Need help configuring a specific device? Contact support.</p>
+
+        <!-- IP authentication. At volume, a password on every call is the thing
+             that breaks first — carriers interconnect by address instead. Both
+             halves are shown, because half a firewall rule is a day lost. -->
+        <div class="card sip-card">
+          <div class="card-head"><span class="card-title">SIP via IP address</span></div>
+          <div class="card-pad">
+            <p class="sip-setup-note">For higher volumes you can connect without a username and password: we trust traffic from your address, you trust ours. Nothing to register, nothing to expire.</p>
+
+            <h4 class="sipip-h">Permit these on your side</h4>
+            <table class="table sipip-table">
+              <tbody>
+                <tr><td>SIP server</td><td class="mono">{{ ipData?.ours?.host }}<button class="sip-copy" @click="copy(ipData.ours.host)">Copy</button></td></tr>
+                <tr><td>IP address</td><td class="mono">{{ ipData?.ours?.ip }}<button class="sip-copy" @click="copy(ipData.ours.ip)">Copy</button></td></tr>
+                <tr><td>Port</td><td class="mono">{{ ipData?.ours?.port }} ({{ ipData?.ours?.transport }})</td></tr>
+                <tr><td>Media ports</td><td class="mono">{{ ipData?.ours?.rtpRange }} UDP</td></tr>
+                <tr><td>Codecs</td><td>{{ ipData?.ours?.codecs }}</td></tr>
+                <tr><td>Number format</td><td>{{ ipData?.ours?.format }}</td></tr>
+              </tbody>
+            </table>
+
+            <h4 class="sipip-h">Tell us your address</h4>
+            <p class="sip-setup-note">The public address your PBX sends from — not the one it listens on. If you're unsure, send us a test call and we'll tell you what we see arriving.</p>
+            <div class="sipip-form">
+              <input v-model="ipForm.ipAddress" class="input mono" placeholder="102.89.14.7" />
+              <input v-model="ipForm.note" class="input" placeholder="Which site or system this is (optional)" />
+              <button class="btn btn-signal" :disabled="ipSubmitting || !ipForm.ipAddress" @click="submitIp">{{ ipSubmitting ? 'Sending…' : 'Request access' }}</button>
+            </div>
+
+            <table v-if="ipData?.requests?.length" class="table sipip-table">
+              <thead><tr><th>Address</th><th>Status</th><th>Requested</th></tr></thead>
+              <tbody>
+                <tr v-for="r in ipData.requests" :key="r.id">
+                  <td class="mono">{{ r.ipAddress }}</td>
+                  <td>
+                    <span class="sipip-badge" :class="r.status">{{ r.status }}</span>
+                    <span v-if="r.rejectReason" class="muted"> — {{ r.rejectReason }}</span>
+                  </td>
+                  <td class="muted">{{ new Date(r.createdAt).toLocaleDateString() }}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p v-else class="muted sipip-empty">No addresses requested yet.</p>
+          </div>
+        </div>
       </template>
     </template>
 
@@ -87,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 useHead({ title: 'SIP — Telroi' });
 const api = useApi();
 const toast = useToast();
@@ -141,6 +186,27 @@ async function load() {
   catch (e: any) { toast.err(e.message); }
   finally { pending.value = false; }
   if (data.value?.endpoints?.length) loadStatus();
+  loadIp();
+}
+
+const ipData = ref<any>(null);
+const ipForm = reactive({ ipAddress: '', note: '' });
+const ipSubmitting = ref(false);
+
+async function loadIp() {
+  try { ipData.value = await api.get('/api/voice/sip/ip'); }
+  catch { /* the rest of the page is still worth showing */ }
+}
+
+async function submitIp() {
+  ipSubmitting.value = true;
+  try {
+    await api.post('/api/voice/sip/ip', { ipAddress: ipForm.ipAddress.trim(), note: ipForm.note.trim() || undefined });
+    ipForm.ipAddress = ''; ipForm.note = '';
+    toast.ok('Sent — we will confirm once it is approved');
+    await loadIp();
+  } catch (e: any) { toast.err(e.message); }
+  finally { ipSubmitting.value = false; }
 }
 
 async function provision() {
@@ -185,6 +251,14 @@ onMounted(load);
 </script>
 
 <style scoped>
+.sipip-h { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin: 20px 0 8px; }
+.sipip-table td:first-child { color: var(--ink-soft); width: 160px; }
+.sipip-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.sipip-form .input { flex: 1; min-width: 180px; }
+.sipip-badge { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); text-transform: capitalize; }
+.sipip-badge.approved { background: rgba(34,139,84,.12); color: #1c7a49; }
+.sipip-badge.rejected { background: rgba(180,45,45,.12); color: #a33; }
+.sipip-empty { font-size: 13px; padding: 6px 0; }
 .sip-setup { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .sip-setup-h { font-size: 16px; margin-bottom: 4px; }
 .sip-setup-note { font-size: 13px; color: var(--ink-soft); line-height: 1.5; max-width: 60ch; }

@@ -54,3 +54,15 @@ export async function slackWentLive(input: {
   ], `${input.name} went live on ${input.plan}`).catch((e) =>
     console.error('[slack] go-live notice failed:', (e as Error)?.message));
 }
+
+/** A client wants an IP trusted for SIP. Nobody watches a request queue, and an
+ *  address left pending is a client who can't send traffic. */
+export async function slackSipIpRequest(input: {
+  ipAddress: string; email: string; note?: string | null; tenantId: string;
+}): Promise<void> {
+  await post([
+    { type: 'section', text: { type: 'mrkdwn', text: `*SIP access requested* — \`${input.ipAddress}\`` } },
+    { type: 'context', elements: [{ type: 'mrkdwn', text: [input.email, input.note, when()].filter(Boolean).join('  ·  ') }] }
+  ], `SIP access requested for ${input.ipAddress} by ${input.email}`).catch((e) =>
+    console.error('[slack] sip request notice failed:', (e as Error)?.message));
+}
