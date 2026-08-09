@@ -11,7 +11,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import type Ari from 'ari-client';
-import { provisionEndpoint, deprovisionEndpoint } from './provision-core.ts';
+import { provisionIpEndpoint, provisionEndpoint, deprovisionEndpoint } from './provision-core.ts';
 import { upsertCarrier, removeCarrier, type CarrierInput } from './carrier-core.ts';
 import { originateCall } from './originate.ts';
 import { logOutbound, reportOtpStatus } from './call-log.ts';
@@ -130,6 +130,27 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
         const result = provisionEndpoint(tenantId, label, webrtc, context);
         log(`provisioned ${result.username} for tenant ${tenantId}`);
         return send(res, 200, { ok: true, ...result });
+      }
+
+      // POST /provision-ip { tenantId, label, ipAddress } -> trust a client's own
+      // PBX by address. Separate from /provision because it mints no password
+      // and writes an identify rule — a different thing to reason about, and
+      // worth being obvious in the logs when it happens.
+      if (req.method === 'POST' && req.url === '/provision-ip') {
+        const body = await readJson(req);
+        const tenantId = String(body.tenantId || '').trim();
+        const ipAddress = String(body.ipAddress || '').trim();
+        const label = String(body.label || 'ip-auth').slice(0, 120);
+        if (!tenantId) return send(res, 400, { ok: false, error: 'tenantId required' });
+        if (!ipAddress) return send(res, 400, { ok: false, error: 'ipAddress required' });
+        try {
+          const result = provisionIpEndpoint(tenantId, label, ipAddress);
+          log(`provisioned ${result.username} for tenant ${tenantId} trusting ${ipAddress}`);
+          return send(res, 200, { ok: true, ...result });
+        } catch (e: any) {
+          log(`refused to provision ip endpoint: ${e?.message}`);
+          return send(res, 400, { ok: false, error: e?.message || 'invalid request' });
+        }
       }
 
       // POST /deprovision  { username } -> { removed }
