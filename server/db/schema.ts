@@ -821,6 +821,9 @@ export const voiceOtps = pgTable('voice_otps', {
   // puts a live one-time code in a third party's system for the same window.
   pendingCode: text('pending_code'),           // sha256(code) — never store plaintext
   codeLength: integer('code_length').notNull(),
+  // The client generated this code, not us. We deliver and bill for it but never
+  // check it — verification stays with whoever made it.
+  clientSupplied: boolean('client_supplied').notNull().default(false),
   status: text('status').notNull().default('pending'), // pending | calling | delivered | verified | failed | expired
   attempts: integer('attempts').notNull().default(0),
   maxAttempts: integer('max_attempts').notNull(),

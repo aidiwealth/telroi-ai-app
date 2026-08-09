@@ -16,5 +16,13 @@ export default defineEventHandler(async (event) => {
 
   const { verifyVoiceOtp } = await import('~/server/utils/voice/otp-service');
   const r = await verifyVoiceOtp(ctx.tenantId, { id: p.data.id, toNumber: p.data.to }, p.data.code);
+
+  // A code the client generated isn't ours to check, and returning verified:false
+  // would read as a mismatch — sending someone to debug an integration that is
+  // working. An error says what happened instead.
+  if (r.status === 'not_verifiable') {
+    throw apiError('not_verifiable', r.error || 'You supplied this code, so verifying it is yours to do.', 422);
+  }
+
   return { object: 'otp_verification', livemode: true, status: r.status, verified: r.ok, attempts_left: r.attemptsLeft };
 });

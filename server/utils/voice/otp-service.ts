@@ -83,7 +83,7 @@ async function checkRate(tenantId: string, toNumber: string, p: OtpPolicy): Prom
 }
 
 // Send a voice OTP: generate, rate-check, place the call, persist (hashed).
-export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string } = {}): Promise<SendResult> {
+export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string; ownCode?: string } = {}): Promise<SendResult> {
   const p = await otpPolicy(tenantId);
   const db = useDb();
 
@@ -115,10 +115,17 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
     }
   }
 
-  const code = genCode(len);
+  // A client can send its own code. Plenty of platforms already generate one and
+  // want a delivery channel rather than a verification service — refusing them
+  // means they either duplicate what they have or don't use us at all. We still
+  // hash it, so the row records that a call was placed and what it cost without
+  // holding a live credential we have no use for: verifying it is theirs.
+  const ownCode = opts.ownCode?.trim();
+  const code = ownCode || genCode(len);
   const expiresAt = new Date(Date.now() + p.ttlSeconds * 1000);
   const [row] = await db.insert(schema.voiceOtps).values({
-    tenantId, toNumber, codeHash: sha256(code), codeLength: len,
+    tenantId, toNumber, codeHash: sha256(code), codeLength: ownCode ? ownCode.length : len,
+    clientSupplied: !!ownCode,
     status: 'calling', maxAttempts: p.maxAttempts, expiresAt
   }).returning({ id: schema.voiceOtps.id });
 
@@ -165,6 +172,17 @@ export async function verifyVoiceOtp(tenantId: string, idOrNumber: { id?: string
     .where(and(...filters))
     .orderBy(sql`${schema.voiceOtps.createdAt} DESC`).limit(1);
   if (!otp) return { ok: false, status: 'not_found', error: 'No OTP found' };
+
+  // A code the client generated is not ours to check. Falling through would
+  // compare hashes and usually match, which would be us appearing to verify
+  // something we have no authority over — and the attempt counter and expiry
+  // below are rules they never agreed to. Said plainly instead, so nobody
+  // debugs a working integration.
+  if (otp.clientSupplied) {
+    return { ok: false, status: 'not_verifiable',
+      error: 'You supplied this code, so verifying it is yours to do. We delivered it and recorded the call.' };
+  }
+
   if (otp.status === 'verified') return { ok: false, status: 'already_verified', error: 'Code already used' };
   if (new Date(otp.expiresAt).getTime() < Date.now()) {
     await db.update(schema.voiceOtps).set({ status: 'expired' }).where(eq(schema.voiceOtps.id, otp.id));
