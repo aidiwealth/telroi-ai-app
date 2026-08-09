@@ -109,6 +109,7 @@
           <select v-model="sp.otpNgTrunk" class="ad-input" @change="syncOtpHost">
             <option value="ruach-endpoint">Ruach</option>
             <option value="kasooko-endpoint">Kasooko</option>
+            <option value="sotel-endpoint">Sotel</option>
           </select>
           <span class="ad-hint">Calls to +234 numbers leave on this trunk, whatever the vendor below is set to.</span>
         </label>
@@ -762,7 +763,13 @@ const sp = reactive<any>({
 // it was offering a route that doesn't exist.
 const OTP_TRUNK_HOSTS: Record<string, string> = {
   'ruach-endpoint': 'sip.ruach.ng',
-  'kasooko-endpoint': '96.0.46.249'
+  'kasooko-endpoint': '96.0.46.249',
+  // Sotel's primary. Its secondary lives on the trunk, so a call that can't
+  // reach this address still goes out — the OTP path needn't know.
+  'sotel-endpoint': '102.223.37.253',
+  // Sotel's primary. Its secondary is on the trunk itself, so a call that can't
+  // reach this address still goes out — the OTP path doesn't need to know.
+  'sotel-endpoint': '102.223.37.253'
 };
 function syncOtpHost() {
   sp.otpNgHost = OTP_TRUNK_HOSTS[sp.otpNgTrunk] || '';
