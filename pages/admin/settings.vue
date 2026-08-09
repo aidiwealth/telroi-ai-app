@@ -110,6 +110,7 @@
             <option value="ruach-endpoint">Ruach</option>
             <option value="kasooko-endpoint">Kasooko</option>
             <option value="sotel-endpoint">Sotel</option>
+            <option value="sotel-endpoint">Sotel</option>
           </select>
           <span class="ad-hint">Calls to +234 numbers leave on this trunk, whatever the vendor below is set to.</span>
         </label>
@@ -779,7 +780,11 @@ const ngRows = ref<any[]>([]);
 // Presenting a number from another carrier is refused, so the list follows the
 // trunk: choose Kasooko and only Kasooko numbers are offered.
 const ngNumbers = computed(() => {
-  const want = sp.otpNgTrunk === 'kasooko-endpoint' ? 'kasooko' : 'ruach';
+  // Presenting a number from another carrier is refused — that cost most of a
+  // day — so the list follows the trunk rather than offering everything.
+  const want = sp.otpNgTrunk === 'kasooko-endpoint' ? 'kasooko'
+    : sp.otpNgTrunk === 'sotel-endpoint' ? 'sotel'
+    : 'ruach';
   return ngRows.value.filter((n) => n.provider === want).map((n) => n.telnum);
 });
 // Grouped by provider, because a from-number has to belong to whoever places the
