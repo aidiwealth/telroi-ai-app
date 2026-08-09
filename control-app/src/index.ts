@@ -534,6 +534,11 @@ async function main() {
               // Mode: ring_all — ring every registered endpoint for this tenant.
               if (mode === 'ring_all') {
                 const allUsers = resolveTenantEndpoints(route.tenantId);
+                // Temporary: a client's escalation rang an endpoint belonging to
+                // the support workspace, and narrowing by elimination has been
+                // wrong three times. This says plainly which tenant was asked for
+                // and what came back.
+                log(`  [ai ${chId}] ring_all for tenant ${route.tenantId} -> ${JSON.stringify(allUsers)}`);
                 const liveUsers = await filterLiveEndpoints(client, allUsers, log);
                 const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
                 log(`  [ai ${chId}] escalation mode=ring_all — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);

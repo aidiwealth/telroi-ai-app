@@ -127,6 +127,10 @@
           </div>
           <div class="ad-field"><label>Region</label><input v-model="form.region" class="ad-input mono" placeholder="NG" /></div>
           <div class="ad-field"><label>SIP gateway (IP or host)</label><input v-model="form.sipGateway" class="ad-input mono" placeholder="41.222.211.109" /></div>
+          <!-- Where the carrier runs two SBCs. Sotel moves traffic to its
+               secondary during maintenance, and a trunk that only knows the
+               primary fails at exactly the moment failover was meant to help. -->
+          <div class="ad-field"><label>Secondary gateway</label><input v-model="form.sipGateway2" class="ad-input mono" placeholder="blank unless the carrier has a failover SBC" /></div>
           <div class="ad-field"><label>Port</label><input v-model.number="form.sipPort" type="number" class="ad-input mono" placeholder="5060" /></div>
           <div class="ad-field"><label>Transport</label>
             <select v-model="form.transport" class="ad-input"><option value="udp">UDP</option><option value="tcp">TCP</option><option value="tls">TLS</option></select>
@@ -163,7 +167,7 @@ const tab = ref<'asterisk' | 'other'>('asterisk');
 
 interface Carrier {
   id: string; name: string; displayName: string; prefix: string; region: string;
-  sipGateway: string; sipPort: number; transport: string; sipDomain?: string | null;
+  sipGateway: string; sipGateway2?: string | null; sipPort: number; transport: string; sipDomain?: string | null;
   authUser?: string | null; codecs?: string[]; enabled: boolean; status: string;
   pushedAt?: string | null; authPassSet?: boolean; webhookSecretSet?: boolean;
 }
@@ -178,7 +182,7 @@ const error = ref('');
 
 const blankForm = () => ({
   name: '', displayName: '', prefix: '', region: 'NG',
-  sipGateway: '', sipPort: 5060, transport: 'udp', sipDomain: '',
+  sipGateway: '', sipGateway2: '', sipPort: 5060, transport: 'udp', sipDomain: '',
   authUser: '', authPass: '', webhookSecret: '', enabled: true
 });
 const form = reactive(blankForm());
@@ -218,7 +222,7 @@ function openNew() {
 function edit(c: Carrier) {
   Object.assign(form, blankForm());
   form.name = c.name; form.displayName = c.displayName; form.prefix = c.prefix;
-  form.region = c.region; form.sipGateway = c.sipGateway; form.sipPort = c.sipPort;
+  form.region = c.region; form.sipGateway = c.sipGateway; form.sipGateway2 = c.sipGateway2 || ''; form.sipPort = c.sipPort;
   form.transport = c.transport; form.sipDomain = c.sipDomain || '';
   form.authUser = c.authUser || ''; form.enabled = c.enabled;
   form.authPass = ''; form.webhookSecret = '';

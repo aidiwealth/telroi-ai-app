@@ -143,6 +143,10 @@ export const platformSettings = pgTable('platform_settings', {
   // and Kasooko on an IP, so switching trunks without it dialled the new carrier
   // at the old one's address.
   otpNgHost: text('otp_ng_host'),
+  // Slack incoming webhook. Encrypted because anyone holding it can post to the
+  // channel, and a setting rather than an env var so the channel can change
+  // without a deploy.
+  slackWebhookEnc: text('slack_webhook_enc'),
   // The carrier's SIP host travels with the trunk: Ruach answers on a hostname
   // and Kasooko on an IP, so switching trunks without it dialled the new carrier
   // at the old one's address.
@@ -1182,7 +1186,11 @@ export const carriers = pgTable('carriers', {
   displayName: text('display_name').notNull(),
   prefix: text('prefix').notNull().unique(),    // dial prefix, e.g. "81"
   region: text('region').notNull().default('NG'),
-  sipGateway: text('sip_gateway').notNull(),    // gateway IP or host
+  sipGateway: text('sip_gateway').notNull(),
+  // A carrier's second SBC, where it has one. Sotel runs primary and secondary
+  // and moves traffic between them during maintenance — a trunk that only knows
+  // the primary fails at the moment failover was meant to help.
+  sipGateway2: text('sip_gateway2'),    // gateway IP or host
   sipPort: integer('sip_port').notNull().default(5060),
   transport: text('transport').notNull().default('udp'),  // udp|tcp|tls
   sipDomain: text('sip_domain'),                // dial domain (default = gateway)

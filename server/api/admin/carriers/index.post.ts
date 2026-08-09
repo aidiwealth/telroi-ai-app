@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
   const displayName = String(raw.displayName || '').trim();
   const prefix = String(raw.prefix || '').trim();
   const sipGateway = String(raw.sipGateway || '').trim();
+  const sipGateway2 = String(raw.sipGateway2 || '').trim() || null;
   if (!/^[a-z0-9]{2,32}$/.test(name)) throw apiError('bad_request', 'Name must be lowercase a-z0-9, 2-32 chars', 400);
   if (!displayName) throw apiError('bad_request', 'Display name is required', 400);
   if (!/^[0-9]{2,4}$/.test(prefix)) throw apiError('bad_request', 'Prefix must be 2-4 digits', 400);
@@ -54,7 +55,7 @@ export default defineEventHandler(async (event) => {
     }
     try {
       await agentCarrierUpsert({
-        name, displayName, prefix, sipGateway, sipPort, transport,
+        name, displayName, prefix, sipGateway, sipGateway2, sipPort, transport,
         sipDomain: sipDomain || undefined, authUser: authUser || undefined,
         authPass: authPassPlain, codecs: codecs || undefined
       });
@@ -66,7 +67,7 @@ export default defineEventHandler(async (event) => {
 
   // 2) Upsert the DB record.
   const values: any = {
-    name, displayName, prefix, region, sipGateway, sipPort, transport,
+    name, displayName, prefix, region, sipGateway, sipGateway2, sipPort, transport,
     sipDomain, authUser, authPassEnc, fromUser: null, callerId: null,
     codecs: codecs ?? ['ulaw', 'alaw'], webhookSecretEnc, enabled,
     status: pushed ? 'live' : (isScaffold ? 'scaffold' : 'disabled'),

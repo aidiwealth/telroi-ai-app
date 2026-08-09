@@ -31,6 +31,11 @@ export interface CarrierInput {
   displayName?: string;
   prefix: string;
   sipGateway: string;
+  // A second SBC address, where the carrier has one. Sotel runs primary and
+  // secondary and expects traffic to move between them during maintenance — a
+  // trunk that only knows the primary fails at exactly the moment failover was
+  // meant to help.
+  sipGateway2?: string | null;
   sipPort?: number;
   transport?: string;
   sipDomain?: string;
@@ -91,7 +96,7 @@ rewrite_contact=yes
 [${c.name}-aor]
 type=aor
 contact=sip:${c.sipGateway}:${port}
-qualify_frequency=60
+${c.sipGateway2 ? `contact=sip:${c.sipGateway2}:${port}\n` : ''}qualify_frequency=60
 qualify_timeout=3
 
 [${c.name}-identify]
@@ -99,6 +104,7 @@ type=identify
 endpoint=${c.name}-endpoint
 match=${c.sipGateway}
 `;
+  if (c.sipGateway2) out += `match=${c.sipGateway2}\n`;
   if (domain && domain !== c.sipGateway) out += `match=${domain}\n`;
 
   if (useAuth) {
