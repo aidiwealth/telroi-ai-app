@@ -55,16 +55,20 @@ export default defineEventHandler((event) => {
       '/v1/otp': {
         post: {
           tags: ['Voice OTP'], summary: 'Send a voice OTP',
-          description: 'Places a phone call to `to` and reads a one-time code aloud. The code length, validity window, repeat count and per-number frequency are governed by the operator policy; a request may ask for a shorter code but never a longer-lived one. Returns immediately with the OTP id; verify the code the user enters with `POST /v1/otp/verify`.',
+          description: 'Places a phone call to `to` and reads a one-time code aloud.\n\nBy default we generate the code and you verify it with `POST /v1/otp/verify`. The code length, validity window, repeat count and per-number frequency are governed by the operator policy; a request may ask for a shorter code but never a longer-lived one.\n\nIf you already generate codes yourself, send one as `code`. We read it out, record the call and bill for it, but never check it — expiry, attempt limits and verification stay entirely with you, and `POST /v1/otp/verify` will refuse a code it did not generate.',
           operationId: 'sendVoiceOtp',
           requestBody: { required: true, content: { 'application/json': { schema: {
             type: 'object', required: ['to'],
             properties: {
               to: { type: 'string', description: 'Destination number in E.164 format.', example: '+2348012345678' },
               code_length: { type: 'integer', minimum: 4, maximum: 10, description: 'Requested code length (clamped to the operator maximum).', example: 6 },
-              language: { type: 'string', description: 'BCP-47 language for the spoken prompt.', example: 'en-US' }
+              language: { type: 'string', description: 'BCP-47 language for the spoken prompt.', example: 'en-US' },
+              code: { type: 'string', pattern: '^[0-9]{4,10}$', description: 'Your own code, if you generate them. We read it out and record the call; verifying it stays with you. When set, `code_length` is ignored and no `expires_at` is returned — how long it stays valid is your decision.', example: '483920' }
             }
-          }, examples: { default: { value: { to: '+2348012345678', code_length: 6 } } } } } },
+          }, examples: {
+            default: { summary: 'We generate the code', value: { to: '+2348012345678', code_length: 6 } },
+            ownCode: { summary: 'You supply the code', value: { to: '+2348012345678', code: '483920' } }
+          } } } },
           responses: {
             200: { description: 'OTP call placed.', content: { 'application/json': { schema: {
               type: 'object', properties: { object: { const: 'otp' }, id: { type: 'string' }, to: { type: 'string' }, status: { type: 'string', enum: ['delivered', 'calling', 'failed'] }, expires_at: { type: 'string', format: 'date-time' }, livemode: { type: 'boolean' } }

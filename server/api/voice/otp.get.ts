@@ -25,6 +25,7 @@ export default defineEventHandler(async (event) => {
     maxAttempts: schema.voiceOtps.maxAttempts,
     createdAt: schema.voiceOtps.createdAt,
     verifiedAt: schema.voiceOtps.verifiedAt,
+    clientSupplied: schema.voiceOtps.clientSupplied,
     expiresAt: schema.voiceOtps.expiresAt,
     reason: schema.voiceOtps.reason
   }).from(schema.voiceOtps)
@@ -45,7 +46,10 @@ export default defineEventHandler(async (event) => {
   const items = rows.map((r) => ({
     ...r,
     chargedMinor: costs.get(r.id) ?? null,
-    verified: r.status === 'verified'
+    // A client-supplied code can never read as verified here — we never checked
+    // it. Marked so the log shows a different mode rather than a failure.
+    verified: r.status === 'verified',
+    clientSupplied: !!r.clientSupplied
   }));
 
   const summary = {

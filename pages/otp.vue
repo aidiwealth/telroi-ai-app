@@ -44,7 +44,10 @@
             <td class="mono">{{ i.to }}</td>
             <td>{{ when(i.createdAt) }}</td>
             <td><span class="otp-badge" :class="i.status">{{ i.status }}</span></td>
-            <td>{{ i.verified ? when(i.verifiedAt) : '—' }}</td>
+            <td>
+              <span v-if="i.clientSupplied" class="muted">your code</span>
+              <span v-else>{{ i.verified ? when(i.verifiedAt) : '—' }}</span>
+            </td>
             <td>{{ i.attempts }} / {{ i.maxAttempts }}</td>
             <td class="ta-r mono">{{ i.chargedMinor == null ? '—' : money(i.chargedMinor) }}</td>
           </tr>
