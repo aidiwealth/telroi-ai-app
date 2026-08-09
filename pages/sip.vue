@@ -108,6 +108,28 @@
       </template>
     </template>
 
+    <!-- Withdrawing an address. Worth a proper modal: for an approved one this
+         is the only way access ends, and a browser dialog understates that. -->
+    <div v-if="removingIp" class="modal-overlay" @click.self="removingIp = null">
+      <div class="modal card">
+        <div class="card-head">
+          <span class="card-title">{{ removingIp.status === 'approved' ? 'Stop trusting this address?' : 'Withdraw this request?' }}</span>
+          <button class="modal-x" @click="removingIp = null">✕</button>
+        </div>
+        <div class="card-pad">
+          <p v-if="removingIp.status === 'approved'" class="sipip-modal-p">
+            Calls from <strong class="mono">{{ removingIp.ipAddress }}</strong> will be refused straight away. There is no password here, so removing it is how access ends — you can request it again later.
+          </p>
+          <p v-else class="sipip-modal-p">
+            <strong class="mono">{{ removingIp.ipAddress }}</strong> hasn't been approved yet. Withdrawing simply removes the request.
+          </p>
+          <button class="btn btn-danger btn-block" :disabled="ipRemoving === removingIp.id" @click="confirmRemoveIp">
+            {{ ipRemoving === removingIp.id ? 'Removing…' : (removingIp.status === 'approved' ? 'Stop trusting it' : 'Withdraw') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- One-time password modal -->
     <div v-if="secret" class="modal-overlay" @click.self="secret = null">
       <div class="modal card">
@@ -209,15 +231,16 @@ const ipForm = reactive({ ipAddress: '', note: '' });
 const ipSubmitting = ref(false);
 const ipRemoving = ref<string | null>(null);
 
-async function removeIp(r: any) {
-  const msg = r.status === 'approved'
-    ? `Stop trusting ${r.ipAddress}? Calls from that address will be refused straight away — there is no password here, so removing it is how access ends.`
-    : `Withdraw the request for ${r.ipAddress}?`;
-  if (!confirm(msg)) return;
+const removingIp = ref<any>(null);
+function removeIp(r: any) { removingIp.value = r; }
+
+async function confirmRemoveIp() {
+  const r = removingIp.value;
   ipRemoving.value = r.id;
   try {
     await api.del(`/api/voice/sip/ip/${encodeURIComponent(r.id)}`);
     toast.ok(r.status === 'approved' ? 'Access withdrawn' : 'Request withdrawn');
+    removingIp.value = null;
     await loadIp();
   } catch (e: any) { toast.err(e.message); }
   finally { ipRemoving.value = null; }
@@ -294,6 +317,7 @@ onMounted(load);
 .sipip-badge.rejected { background: rgba(180,45,45,.12); color: #a33; }
 .sipip-empty { font-size: 13px; padding: 6px 0; }
 .ta-r { text-align: right; }
+.sipip-modal-p { font-size: 14px; line-height: 1.5; margin: 0 0 14px; }
 .sip-setup { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
 .sip-setup-h { font-size: 16px; margin-bottom: 4px; }
 .sip-setup-note { font-size: 13px; color: var(--ink-soft); line-height: 1.5; max-width: 60ch; }

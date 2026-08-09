@@ -68,6 +68,17 @@
       </div>
     </div>
 
+    <div v-if="revoking" class="ad-modal-overlay" @click.self="revoking = null">
+      <div class="ad-modal">
+        <div class="ad-modal-head"><h3>Stop trusting this address?</h3><button class="ad-x" @click="revoking = null">✕</button></div>
+        <p class="req-modal-p">
+          Calls from <strong class="mono">{{ revoking.ipAddress }}</strong> on behalf of <strong>{{ revoking.workspace }}</strong> will be refused immediately.
+        </p>
+        <p class="req-modal-p ad-dim">There is no password to rotate here, so this is how access ends. They can request it again.</p>
+        <button class="btn btn-danger btn-block" :disabled="busy === revoking.id" @click="doRevoke">{{ busy === revoking.id ? 'Revoking…' : 'Stop trusting it' }}</button>
+      </div>
+    </div>
+
     <div v-if="declining" class="ad-modal-overlay" @click.self="declining = null">
       <div class="ad-modal">
         <div class="ad-modal-head"><h3>Decline {{ declining.ipAddress }}</h3><button class="ad-x" @click="declining = null">✕</button></div>
@@ -131,14 +142,16 @@ async function doReject() {
   finally { busy.value = null; }
 }
 
-async function revoke(r: any) {
-  // Deliberately blunt: this is the only way access ends, since there is no
-  // password to rotate.
-  if (!confirm(`Stop trusting ${r.ipAddress} for ${r.workspace}? Calls from that address will be refused immediately.`)) return;
+const revoking = ref<any>(null);
+function revoke(r: any) { revoking.value = r; }
+
+async function doRevoke() {
+  const r = revoking.value;
   busy.value = r.id;
   try {
     await $fetch(`/api/admin/sip-requests/${r.id}`, { method: 'DELETE' });
     toast.ok('Access withdrawn');
+    revoking.value = null;
     await load();
   } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not revoke'); }
   finally { busy.value = null; }
