@@ -236,7 +236,7 @@ async function save() {
   try {
     const payload: any = {
       name: form.name, displayName: form.displayName, prefix: form.prefix,
-      region: form.region, sipGateway: form.sipGateway, sipPort: form.sipPort,
+      region: form.region, sipGateway: form.sipGateway, sipGateway2: form.sipGateway2 || null, sipPort: form.sipPort,
       transport: form.transport, enabled: form.enabled
     };
     if (form.sipDomain) payload.sipDomain = form.sipDomain;
