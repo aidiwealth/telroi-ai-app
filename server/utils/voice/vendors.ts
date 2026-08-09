@@ -70,7 +70,12 @@ export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCa
   const isNigeria = dest.startsWith('234') || dest.startsWith('0');
   const vendor = isNigeria ? 'telroi' : (v.otpIntlVendor || v.otpVoiceVendor);
   console.log(`[otp-route] to=${input.toNumber} dest=${dest} nigeria=${isNigeria} vendor=${vendor}`);
-  const speech = `Your verification code is. ${input.code.split('').join(', ')}. I repeat. ${input.code.split('').join(', ')}.`;
+  // The same script the other two paths use. Nigeria plays recorded audio and
+  // Telnyx speaks at call.answered, so this is Twilio's copy — and it had drifted
+  // to older wording, which nobody would notice until a vendor switch changed
+  // what callers heard.
+  const digits = input.code.split('').join(', ');
+  const speech = `Hi. Your O T P code is. ${digits}. Let me repeat that. Your O T P code is. ${digits}. Please do not share this code with anyone. Goodbye.`;
 
   if (vendor === 'telroi') {
     // Use Telroi's own configured carrier gateway. The control-plane request is
@@ -81,7 +86,7 @@ export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCa
   if (vendor === 'twilio') {
     if (!v.otpCreds?.accountSid || !v.otpCreds?.authToken || !v.otpCreds?.from)
       return { ok: false, reason: 'Twilio OTP vendor not configured' };
-    const twiml = `<Response><Say voice="alice" language="${input.language || 'en-US'}" loop="${input.repeatCount}">${speech}</Say></Response>`;
+    const twiml = `<Response><Say voice="alice" language="${input.language || 'en-US'}" loop="1">${speech}</Say></Response>`;
     const body = new URLSearchParams({ To: input.toNumber, From: v.otpCreds.from, Twiml: twiml, Timeout: String(input.callTimeoutSec) });
     const res = await http(`https://api.twilio.com/2010-04-01/Accounts/${v.otpCreds.accountSid}/Calls.json`, {
       method: 'POST',
