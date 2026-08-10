@@ -11,20 +11,38 @@ export default defineEventHandler(async (event) => {
   const sig = getRequestHeader(event, 'x-paystack-signature') || '';
   const pay = await paymentCreds();
 
+  // Recorded before verification: a refused notification and one that never
+  // arrived look identical otherwise.
+  const { recordWebhook, finishWebhook } = await import('~/server/utils/webhook-log');
+  const logId = await recordWebhook({ provider: 'paystack', raw });
+
   if (!pay.paystack || !paystack.verifySignature(pay.paystack, raw, sig)) {
+    await finishWebhook(logId, {
+      outcome: 'rejected', signatureOk: false,
+      detail: !pay.paystack ? 'no Paystack key configured for the current payment mode' : 'signature did not verify'
+    });
     throw createError({ statusCode: 401, message: 'Invalid signature' });
   }
 
   const body = JSON.parse(raw);
-  if (body.event !== 'charge.success') return { ok: true, ignored: body.event };
+  if (body.event !== 'charge.success') {
+    await finishWebhook(logId, { outcome: 'ignored', signatureOk: true, eventType: body.event, detail: 'not a successful charge' });
+    return { ok: true, ignored: body.event };
+  }
 
   const reference = body.data?.reference;
   const db = useDb();
   const [payment] = await db.select().from(schema.payments).where(eq(schema.payments.reference, reference)).limit(1);
-  if (!payment || payment.status === 'succeeded') return { ok: true, idempotent: true };
+  if (!payment || payment.status === 'succeeded') {
+    await finishWebhook(logId, { outcome: 'ignored', signatureOk: true, eventType: body.event,
+      tenantId: payment?.tenantId, detail: payment ? 'already credited' : `no payment found for ${reference}` });
+    return { ok: true, idempotent: true };
+  }
 
   // Credit the wallet (idempotent by reference) and mark the payment settled.
   await credit(payment.tenantId, payment.amountMinor, 'topup', reference, { provider: 'paystack' });
+  await finishWebhook(logId, { outcome: 'accepted', signatureOk: true, eventType: body.event,
+    tenantId: payment.tenantId, detail: `credited ${(payment.amountMinor / 100).toLocaleString()}` });
   await db.update(schema.payments).set({ status: 'succeeded', creditedAt: new Date(), raw: body })
     .where(eq(schema.payments.id, payment.id));
 
