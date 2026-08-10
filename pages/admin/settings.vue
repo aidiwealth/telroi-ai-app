@@ -116,9 +116,13 @@
         <label class="ad-field"><span>Nigerian calls — presenting number</span>
           <select v-model="sp.otpNgCallerId" class="ad-input">
             <option value="">Carrier default</option>
+            <!-- Empty is a state, not a fault: numbers only appear once we hold
+                 one on the carrier selected above, because presenting another
+                 carrier's number is refused. -->
             <option v-for="n in ngNumbers" :key="n" :value="n">{{ n }}</option>
           </select>
-          <span class="ad-hint">What the recipient sees. Somebody who can't tell who is calling is unlikely to answer a verification call.</span>
+          <span v-if="!ngNumbers.length" class="ad-hint">No numbers held on this carrier yet. Buy or reserve one under Inventory — presenting a number we don't hold is refused, which reads like a carrier outage and isn't one.</span>
+          <span v-else class="ad-hint">What the recipient sees. Somebody who can't tell who is calling is unlikely to answer a verification call.</span>
         </label>
       </div>
 
@@ -847,11 +851,17 @@ onMounted(async () => {
     // numbers returned to stock, and presenting one of those is refused —
     // Kasooko answers "403 Source number blacklisted" directly and cause 41
     // through its normal path, which reads like a carrier outage and isn't one.
-    ngRows.value = rows.filter((n: any) =>
-      String(n.telnum || '').startsWith('+234') && n.status === 'sold');
+    // Sold or reserved. A number held for platform use is exactly what we would
+    // present on an OTP call — ours, deliberately kept back, not saleable — and
+    // leaving it out meant reserving a number made it unusable as a caller id,
+    // which inverts the point of reserving it.
+    const ours = (n: any) => n.status === 'sold' || n.status === 'reserved';
+    ngRows.value = rows.filter((n: any) => String(n.telnum || '').startsWith('+234') && ours(n));
     intlNumbers.value = {
-      twilio: rows.filter((n) => n.provider === 'twilio' && !String(n.telnum || '').startsWith('+234')).map((n) => n.telnum),
-      telnyx: rows.filter((n) => n.provider === 'telnyx' && !String(n.telnum || '').startsWith('+234')).map((n) => n.telnum)
+      // Same rule internationally: a number still in stock is one the carrier
+      // does not yet consider ours, and presenting it is refused.
+      twilio: rows.filter((n: any) => n.provider === 'twilio' && ours(n) && !String(n.telnum || '').startsWith('+234')).map((n: any) => n.telnum),
+      telnyx: rows.filter((n: any) => n.provider === 'telnyx' && ours(n) && !String(n.telnum || '').startsWith('+234')).map((n: any) => n.telnum)
     };
   } catch { /* the fields fall back to carrier default */ }
 });
