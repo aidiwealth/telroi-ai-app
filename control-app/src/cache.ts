@@ -17,7 +17,7 @@
 // (see call-log.ts), so the caller never waits on a write either.
 // ───────────────────────────────────────────────────────────────────────────
 import { db, schema } from './db.ts';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { config } from './config.ts';
 
 export interface NumberRoute {
