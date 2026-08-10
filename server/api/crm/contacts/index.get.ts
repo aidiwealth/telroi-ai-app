@@ -9,7 +9,11 @@ export default defineEventHandler(async (event) => {
   // the autoLinkCalls setting), so calls flow into contacts automatically.
   await syncCallsToContacts(s.tenantId);
   const q = getQuery(event);
-  const p = pageParams(event);
+  // 200, as before. This feeds a kanban board that sorts every contact into
+  // status columns — paging it would show page two with columns missing their
+  // cards, which is not a smaller view but a wrong one. Paging is supported for
+  // anything that wants it; the board simply asks for the lot.
+  const p = pageParams(event, 200);
   const { items, total } = await listContacts(s.tenantId, {
     q: q.q as string,
     status: q.status as string,
