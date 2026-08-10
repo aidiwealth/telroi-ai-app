@@ -706,7 +706,10 @@ async function savePostpaid() {
     } });
     data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
     syncPostpaidForm();
-  } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }
+    // Said out loud: a form that saves in silence leaves you unsure whether it
+    // took, and this one governs whether a client can spend money they don't have.
+    toast.ok(ppForm.value.postpaid ? 'Postpaid settings saved' : 'Switched back to pay as you go');
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not save'); }
   finally { ppBusy.value = false; }
 }
 

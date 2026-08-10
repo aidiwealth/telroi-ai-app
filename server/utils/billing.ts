@@ -63,6 +63,9 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
       creditLimitMinor: schema.tenants.creditLimitMinor
     }).from(schema.tenants).where(eq(schema.tenants.id, sub.tenantId)).limit(1);
     if (!canSpend(t, wallet.balanceMinor, amount)) {
+      // Temporary: a postpaid client with funds had numbers suspended and the
+      // logic reads correctly, so this says what it actually saw.
+      console.log(`[billing] suspending ${sub.telnum}: balance=${wallet.balanceMinor} amount=${amount} postpaid=${t?.postpaid} limit=${t?.creditLimitMinor} currency=${wallet.currency}`);
       await db.update(schema.numberSubscriptions).set({ status: 'suspended' }).where(eq(schema.numberSubscriptions.id, sub.id));
       result.suspended++;
       result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
