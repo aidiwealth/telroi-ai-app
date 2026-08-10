@@ -180,7 +180,14 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
       // POST /originate { agentEndpoint, to, trunk, callerId } -> { callid }
       // Click-to-call: ring the agent's device, then dial the destination out
       // through the named trunk and bridge them.
-      // POST /otp-call { to, code, trunk, prefix?, callerId?, repeatCount?, timeoutSec? }
+      // POST /otp-call { to, code, trunk, host?, prefix?, callerId?, repeatCount?,
+      //                   timeoutSec?, otpId? }
+      //
+      // host matters as much as trunk: the dial string is
+      // PJSIP/<trunk>/sip:<number>@<host>, so a call named for one carrier and
+      // addressed to another's host goes to the wrong place entirely — which is
+      // what happened when it was missing here, defaulting to Ruach while the
+      // logs said Sotel.
       // Dials a number and reads a code to whoever answers. No agent, no bridge.
       if (req.method === 'POST' && req.url === '/otp-call') {
         if (!ari) return send(res, 503, { ok: false, error: 'ARI not connected' });
@@ -195,6 +202,7 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
           const { placeOtpCall } = await import('./otp-call.ts');
           const result = await placeOtpCall({
             client: ari, to, code, trunk,
+            host: body.host ? String(body.host).slice(0, 120) : undefined,
             prefix: body.prefix ? String(body.prefix) : undefined,
             callerId: body.callerId ? String(body.callerId).slice(0, 64) : undefined,
             repeatCount: Number(body.repeatCount) || undefined,
@@ -202,7 +210,7 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
             otpId: body.otpId ? String(body.otpId) : undefined
           });
           // The code is deliberately absent from this line.
-          log(`otp placed to ${to} via ${trunk} (callid ${result.callid})`);
+          log(`otp placed to ${to} via ${trunk}@${body.host || 'default'} (callid ${result.callid})`);
           return send(res, 200, { ok: true, ...result });
         } catch (e) {
           log(`otp-call failed: ${(e as Error).message}`);
