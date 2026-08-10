@@ -203,7 +203,10 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
             workspace: t?.name || 'your workspace',
             amount: fmt(amountMinor),
             balance: (w.balanceMinor < 0 ? '−' : '') + fmt(w.balanceMinor),
-            method: String(meta.provider || 'card'),
+            // What the client experienced, not who we route through. Monnify is
+            // our provider; to them the money went to a bank account, and the
+            // bank's name is the thing they'd recognise on their own statement.
+            method: await describeMethod(tenantId, String(meta.provider || 'card')),
             invoiceNumber: settled?.number || null,
             invoiceId: settled?.id || null,
             suspensionLifted: liftedSuspension
@@ -345,4 +348,26 @@ async function chargeViaProvider(provider: string, _token: string, _amountMinor:
     return { ok: false, reason: 'provider_unconfigured' };
   }
   return { ok: false, reason: 'provider_unconfigured' };
+}
+
+
+/** How a payment looked from the client's side.
+ *
+ *  Our provider names are ours: a client transferring into a reserved account
+ *  sees their own bank on their statement, not the platform we happen to use to
+ *  issue it. Naming the plumbing in a receipt is both confusing and more than
+ *  they need to know.
+ */
+async function describeMethod(tenantId: string, provider: string): Promise<string> {
+  const p = provider.toLowerCase();
+  if (p === 'monnify') {
+    try {
+      const [acct] = await useDb().select().from(schema.virtualAccounts)
+        .where(eq(schema.virtualAccounts.tenantId, tenantId)).limit(1);
+      return acct?.bankName ? `bank transfer to ${acct.bankName}` : 'bank transfer';
+    } catch { return 'bank transfer'; }
+  }
+  if (p === 'card_on_file') return 'your saved card';
+  if (p === 'paystack' || p === 'stripe') return 'card';
+  return 'card';
 }
