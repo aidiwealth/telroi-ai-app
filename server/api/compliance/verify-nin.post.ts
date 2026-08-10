@@ -87,6 +87,9 @@ async function saveCompliance(db: any, tenantId: string, patch: any) {
   if (existing) {
     await db.update(schema.compliance).set(patch).where(eq(schema.compliance.id, existing.id));
   } else {
-    await db.insert(schema.compliance).values({ tenantId, officialName: '', ...patch });
+    // 'incomplete', not the 'pending' default: verifying a NIN is not a
+    // submission, and a row claiming otherwise told the client their documents
+    // were under review when they had uploaded none.
+    await db.insert(schema.compliance).values({ tenantId, officialName: '', status: 'incomplete', ...patch });
   }
 }
