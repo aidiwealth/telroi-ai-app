@@ -76,7 +76,7 @@ const tab = ref('docs');
 // Nigerian workspaces only: NIMC is a Nigerian register, so a Ghanaian client
 // listed as "not verified" would be a criticism of something we never asked
 // them for.
-const ninRows = computed(() => subs.value.filter((r) => (r.country || '').toUpperCase() === 'NG'));
+const ninRows = computed(() => subs.value.filter((r) => (r.country || '').toLowerCase() === 'nigeria'));
 const notes = ref<Record<string, string>>({});
 const busy = ref<string | null>(null);
 
