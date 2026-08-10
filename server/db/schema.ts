@@ -147,6 +147,7 @@ export const platformSettings = pgTable('platform_settings', {
   // channel, and a setting rather than an env var so the channel can change
   // without a deploy.
   slackWebhookEnc: text('slack_webhook_enc'),
+  premblyCredsEnc: text('prembly_creds_enc'),   // {apiKey}
   // What we tell a client to point their PBX at. A setting rather than a source
   // constant: moving the PBX shouldn't need a deploy, and a client reading a
   // stale address would spend a day on a firewall rule that was never wrong.
@@ -1087,6 +1088,20 @@ export const compliance = pgTable('compliance', {
   regulatoryLicenseKey: text('regulatory_license_key'),
   regulatoryLicenseName: text('regulatory_license_name'),
   regulatoryLicenseType: text('regulatory_license_type'),
+  // The person answering for the business, and their NIN.
+  //
+  // officialName is the company; a NIN returns a citizen, so the two would never
+  // match. We keep the reference and the name we matched, never the raw
+  // response: it carries a residential address and a photograph, and holding
+  // either would be taking on a duty of care we have no reason to accept. The
+  // number is kept so a resubmission doesn't pay for the same lookup twice.
+  directorName: text('director_name'),
+  nin: text('nin'),
+  ninVerifiedAt: timestamp('nin_verified_at', { withTimezone: true }),
+  ninReference: text('nin_reference'),
+  ninName: text('nin_name'),
+  ninAttempts: integer('nin_attempts').notNull().default(0),
+  ninLastAttemptAt: timestamp('nin_last_attempt_at', { withTimezone: true }),
   status: text('status').notNull().default('pending'),  // pending | approved | rejected
   notes: text('notes'),
   submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),

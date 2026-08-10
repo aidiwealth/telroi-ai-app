@@ -325,6 +325,29 @@
       </div>
     </section>
 
+    <!-- Identity verification. A lookup costs money on every call, so the
+         client-facing flow caches and caps attempts — this is only the key. -->
+    <section v-show="activeTab === 'security'" class="set-card">
+      <div class="set-card-head">
+        <div>
+          <h2 class="set-card-title">Identity verification (NIN)</h2>
+          <p class="set-card-desc">Checks the director's NIN against NIMC before a client can submit compliance documents. Without a key the check cannot run and clients are told to contact support rather than being let through unverified.</p>
+        </div>
+      </div>
+      <div class="set-card-body">
+        <div class="set-grid">
+          <label class="ad-field">
+            <span>Prembly API key {{ cfg.premblySet ? '· set' : '· not set' }}</span>
+            <input v-model="premblyKey" type="password" class="ad-input mono" :placeholder="cfg.premblySet ? '•••••••• (blank to keep)' : 'your Prembly secret key'" />
+          </label>
+        </div>
+        <p class="ad-hint">Each verification is charged by Prembly, so a number already verified for a workspace is never looked up twice and attempts are capped at five a day.</p>
+        <div class="set-actions">
+          <button class="btn btn-signal" :disabled="savingPrembly" @click="savePrembly">{{ savingPrembly ? 'Saving…' : 'Save key' }}</button>
+        </div>
+      </div>
+    </section>
+
     <!-- Slack. A workspace being created is the one event nobody is watching a
          dashboard for, and an email to a shared inbox gets read tomorrow. -->
     <section v-show="activeTab === 'security'" class="set-card">
@@ -681,6 +704,21 @@ async function loadSandboxLimits() {
     if (r?.trialCallMaxSeconds != null) trialCallMinutes.value = r.trialCallMaxSeconds / 60;
   } catch { /* keep defaults */ }
 }
+const premblyKey = ref('');
+const savingPrembly = ref(false);
+
+async function savePrembly() {
+  savingPrembly.value = true;
+  try {
+    if (premblyKey.value.trim()) {
+      await $fetch('/api/admin/settings', { method: 'POST', body: { premblyApiKey: premblyKey.value.trim() } });
+      premblyKey.value = '';
+      cfg.value = await $fetch<any>('/api/admin/settings');
+    }
+  } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
+  finally { savingPrembly.value = false; }
+}
+
 const slackWebhook = ref('');
 const savingSlack = ref(false);
 const testingSlack = ref(false);

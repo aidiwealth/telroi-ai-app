@@ -78,6 +78,7 @@ const Body = z.object({
   otpNgTrunk: z.string().max(64).optional(),
   otpNgHost: z.string().max(120).optional(),
   slackWebhook: z.string().url().max(300).optional(),
+  premblyApiKey: z.string().min(8).max(200).optional(),
   otpNgCallerId: z.string().max(32).optional(),
   ttsVendor: z.enum(['telroi', 'elevenlabs', 'openai', 'google', 'azure', 'custom']).optional(),
   sttVendor: z.enum(['telroi', 'deepgram', 'openai', 'google', 'azure', 'custom']).optional(),
@@ -205,6 +206,7 @@ export default defineEventHandler(async (event) => {
   // Encrypted: anyone holding the URL can post to the channel, and it is never
   // read back to the browser — a blank field means unchanged, not cleared.
   if (d.slackWebhook) patch.slackWebhookEnc = encrypt(d.slackWebhook);
+  if (d.premblyApiKey) patch.premblyCredsEnc = encrypt(JSON.stringify({ apiKey: d.premblyApiKey }));
   if (d.otpNgCallerId !== undefined) patch.otpNgCallerId = d.otpNgCallerId || null;
   if (d.ttsVendor) patch.ttsVendor = d.ttsVendor;
   if (d.sttVendor) patch.sttVendor = d.sttVendor;
