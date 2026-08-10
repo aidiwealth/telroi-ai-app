@@ -148,6 +148,23 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
     // A real top-up/credit counts as account activity (suppresses follow-ups).
     if (!(r as any).idempotent) {
       try { const { touchActivity } = await import('./activity'); await touchActivity(tenantId); } catch { /* */ }
+      // Paying an invoice IS topping up, because the debt is the negative
+      // balance. So settlement belongs here rather than in each payment
+      // provider: Paystack, Stripe, Monnify and a card on file all arrive
+      // through this one function, and none of them needs to know about
+      // invoices at all.
+      try {
+        const bal = (r as any).balanceMinor as number;
+        if (bal >= 0) {
+          const open = await useDb().select().from(schema.invoices)
+            .where(and(eq(schema.invoices.tenantId, tenantId), eq(schema.invoices.status, 'open')));
+          for (const inv of open) {
+            await useDb().update(schema.invoices)
+              .set({ status: 'paid', paidAt: new Date(), paidVia: String(meta.provider || reason) })
+              .where(eq(schema.invoices.id, inv.id));
+          }
+        }
+      } catch (e: any) { console.error('[wallet] invoice settlement failed:', e?.message); }
     }
     return r;
   });

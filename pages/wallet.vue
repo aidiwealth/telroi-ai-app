@@ -92,6 +92,16 @@
       </div>
     </div>
 
+    <!-- Money and invoices split, so a postpaid client isn't scrolling past a
+         month of transactions to find what they owe. -->
+    <nav v-if="wallet.postpaid" class="wal-tabs">
+      <button class="wal-tab" :class="{ on: tab === 'money' }" @click="tab = 'money'">Money movement</button>
+      <button class="wal-tab" :class="{ on: tab === 'invoices' }" @click="tab = 'invoices'">
+        Invoices<span v-if="openInvoices.length" class="wal-tab-dot">{{ openInvoices.length }}</span>
+      </button>
+    </nav>
+
+    <div v-show="!wallet.postpaid || tab === 'money'">
     <!-- Money movement -->
     <div class="wal-movement-head">
       <h2 class="wal-section-title">Money movement</h2>
@@ -164,6 +174,39 @@
       <EmptyState v-else icon="generic" title="No transactions yet" description="Top up to get started — your activity will show here." />
     </div>
 
+    </div>
+
+    <!-- Invoices -->
+    <div v-if="wallet.postpaid" v-show="tab === 'invoices'">
+      <h2 class="wal-section-title">Invoices</h2>
+
+      <div v-if="bank" class="card card-pad wal-bank">
+        <p class="wal-bank-h">Pay by transfer</p>
+        <p class="wal-bank-note">Anything you send here clears what you owe — the invoice settles once your balance is back to zero.</p>
+        <div class="wal-bank-grid">
+          <div><span>Bank</span><strong>{{ bank.bankName }}</strong></div>
+          <div><span>Account number</span><strong class="mono">{{ bank.accountNumber }}</strong></div>
+          <div><span>Account name</span><strong>{{ bank.accountName }}</strong></div>
+        </div>
+      </div>
+
+      <div v-if="invoices.length" class="card">
+        <table class="table">
+          <thead><tr><th>Invoice</th><th>Period</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr v-for="i in invoices" :key="i.id">
+              <td class="mono">{{ i.number }}</td>
+              <td class="muted">{{ shortDate(i.periodStart) }} – {{ shortDate(i.periodEnd) }}</td>
+              <td class="mono">{{ invAmount(i) }}</td>
+              <td :class="{ 'wal-overdue': i.status === 'open' && new Date(i.dueAt) < new Date() }">{{ shortDate(i.dueAt) }}</td>
+              <td><span class="wal-inv-badge" :class="i.status">{{ i.status }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="card card-pad muted">No invoices yet. One is raised on your billing day for whatever you owe at that point.</div>
+    </div>
+
     <!-- Transaction detail drawer with timeline -->
     <Transition name="drawer">
       <div v-if="selected" class="drawer-overlay" @click.self="selected = null">
@@ -230,6 +273,27 @@ const bal = computed(() => money.parts(wallet.value.balanceMinor, wallet.value.c
 // On account: what they've run up this period, as a positive figure, against the
 // ceiling where calls stop. A client watching a balance fall past zero with no
 // explanation would reasonably think their account had broken.
+const tab = ref('money');
+const invoices = ref<any[]>([]);
+const bank = ref<any>(null);
+const openInvoices = computed(() => invoices.value.filter((i) => i.status === 'open'));
+
+async function loadInvoices() {
+  try {
+    const r = await api.get<any>('/api/invoices');
+    invoices.value = r.invoices || [];
+    bank.value = r.bank || null;
+  } catch { /* the rest of the page is still worth showing */ }
+}
+
+function invAmount(i: any) {
+  const sym = i.currency === 'USD' ? '$' : '₦';
+  return sym + (i.amountMinor / 100).toLocaleString(undefined, { minimumFractionDigits: 2 });
+}
+function shortDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
 const used = computed(() => money.parts(Math.abs(wallet.value.balanceMinor || 0), wallet.value.currency));
 const limit = computed(() => money.parts(wallet.value.creditLimitMinor || 0, wallet.value.currency));
 const creditPct = computed(() => {
@@ -303,6 +367,7 @@ async function topup() {
 
 onMounted(async () => {
   await load();
+  loadInvoices();
   if (route.query.ref) {
     toast.info('Confirming your payment…');
     // The webhook usually lands within a second or two, but not always — keep
@@ -323,6 +388,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.wal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin: 26px 0 20px; }
+.wal-tab { padding: 10px 16px; font-size: 14px; color: var(--ink-soft); border: 0; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.wal-tab.on { color: var(--signal); border-bottom-color: var(--signal); font-weight: 500; }
+.wal-tab-dot { background: var(--signal); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 6px; margin-left: 6px; }
+.wal-bank { margin-bottom: 16px; }
+.wal-bank-h { font-size: 15px; font-weight: 500; margin: 0 0 4px; }
+.wal-bank-note { font-size: 13px; color: var(--ink-soft); margin: 0 0 14px; }
+.wal-bank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.wal-bank-grid span { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 2px; }
+.wal-inv-badge { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); text-transform: capitalize; }
+.wal-inv-badge.paid { background: rgba(34,139,84,.12); color: #1c7a49; }
+.wal-overdue { color: #a33; font-weight: 500; }
 .wal-card-limit { font-size: 13px; color: rgba(255,255,255,.7); margin-top: 2px; }
 .wal-card-warn { color: #ffd479; }
 .wal-pagehead { display: flex; align-items: flex-start; justify-content: space-between; }
