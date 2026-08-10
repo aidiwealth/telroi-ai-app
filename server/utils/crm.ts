@@ -2,7 +2,7 @@
 import { and, eq, desc, ilike, or, sql, inArray } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 
-export async function listContacts(tenantId: string, opts: { q?: string; status?: string; sources?: string[]; limit?: number } = {}) {
+export async function listContacts(tenantId: string, opts: { q?: string; status?: string; sources?: string[]; limit?: number; offset?: number } = {}) {
   const db = useDb();
   const conds: any[] = [eq(schema.crmContacts.tenantId, tenantId)];
   if (opts.status && opts.status !== 'all') conds.push(eq(schema.crmContacts.status, opts.status));
@@ -11,10 +11,18 @@ export async function listContacts(tenantId: string, opts: { q?: string; status?
     const like = `%${opts.q}%`;
     conds.push(or(ilike(schema.crmContacts.name, like), ilike(schema.crmContacts.company, like), ilike(schema.crmContacts.phone, like), ilike(schema.crmContacts.email, like)));
   }
-  return db.select().from(schema.crmContacts)
+  // The same conditions count as list, so the total reflects the filter rather
+  // than the whole book — "3 of 12,000" when searching for one name would be
+  // worse than useless.
+  const [{ total }] = await db.select({ total: sql<number>`count(*)` })
+    .from(schema.crmContacts).where(and(...conds));
+
+  const items = await db.select().from(schema.crmContacts)
     .where(and(...conds))
     .orderBy(desc(schema.crmContacts.updatedAt))
-    .limit(Math.min(opts.limit || 200, 500));
+    .limit(opts.limit || 50).offset(opts.offset || 0);
+
+  return { items, total: Number(total) };
 }
 
 export async function getContact(tenantId: string, id: string) {

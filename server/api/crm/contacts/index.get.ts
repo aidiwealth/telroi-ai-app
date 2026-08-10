@@ -1,6 +1,7 @@
 import { requireTenant, apiError } from '~/server/utils/api';
 import { hasFeature } from '~/server/utils/entitlements';
 import { listContacts, syncCallsToContacts } from '~/server/utils/crm';
+import { pageParams } from '~/server/utils/paginate';
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   if (!(await hasFeature(s.tenantId, 'crm'))) throw apiError('feature_locked', 'CRM is part of Telroi One. Upgrade to unlock.', 402);
@@ -8,5 +9,14 @@ export default defineEventHandler(async (event) => {
   // the autoLinkCalls setting), so calls flow into contacts automatically.
   await syncCallsToContacts(s.tenantId);
   const q = getQuery(event);
-  return { contacts: await listContacts(s.tenantId, { q: q.q as string, status: q.status as string, sources: q.sources ? String(q.sources).split(',') : undefined }) };
+  const p = pageParams(event);
+  const { items, total } = await listContacts(s.tenantId, {
+    q: q.q as string,
+    status: q.status as string,
+    sources: q.sources ? String(q.sources).split(',') : undefined,
+    limit: p.limit, offset: p.offset
+  });
+  // contacts kept as the key so nothing calling this has to change, with the
+  // paging alongside.
+  return { contacts: items, total, page: p.page, perPage: p.perPage, pages: Math.max(1, Math.ceil(total / p.perPage)) };
 });
