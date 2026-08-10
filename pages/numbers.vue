@@ -185,11 +185,15 @@
                 <label>Voice channels</label>
                 <input v-model.number="buy.channels" type="number" min="1" max="50" class="input mono" />
               </div>
+              <!-- Real pricing in the workspace's own currency. These were four
+                   hardcoded dollar figures, so a naira client was quoted in
+                   dollars at rates that were somebody else's — and the amount
+                   actually charged came from the server regardless. -->
               <div class="buy-pricing">
-                <div class="buy-row"><span>Number (DID) · monthly</span><span class="mono">$1.70</span></div>
-                <div class="buy-row"><span>{{ buy.channels }} channel{{ buy.channels > 1 ? 's' : '' }} · monthly</span><span class="mono">${{ (buy.channels * 2).toFixed(2) }}</span></div>
-                <div class="buy-row buy-total"><span>Due now (first month)</span><span class="mono">${{ (1.7 + buy.channels * 2).toFixed(2) }}</span></div>
-                <div class="buy-row buy-airtime muted"><span>Airtime</span><span>$0.0102 / min, billed per call</span></div>
+                <div class="buy-row"><span>Number (DID) · monthly</span><span class="mono">{{ money(didMonthly) }}</span></div>
+                <div class="buy-row"><span>{{ buy.channels }} channel{{ buy.channels > 1 ? 's' : '' }} · monthly</span><span class="mono">{{ money(buy.channels * channelMonthly) }}</span></div>
+                <div class="buy-row buy-total"><span>Due now (first month)</span><span class="mono">{{ money(didMonthly + buy.channels * channelMonthly) }}</span></div>
+                <div class="buy-row buy-airtime muted"><span>Airtime</span><span>{{ airtimeLabel }} / min, billed per call</span></div>
               </div>
               <button class="btn btn-signal btn-block" :disabled="buying" @click="purchase">
                 {{ buying ? 'Processing…' : 'Buy & charge wallet' }}
@@ -215,7 +219,15 @@ const pending = ref(true);
 const numbers = ref<TelroiNumber[]>([]);
 const channels = ref<{ capacity: number; inUse: number; available: number } | null>(null);
 const subs = ref<any[]>([]);
-const channelMonthly = ref(2);          // USD per channel/month (display); refined from pricing
+const channelMonthly = ref(2);          // per channel/month, in the workspace's currency
+const didMonthly = ref(1.7);            // per number/month, same
+const airtimePerMin = ref(0.0102);
+const airtimeLabel = computed(() => {
+  // Per-minute rates run to four decimals in dollars and none in naira; one
+  // format would either lose the rate or pad it with meaningless zeros.
+  const v = airtimePerMin.value;
+  return `${currencySym.value}${v < 1 ? v.toFixed(4) : v.toFixed(2)}`;
+});
 const currencySym = ref('$');
 const adjust = ref<{ sub: any | null; next: number }>({ sub: null, next: 1 });
 const adjusting = ref(false);
@@ -355,8 +367,11 @@ onMounted(async () => {
       const pr = await api.get<any>('/api/pricing');
       if (pr) {
         currencySym.value = pr.currency === 'NGN' ? '₦' : '$';
-        const perCh = pr.currency === 'NGN' ? Math.round((pr.channelMonthlyUsdMinor || 200) * (pr.ngnPerUsd || 1600)) : (pr.channelMonthlyUsdMinor || 200);
-        channelMonthly.value = perCh / 100;
+        const rate = pr.currency === 'NGN' ? (pr.ngnPerUsd || 1600) : 1;
+        const conv = (usdMinor: number) => Math.round(usdMinor * rate) / 100;
+        channelMonthly.value = conv(pr.channelMonthlyUsdMinor || 200);
+        didMonthly.value = conv(pr.didMonthlyUsdMinor || 170);
+        airtimePerMin.value = conv(pr.voiceMinuteUsdMinor ?? 1.02);
       }
     } catch { /* keep $2 default */ }
   } catch (e: any) { toast.err(e.message); }
