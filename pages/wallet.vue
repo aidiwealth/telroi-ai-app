@@ -180,15 +180,39 @@
     <div v-if="wallet.postpaid" v-show="tab === 'invoices'">
       <h2 class="wal-section-title">Invoices</h2>
 
-      <div v-if="bank" class="card card-pad wal-bank">
-        <p class="wal-bank-h">Pay by transfer</p>
-        <p class="wal-bank-note">Anything you send here clears what you owe — the invoice settles once your balance is back to zero.</p>
-        <div class="wal-bank-grid">
-          <div><span>Bank</span><strong>{{ bank.bankName }}</strong></div>
-          <div><span>Account number</span><strong class="mono">{{ bank.accountNumber }}</strong></div>
-          <div><span>Account name</span><strong>{{ bank.accountName }}</strong></div>
+      <div class="wal-movement">
+        <div class="card wal-move-card">
+          <div class="card-pad">
+            <div class="wal-move-label">Outstanding</div>
+            <div class="wal-move-amount money" :class="{ neg: invUnpaid.minor > 0 }">{{ invUnpaid.sym }}{{ invUnpaid.whole }}<span class="cents">{{ invUnpaid.cents }}</span></div>
+          </div>
+          <div class="wal-move-foot">
+            <span class="muted">{{ invUnpaid.count ? invUnpaid.count + ' invoice' + (invUnpaid.count === 1 ? '' : 's') + ' awaiting payment' : 'Nothing outstanding' }}</span>
+          </div>
+          <div class="wal-move-foot wal-move-avg">
+            <span class="muted">Oldest due</span>
+            <span class="muted">{{ invUnpaid.oldestDue || '—' }}</span>
+          </div>
+        </div>
+
+        <div class="card wal-move-card">
+          <div class="card-pad">
+            <div class="wal-move-label">Settled</div>
+            <div class="wal-move-amount money pos">{{ invPaid.sym }}{{ invPaid.whole }}<span class="cents">{{ invPaid.cents }}</span></div>
+          </div>
+          <div class="wal-move-foot">
+            <span class="muted">{{ invPaid.count ? invPaid.count + ' invoice' + (invPaid.count === 1 ? '' : 's') + ' paid' : 'None paid yet' }}</span>
+          </div>
+          <div class="wal-move-foot wal-move-avg">
+            <span class="muted">In {{ monthLabel }}</span>
+            <span class="money muted">{{ invPaidMonth.sym }}{{ invPaidMonth.whole }}<span class="cents">{{ invPaidMonth.cents }}</span></span>
+          </div>
         </div>
       </div>
+
+      <p v-if="invUnpaid.count" class="wal-inv-lede muted">
+        Settle by transfer or card from the funding panel at the top of this page — anything you send clears what you owe, and an invoice marks itself paid once your balance is back to zero.
+      </p>
 
       <div v-if="invoices.length" class="card">
         <table class="table">
@@ -277,6 +301,33 @@ const tab = ref('money');
 const invoices = ref<any[]>([]);
 const bank = ref<any>(null);
 const openInvoices = computed(() => invoices.value.filter((i) => i.status === 'open'));
+
+function invSum(list: any[]) {
+  return list.reduce((a, i) => a + (i.amountMinor || 0), 0);
+}
+
+const invUnpaid = computed(() => {
+  const list = openInvoices.value;
+  const minor = invSum(list);
+  const oldest = list.map((i) => new Date(i.dueAt)).sort((a, b) => a.getTime() - b.getTime())[0];
+  return {
+    ...money.parts(minor, wallet.value.currency), minor, count: list.length,
+    oldestDue: oldest ? oldest.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ''
+  };
+});
+
+const invPaid = computed(() => {
+  const list = invoices.value.filter((i) => i.status === 'paid');
+  return { ...money.parts(invSum(list), wallet.value.currency), count: list.length };
+});
+
+// Settled within the month the movement nav is showing, so both halves of the
+// page describe the same window rather than quietly meaning different things.
+const invPaidMonth = computed(() => {
+  const m = monthDate.value.toISOString().slice(0, 7);
+  const list = invoices.value.filter((i) => i.status === 'paid' && String(i.paidAt || '').slice(0, 7) === m);
+  return money.parts(invSum(list), wallet.value.currency);
+});
 
 async function loadInvoices() {
   try {
@@ -392,14 +443,10 @@ onMounted(async () => {
 .wal-tab { padding: 10px 16px; font-size: 14px; color: var(--ink-soft); border: 0; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
 .wal-tab.on { color: var(--signal); border-bottom-color: var(--signal); font-weight: 500; }
 .wal-tab-dot { background: var(--signal); color: #fff; border-radius: 999px; font-size: 11px; padding: 1px 6px; margin-left: 6px; }
-.wal-bank { margin-bottom: 16px; }
-.wal-bank-h { font-size: 15px; font-weight: 500; margin: 0 0 4px; }
-.wal-bank-note { font-size: 13px; color: var(--ink-soft); margin: 0 0 14px; }
-.wal-bank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
-.wal-bank-grid span { display: block; font-size: 12px; color: var(--ink-soft); margin-bottom: 2px; }
 .wal-inv-badge { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); text-transform: capitalize; }
 .wal-inv-badge.paid { background: rgba(34,139,84,.12); color: #1c7a49; }
 .wal-overdue { color: #a33; font-weight: 500; }
+.wal-inv-lede { font-size: 13px; margin: 0 0 14px; max-width: 70ch; }
 .wal-card-limit { font-size: 13px; color: rgba(255,255,255,.7); margin-top: 2px; }
 .wal-card-warn { color: #ffd479; }
 .wal-pagehead { display: flex; align-items: flex-start; justify-content: space-between; }
