@@ -28,6 +28,11 @@
                 {{ provisioning === r.id ? '…' : 'Provision' }}
               </button>
               <button v-if="!r.provisionRef && r.status === 'available'" class="btn btn-ghost btn-sm" @click="editNumber(r)">Edit</button>
+              <!-- Carrier interop and OTP presenting numbers are ours, not stock.
+                   Reserving takes one off the shelf without touching anything
+                   else about it. -->
+              <button v-if="r.status === 'available'" class="btn btn-ghost btn-sm" :disabled="reserving === r.id" @click="setReserved(r, true)">Reserve</button>
+              <button v-if="r.status === 'reserved'" class="btn btn-ghost btn-sm" :disabled="reserving === r.id" @click="setReserved(r, false)">Release</button>
               <button v-if="r.status === 'available'" class="btn btn-ghost btn-sm" @click="remove(r.id)">Remove</button>
             </td>
           </tr>
@@ -128,6 +133,17 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 const toast = useToast();
+const reserving = ref<string | null>(null);
+
+async function setReserved(r: any, reserved: boolean) {
+  reserving.value = r.id;
+  try {
+    await $fetch(`/api/admin/inventory/${r.id}/reserve`, { method: 'POST', body: { reserved } });
+    toast.ok(reserved ? `${r.telnum} is off the shelf` : `${r.telnum} is back in inventory`);
+    await load();
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not change it'); }
+  finally { reserving.value = null; }
+}
 const confirmRemove = ref<string | null>(null); // inventory id pending removal
 definePageMeta({ layout: 'admin' });
 useHead({ title: 'Number inventory — Telroi Operator' });

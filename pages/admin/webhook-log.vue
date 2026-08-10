@@ -34,8 +34,11 @@
       </div>
 
       <EmptyState v-if="!events.length" icon="generic" title="Nothing recorded yet" description="Notifications appear here as providers send them." />
-      <div v-else class="ad-panel">
-        <table class="ad-table wl-table">
+      <!-- ad-data-table and set-card are global; ad-table and ad-panel are
+           defined inside audit.vue's scoped styles, so borrowing those names
+           gave the markup and none of the styling. -->
+      <div v-else class="set-card ad-table-wrap">
+        <table class="ad-data-table wl-table">
           <thead><tr><th>Provider</th><th>Outcome</th><th>Workspace</th><th>Detail</th><th>When</th></tr></thead>
           <tbody>
             <tr v-for="e in events" :key="e.id" class="wl-row" @click="open = open === e.id ? null : e.id">
