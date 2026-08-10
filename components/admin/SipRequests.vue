@@ -1,11 +1,5 @@
 <template>
   <div>
-    <div class="ad-head">
-      <div>
-        <h1 class="ad-title">SIP access requests</h1>
-        <p class="ad-sub">Clients asking us to trust an address so their PBX can send without a password. Approving writes an endpoint identified by source IP — there is no secret afterwards to rotate, so withdrawing access means removing it.</p>
-      </div>
-    </div>
 
     <div v-if="pending" class="ad-loading">Loading…</div>
 
@@ -94,8 +88,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-definePageMeta({ layout: 'admin' });
-useHead({ title: 'SIP access requests — Telroi' });
 
 const data = ref<any>({ pending: [], decided: [] });
 const pending = ref(true);

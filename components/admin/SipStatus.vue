@@ -2,7 +2,6 @@
   <div class="stack">
     <div class="page-head">
       <div>
-        <h1 class="page-title">SIP Status</h1>
         <p class="page-sub">Live registration state of every client SIP endpoint across the platform. Use this to diagnose "my phone won't connect" reports — an offline endpoint means no device is currently registered.</p>
       </div>
     </div>
@@ -38,8 +37,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useApi } from '~/composables/useApi';
-definePageMeta({ layout: 'admin' });
-useHead({ title: 'SIP Status — Admin' });
 const api = useApi();
 const data = ref<any>(null);
 const pending = ref(true);
