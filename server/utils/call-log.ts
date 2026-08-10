@@ -42,8 +42,15 @@ export async function upsertCallEvent(input: CallEventInput) {
       if (input.phone) patch.phone = normalizePhone(input.phone);
       if (input.raw) patch.raw = { ...(existing.raw as any), ...input.raw };
       await db.update(schema.callEvents).set(patch).where(eq(schema.callEvents.id, existing.id));
+      // A call almost always ends by update rather than insert, so the event
+      // belongs here — and only on the move into a terminal state, so a client
+      // hears once about a finished call rather than on every carrier update.
+      maybeEmitCompleted(input, String(existing.status || ''), patch.status);
       return existing.id;
     }
+    // A call that arrives already finished — a short OTP leg, say — still counts.
+    maybeEmitCompleted(input, '', input.status);
+
     const [row] = await db.insert(schema.callEvents).values({
       tenantId: input.tenantId, callid: input.callid, carrier: input.carrier || null,
       type: input.direction || 'in', direction: input.direction || 'in',
@@ -115,4 +122,25 @@ export function normalizeStatus(carrier: string, raw: string): string {
     return '';
   }
   return raw || 'ringing';
+}
+
+
+const TERMINAL = new Set(['ended', 'completed', 'failed', 'missed', 'busy', 'no-answer', 'no_answer', 'blacklisted']);
+
+/** Fire call.completed once, on the move into a terminal state.
+ *
+ *  Carrier events arrive repeatedly and out of order for a single call; without
+ *  the before/after comparison a client would hear about the same hangup several
+ *  times, which at these volumes is both their problem and our bandwidth. */
+function maybeEmitCompleted(input: CallEventInput, before: string, after?: string | null) {
+  if (!after || !TERMINAL.has(after)) return;
+  if (TERMINAL.has(before)) return;
+  void import('./webhooks-out').then(({ emitWebhook }) => emitWebhook(input.tenantId, 'call.completed', {
+    callid: input.callid,
+    direction: input.direction || 'in',
+    phone: input.phone ? normalizePhone(input.phone) : null,
+    status: after,
+    duration_seconds: input.duration ?? 0,
+    carrier: input.carrier || null
+  })).catch(() => { /* a webhook nobody gets beats a call log that failed */ });
 }

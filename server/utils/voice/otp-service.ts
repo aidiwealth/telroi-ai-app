@@ -149,9 +149,18 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
     : await placeOtpCall({ toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec });
   if (!placed.ok) {
     await db.update(schema.voiceOtps).set({ status: 'failed', reason: placed.reason }).where(eq(schema.voiceOtps.id, row.id));
+    void import('../webhooks-out').then(({ emitWebhook }) => emitWebhook(tenantId, 'otp.failed', {
+      id: row.id, to: toNumber, status: 'failed', reason: placed.reason
+    })).catch(() => { /* best effort */ });
     return { ok: false, id: row.id, status: 'failed', error: placed.reason };
   }
   await db.update(schema.voiceOtps).set({ status: 'delivered', providerRef: placed.providerRef }).where(eq(schema.voiceOtps.id, row.id));
+
+  // Told, if they asked to be. Queued rather than sent, so this returns at the
+  // speed of a database write rather than of somebody else's server.
+  void import('../webhooks-out').then(({ emitWebhook }) => emitWebhook(tenantId, 'otp.completed', {
+    id: row.id, to: toNumber, status: 'delivered', client_supplied: !!ownCode
+  })).catch(() => { /* a webhook nobody gets beats a call that didn't finish */ });
 
   // Charged only once the call actually went out, keyed on the OTP id so a retry
   // can't bill twice.
@@ -199,6 +208,10 @@ export async function verifyVoiceOtp(tenantId: string, idOrNumber: { id?: string
   if (otp.attempts >= otp.maxAttempts) return { ok: false, status: 'locked', error: 'Too many attempts' };
 
   const match = sha256(code) === otp.codeHash;
+  // The event an OTP client most wants: whether the person actually entered it.
+  void import('../webhooks-out').then(({ emitWebhook }) => emitWebhook(tenantId, 'otp.verified', {
+    id: otp.id, to: otp.toNumber, verified: match
+  })).catch(() => { /* best effort */ });
   if (!match) {
     const attempts = otp.attempts + 1;
     const locked = attempts >= otp.maxAttempts;

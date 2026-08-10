@@ -915,6 +915,40 @@ export const speechJobs = pgTable('speech_jobs', {
 // Every webhook that arrives, whether or not we accept it. A notification that
 // fails silently is indistinguishable from one that never came — the row is
 // written before the signature is checked, so a rejection leaves a trace too.
+// Where a client wants to be told about their own traffic, and which events
+// they care about. Subscribing to specific types rather than everything matters
+// at volume: somebody sending OTP wants otp.completed, not a delivery for every
+// leg of every call.
+export const webhookEndpoints = pgTable('webhook_endpoints', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  secretEnc: text('secret_enc'),
+  events: jsonb('events').$type<string[]>().notNull().default([]),
+  enabled: boolean('enabled').notNull().default(true),
+  disabledReason: text('disabled_reason'),
+  consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// One row per attempt. Queued rather than sent inline, so a call finishing never
+// waits on somebody else's slow server, and pruned after thirty days — a
+// developer debugging needs last week, not last year.
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  endpointId: uuid('endpoint_id').notNull().references(() => webhookEndpoints.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(),
+  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+  status: text('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+  responseStatus: integer('response_status'),
+  responseExcerpt: text('response_excerpt'),
+  deliveredAt: timestamp('delivered_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const webhookEvents = pgTable('webhook_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   provider: text('provider').notNull(),
