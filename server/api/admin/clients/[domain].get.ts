@@ -72,6 +72,10 @@ export default defineEventHandler(async (event) => {
       // null means this client inherits the platform sandbox defaults.
       sandboxCallCap: tenant.sandboxCallCap, sandboxAgentCap: tenant.sandboxAgentCap,
       trialAiAllowanceUsdMinor: tenant.trialAiAllowanceUsdMinor, trialCallMaxSeconds: tenant.trialCallMaxSeconds,
+      // Postpaid, so the operator form reflects what is stored rather than
+      // resetting to defaults after a save and suggesting it did not take.
+      postpaid: tenant.postpaid, creditLimitMinor: tenant.creditLimitMinor, billingDay: tenant.billingDay,
+      postpaidSince: tenant.postpaidSince,
       paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null, requiresProvisioning: requiresProvisioning(tenant.country) },
     wallet: wallet ? { balanceMinor: wallet.balanceMinor, currency: wallet.currency, plan: wallet.plan } : null,
     numbers: subs.map((n) => ({ id: n.id, telnum: n.telnum, region: n.region, provider: n.provider, channels: n.channels, status: n.status, departmentId: n.departmentId })),
