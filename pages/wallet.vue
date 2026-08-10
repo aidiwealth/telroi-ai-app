@@ -4,7 +4,7 @@
       <div>
         <h1 class="page-title">Wallet</h1>
         <p v-if="wallet.postpaid" class="page-sub">
-          Your workspace is billed in arrears. Calls run on account and you settle an invoice each period — you can still pay in advance below, which reduces what you're invoiced.
+          Your workspace is billed in arrears. Any balance you hold is used first; after that, calls continue on credit up to your limit and you settle an invoice each period. Topping up below is optional — it simply reduces what you're invoiced.
           <span v-if="nextInvoiceLabel"><br />Next invoice: <strong>{{ nextInvoiceLabel }}</strong>.</span>
         </p>
         <p v-else class="page-sub">Top up and pay as you use — voice, numbers and features bill from here.</p>
@@ -22,15 +22,22 @@
             <svg viewBox="0 0 40 32" width="36" height="28"><rect x="1" y="1" width="38" height="30" rx="5" fill="none" stroke="rgba(255,255,255,0.5)"/><path d="M1 11h12M1 21h12M27 11h12M27 21h12M13 1v30M27 1v30" stroke="rgba(255,255,255,0.4)" fill="none"/></svg>
           </div>
         </div>
-        <div class="wal-card-label">{{ wallet.postpaid ? 'Used this period' : 'Available balance' }}</div>
+        <!-- Postpaid spends the balance first and only then runs on credit, so
+             the label follows where they actually are: money in hand until it
+             runs out, then what they owe. Showing "used" while they are in funds
+             hid a real balance behind a zero. -->
+        <div class="wal-card-label">{{ !wallet.postpaid ? 'Available balance' : (bal.neg ? 'Used on account' : 'Available balance') }}</div>
         <div class="wal-card-balance money" v-if="!pending">
-          <!-- On account, the balance goes negative by design. Shown as usage
-               rather than a deficit: a minus sign reads as something broken. -->
           <template v-if="!wallet.postpaid && bal.neg">−</template>{{ used.sym }}{{ used.whole }}<span class="cents">{{ used.cents }}</span>
         </div>
         <div v-if="wallet.postpaid && !pending" class="wal-card-limit">
-          of {{ limit.sym }}{{ limit.whole }} credit
-          <span v-if="creditPct >= 80" class="wal-card-warn">— {{ creditPct }}% used</span>
+          <template v-if="bal.neg">
+            of {{ limit.sym }}{{ limit.whole }} credit
+            <span v-if="creditPct >= 80" class="wal-card-warn">— {{ creditPct }}% used</span>
+          </template>
+          <template v-else>
+            then {{ limit.sym }}{{ limit.whole }} on account
+          </template>
         </div>
         <div class="skeleton wal-card-skel" v-else />
         <div class="wal-card-foot">
@@ -223,12 +230,7 @@ const bal = computed(() => money.parts(wallet.value.balanceMinor, wallet.value.c
 // On account: what they've run up this period, as a positive figure, against the
 // ceiling where calls stop. A client watching a balance fall past zero with no
 // explanation would reasonably think their account had broken.
-const used = computed(() => {
-  const m = wallet.value.postpaid
-    ? Math.max(0, -(wallet.value.balanceMinor || 0))
-    : Math.abs(wallet.value.balanceMinor || 0);
-  return money.parts(m, wallet.value.currency);
-});
+const used = computed(() => money.parts(Math.abs(wallet.value.balanceMinor || 0), wallet.value.currency));
 const limit = computed(() => money.parts(wallet.value.creditLimitMinor || 0, wallet.value.currency));
 const creditPct = computed(() => {
   const lim = wallet.value.creditLimitMinor || 0;
