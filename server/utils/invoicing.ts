@@ -27,12 +27,18 @@ function invoiceNumber(seq: number, when: Date): string {
 export async function runInvoicing(now = new Date()): Promise<InvoiceRunResult> {
   const db = useDb();
   const result: InvoiceRunResult = { considered: 0, issued: 0, skipped: 0, details: [] };
-  const today = now.getUTCDate();
+  // The day is read in the client's own timezone. A Lagos client asking to be
+  // invoiced on the 9th means the 9th where they are — running on UTC would land
+  // their invoice on the 10th for the first hour of every day, and on the 8th for
+  // clients west of us.
 
   const tenants = await db.select().from(schema.tenants).where(eq(schema.tenants.postpaid, true));
 
   for (const t of tenants as any[]) {
-    if (!t.billingDay || t.billingDay !== today) continue;
+    const localDay = Number(new Intl.DateTimeFormat('en-GB', {
+      timeZone: t.timezone || 'UTC', day: 'numeric'
+    }).format(now));
+    if (!t.billingDay || t.billingDay !== localDay) continue;
     result.considered++;
 
     // The period runs from the last invoice to now — or from the day they went
@@ -66,7 +72,14 @@ export async function runInvoicing(now = new Date()): Promise<InvoiceRunResult> 
         lt(schema.ledger.createdAt, periodEnd)
       ));
 
-    const amount = Number(total || 0);
+    // What they owe, not what they spent. A client who held funds at the start of
+    // the period has already paid for part of it — invoicing the full spend would
+    // charge them twice for the same calls. The deficit is the honest figure, and
+    // paying it brings the wallet back to zero.
+    const [w] = await db.select().from(schema.wallets).where(eq(schema.wallets.tenantId, t.id)).limit(1);
+    const owed = Math.max(0, -(w?.balanceMinor ?? 0));
+    const spent = Number(total || 0);
+    const amount = Math.min(owed, spent);
     if (amount <= 0) {
       result.skipped++;
       result.details.push({ tenant: t.name, outcome: 'nothing-owed' });

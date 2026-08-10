@@ -63,9 +63,17 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
       creditLimitMinor: schema.tenants.creditLimitMinor
     }).from(schema.tenants).where(eq(schema.tenants.id, sub.tenantId)).limit(1);
     if (!canSpend(t, wallet.balanceMinor, amount)) {
-      // Temporary: a postpaid client with funds had numbers suspended and the
-      // logic reads correctly, so this says what it actually saw.
-      console.log(`[billing] suspending ${sub.telnum}: balance=${wallet.balanceMinor} amount=${amount} postpaid=${t?.postpaid} limit=${t?.creditLimitMinor} currency=${wallet.currency}`);
+      // A postpaid client at their ceiling has the charge deferred, not their
+      // number taken. Suspension is heavy — a number can be reassigned, and
+      // somebody who settles their invoice would expect it back rather than
+      // discovering they had lost it. For them, losing service is a consequence
+      // of an unpaid invoice, which arrives with warning; hitting the limit is
+      // just a full month.
+      if (t?.postpaid) {
+        result.details.push({ telnum: sub.telnum, outcome: 'skipped' });
+        result.skipped++;
+        continue;
+      }
       await db.update(schema.numberSubscriptions).set({ status: 'suspended' }).where(eq(schema.numberSubscriptions.id, sub.id));
       result.suspended++;
       result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
