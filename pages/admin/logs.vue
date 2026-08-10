@@ -51,6 +51,7 @@
           </tr>
         </tbody>
       </table>
+      <Pagination v-bind="logMeta" query-key="log" @change="goLogPage" />
     </div>
 
     <!-- Call logs (system-wide, every client, incl. failures) -->
@@ -141,7 +142,9 @@ async function load() {
       const r = await $fetch<any>('/api/admin/calls');
       calls.value = r.calls; callsCursor.value = r.nextCursor;
     } else {
-      logs.value = (await $fetch<any>('/api/admin/logs', { query: { kind: kind.value } })).logs;
+      const lr = await $fetch<any>('/api/admin/logs', { query: { kind: kind.value, page: logPage.value } });
+      logs.value = lr.logs;
+      logMeta.value = { page: lr.page || 1, pages: lr.pages || 1, total: lr.total || 0, perPage: lr.perPage || 100 };
     }
   }
   catch (e: any) { if (e?.statusCode === 401) await navigateTo('/admin/login'); }
@@ -156,8 +159,15 @@ async function loadMoreCalls() {
   } catch { /* */ }
   finally { loadingMore.value = false; }
 }
+const logPage = ref(Number(useRoute().query.log) || 1);
+const logMeta = ref({ page: 1, pages: 1, total: 0, perPage: 100 });
+async function goLogPage(p: number) { logPage.value = p; await load(); }
+
 function setKind(k: 'system' | 'call' | 'audit' | 'webhook' | 'pbx') {
   kind.value = k;
+  // Switching tabs while on page five would ask for page five of a different
+  // list, which shows an empty table and looks like a fault.
+  logPage.value = 1;
   // The webhook and PBX tabs are components that load their own data; calling
   // load() here would fetch system logs nobody is looking at.
   if (k === 'webhook' || k === 'pbx') return;
