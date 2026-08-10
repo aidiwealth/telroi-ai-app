@@ -7,6 +7,7 @@
 // runner (server/db/run-billing.ts) so the logic lives in exactly one place.
 import { and, eq, lte } from 'drizzle-orm';
 import { schema } from '../db';
+import { canSpend } from '~/server/utils/wallet';
 
 export interface BillingResult {
   due: number;
@@ -55,7 +56,13 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
       .where(and(eq(schema.ledger.reference, cycleRef), eq(schema.ledger.kind, 'debit'))).limit(1);
     if (dupe) { result.skipped++; result.details.push({ telnum: sub.telnum, outcome: 'skipped' }); continue; }
 
-    if (wallet.balanceMinor < amount) {
+    // A postpaid client shouldn't lose their numbers over a subscription fee
+    // while their calls run on credit — everything lands on the same invoice.
+    const [t] = await db.select({
+      postpaid: schema.tenants.postpaid,
+      creditLimitMinor: schema.tenants.creditLimitMinor
+    }).from(schema.tenants).where(eq(schema.tenants.id, sub.tenantId)).limit(1);
+    if (!canSpend(t, wallet.balanceMinor, amount)) {
       await db.update(schema.numberSubscriptions).set({ status: 'suspended' }).where(eq(schema.numberSubscriptions.id, sub.id));
       result.suspended++;
       result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
@@ -111,7 +118,11 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
     const [dupe] = await db.select().from(schema.ledger)
       .where(and(eq(schema.ledger.reference, cycleRef), eq(schema.ledger.kind, 'debit'))).limit(1);
     if (dupe) { result.plans.skipped++; continue; }
-    if (wallet.balanceMinor < planAmount) { result.plans.unpaid++; continue; } // leave anchor; retry next run
+    const [pt] = await db.select({
+      postpaid: schema.tenants.postpaid,
+      creditLimitMinor: schema.tenants.creditLimitMinor
+    }).from(schema.tenants).where(eq(schema.tenants.id, t.id)).limit(1);
+    if (!canSpend(pt, wallet.balanceMinor, planAmount)) { result.plans.unpaid++; continue; } // leave anchor; retry next run
     const after = wallet.balanceMinor - planAmount;
     await db.transaction(async (tx: any) => {
       await tx.update(schema.wallets).set({ balanceMinor: after, updatedAt: now }).where(eq(schema.wallets.id, wallet.id));

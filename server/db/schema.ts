@@ -256,6 +256,14 @@ export const tenants = pgTable('tenants', {
   // Per-workspace sandbox switch. When true, money + carrier/PBX actions are
   // simulated (no real charges, no external calls) so the client can safely
   // explore. Server-enforced — the dashboard toggle writes here.
+  // Postpaid: the wallet may go negative, and the negative balance is the debt.
+  // No parallel accounting — an invoice is "bring this back to zero", and the
+  // ledger already says what every charge was for. A credit decision, so only an
+  // operator sets it.
+  postpaid: boolean('postpaid').notNull().default(false),
+  creditLimitMinor: bigint('credit_limit_minor', { mode: 'number' }),
+  billingDay: integer('billing_day'),
+  postpaidSince: timestamp('postpaid_since', { withTimezone: true }),
   sandboxMode: boolean('sandbox_mode').notNull().default(true),
   // Null = inherit the platform default. Set per-client to extend a trial.
   sandboxCallCap: integer('sandbox_call_cap'),
@@ -893,6 +901,26 @@ export const speechJobs = pgTable('speech_jobs', {
    - the ledger is immutable; balance is reconstructable from it
    - wallets are credited ONLY by a verified payment webhook, never the browser
    - debits are atomic with a hard stop at zero (see server/utils/wallet.ts) */
+// What a postpaid client owes for a period. Generated from the ledger rather
+// than accumulated separately, so it can always be reconciled against the calls
+// that produced it.
+export const invoices = pgTable('invoices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  number: text('number').notNull().unique(),
+  periodStart: timestamp('period_start', { withTimezone: true }).notNull(),
+  periodEnd: timestamp('period_end', { withTimezone: true }).notNull(),
+  amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+  currency: text('currency').notNull(),
+  status: text('status').notNull().default('open'),   // open | paid | void
+  dueAt: timestamp('due_at', { withTimezone: true }).notNull(),
+  paidAt: timestamp('paid_at', { withTimezone: true }),
+  paidVia: text('paid_via'),
+  remindedAt: timestamp('reminded_at', { withTimezone: true }),
+  suspendedAt: timestamp('suspended_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const wallets = pgTable('wallets', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),

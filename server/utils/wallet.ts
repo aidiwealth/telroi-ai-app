@@ -53,7 +53,21 @@ export interface DebitArgs {
   meta?: Record<string, unknown>;
 }
 
-/** Atomically debit a wallet. Hard stop at zero — throws 402 if insufficient. */
+/** May this workspace spend this much?
+ *
+ *  Prepaid stops at zero. Postpaid may go negative down to its credit limit, and
+ *  that negative balance IS the debt — there is no second ledger to reconcile,
+ *  and an invoice is simply "bring this back to zero". A postpaid tenant with no
+ *  limit set is treated as having none rather than unlimited: a credit decision
+ *  nobody made shouldn't default to unbounded.
+ */
+export function canSpend(tenant: { postpaid?: boolean | null; creditLimitMinor?: number | null } | null, balanceMinor: number, amountMinor: number): boolean {
+  if (!tenant?.postpaid) return balanceMinor >= amountMinor;
+  const floor = -(tenant.creditLimitMinor ?? 0);
+  return (balanceMinor - amountMinor) >= floor;
+}
+
+/** Atomically debit a wallet. Stops at zero, or at the credit limit for postpaid. */
 export async function debit(args: DebitArgs) {
   if (!Number.isInteger(args.amountMinor) || args.amountMinor <= 0) {
     throw apiError('invalid_amount', 'Debit amount must be a positive integer (minor units)');
@@ -73,9 +87,18 @@ export async function debit(args: DebitArgs) {
       if (dupe) return { balanceMinor: wallet.balanceMinor, ledgerId: dupe.id, idempotent: true };
     }
 
-    // Hard stop at zero — no overdraft.
-    if (wallet.balanceMinor < args.amountMinor) {
-      throw apiError('insufficient_funds', 'Wallet balance is too low for this feature. Please top up.', 402);
+    // Prepaid stops at zero; postpaid stops at its credit limit. Read inside the
+    // transaction with the wallet locked, so a burst of calls can't each see the
+    // same headroom and collectively exceed it.
+    const [tenant] = await tx.select({
+      postpaid: schema.tenants.postpaid,
+      creditLimitMinor: schema.tenants.creditLimitMinor
+    }).from(schema.tenants).where(eq(schema.tenants.id, args.tenantId)).limit(1);
+
+    if (!canSpend(tenant, wallet.balanceMinor, args.amountMinor)) {
+      throw apiError('insufficient_funds', tenant?.postpaid
+        ? 'This would take the account past its credit limit. Settle the outstanding invoice or ask us to raise the limit.'
+        : 'Wallet balance is too low for this feature. Please top up.', 402);
     }
 
     const after = wallet.balanceMinor - args.amountMinor;
@@ -187,9 +210,17 @@ export async function sandboxLedgerEntry(opts: {
   }
 }
 
-export async function canAfford(tenantId: string, amountMinor: number): Promise<boolean> {  const db = useDb();
+export async function canAfford(tenantId: string, amountMinor: number): Promise<boolean> {
+  const db = useDb();
   const [w] = await db.select().from(schema.wallets).where(eq(schema.wallets.tenantId, tenantId)).limit(1);
-  return !!w && w.balanceMinor >= amountMinor;
+  if (!w) return false;
+  // Postpaid has headroom below zero, so a bare balance check would refuse a
+  // client who is perfectly entitled to make the call.
+  const [t] = await db.select({
+    postpaid: schema.tenants.postpaid,
+    creditLimitMinor: schema.tenants.creditLimitMinor
+  }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  return canSpend(t, w.balanceMinor, amountMinor);
 }
 
 /**
