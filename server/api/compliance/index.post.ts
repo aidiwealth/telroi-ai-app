@@ -14,6 +14,23 @@ export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   const db = useDb();
 
+  // Nigerian accounts verify the director's NIN first. Enforced here as well as
+  // in the form, because a form gate is a suggestion — the endpoint is what a
+  // client's own script would post to.
+  //
+  // Only Nigeria: NIMC is a Nigerian register, and demanding a NIN from a
+  // Ghanaian or American business would be asking for something they do not
+  // have.
+  const [tnt] = await db.select({ country: schema.tenants.country })
+    .from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
+  if ((tnt?.country || '').toUpperCase() === 'NG') {
+    const [comp] = await db.select({ ninVerifiedAt: schema.compliance.ninVerifiedAt })
+      .from(schema.compliance).where(eq(schema.compliance.tenantId, s.tenantId)).limit(1);
+    if (!comp?.ninVerifiedAt) {
+      throw apiError('nin_required', "Verify the director's NIN before submitting documents.", 428);
+    }
+  }
+
   // Parse the multipart body up front; report parse failures clearly.
   let parts;
   try {

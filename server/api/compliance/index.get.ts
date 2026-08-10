@@ -13,7 +13,11 @@ export default defineEventHandler(async (event) => {
     compliance: {
       status: row.status, officialName: row.officialName,
       businessLicenseName: row.businessLicenseName, regulatoryLicenseName: row.regulatoryLicenseName,
-      submittedAt: row.submittedAt, notes: row.notes
+      submittedAt: row.submittedAt, notes: row.notes,
+      // Whether the director has been verified, and who. Not the NIN itself:
+      // the form only needs to know it is done, and sending an identity number
+      // back to a browser that has no use for it is a habit worth not having.
+      ninVerifiedAt: row.ninVerifiedAt, ninName: row.ninName, directorName: row.directorName
     },
     policy
   };

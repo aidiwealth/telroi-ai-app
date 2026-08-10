@@ -109,6 +109,34 @@
               <input v-model="cmp.officialName" class="input" placeholder=" " id="cmp-name" />
               <label for="cmp-name">Official company name</label>
             </div>
+            <!-- Nigerian workspaces verify the director first. Asked before the
+                 files because the endpoint refuses without it, and discovering
+                 that after choosing documents would be a poor way to find out.
+                 NIMC is a Nigerian register, so nobody else is asked. -->
+            <div v-if="regRequired" class="cmp-nin">
+              <template v-if="ninVerified">
+                <div class="cmp-nin-done">
+                  <strong>Director verified</strong>
+                  <span class="muted">{{ ninName }}</span>
+                </div>
+              </template>
+              <template v-else>
+                <div class="field-float">
+                  <input v-model="nin.directorName" class="input" placeholder=" " id="cmp-dir" />
+                  <label for="cmp-dir">Director's full name, as on their NIN</label>
+                </div>
+                <div class="field-float">
+                  <input v-model="nin.number" class="input mono" placeholder=" " id="cmp-nin" maxlength="11" inputmode="numeric" />
+                  <label for="cmp-nin">Director's NIN (11 digits)</label>
+                </div>
+                <button class="btn btn-ghost btn-block" :disabled="ninChecking || nin.number.length !== 11 || nin.directorName.trim().length < 3" @click="verifyNin">
+                  {{ ninChecking ? 'Checking…' : 'Verify NIN' }}
+                </button>
+                <p v-if="ninError" class="cmp-nin-err">{{ ninError }}</p>
+                <p v-else class="cmp-note muted">We check the number against NIMC and keep only the reference — not the address or photograph it returns.</p>
+              </template>
+            </div>
+
             <div class="field">
               <label class="cmp-file-label">Business license <span class="cmp-req">required</span></label>
               <label class="cmp-drop" :class="{ filled: businessFile }">
@@ -125,7 +153,7 @@
                 <span v-else class="cmp-drop-file">📄 {{ regulatoryFile.name }}</span>
               </label>
             </div>
-            <button class="btn btn-signal btn-block" :disabled="submitting || !cmp.officialName || !businessFile || (regRequired && !regulatoryFile)" @click="submitCompliance">
+            <button class="btn btn-signal btn-block" :disabled="submitting || !cmp.officialName || !businessFile || (regRequired && !regulatoryFile) || (regRequired && !ninVerified)" @click="submitCompliance">
               {{ submitting ? 'Uploading…' : 'Submit for review' }}
             </button>
             <p class="cmp-note muted">An operator reviews submissions before live access is granted. Your documents are stored securely and only accessed for verification.</p>
@@ -227,6 +255,32 @@ const showCompliance = ref(false);
 const complianceStatus = ref<string | null>(null);
 const submitting = ref(false);
 const cmp = ref({ officialName: '' });
+
+const nin = ref({ directorName: '', number: '' });
+const ninChecking = ref(false);
+const ninVerified = ref(false);
+const ninName = ref('');
+const ninError = ref('');
+
+async function verifyNin() {
+  ninChecking.value = true;
+  ninError.value = '';
+  try {
+    const r = await $fetch<any>('/api/compliance/verify-nin', {
+      method: 'POST',
+      body: { nin: nin.value.number.trim(), directorName: nin.value.directorName.trim() }
+    });
+    ninVerified.value = true;
+    ninName.value = r.name || nin.value.directorName;
+  } catch (e: any) {
+    // Three different situations, and telling them apart is the difference
+    // between someone checking a spelling and someone giving up: a number that
+    // isn't found, a name that doesn't match, and too many tries.
+    ninError.value = e?.data?.error?.message || 'We could not verify that NIN.';
+  } finally {
+    ninChecking.value = false;
+  }
+}
 const businessFile = ref<File | null>(null);
 const regulatoryFile = ref<File | null>(null);
 const regRequired = ref(false); // true for Nigerian accounts
@@ -244,6 +298,13 @@ async function onEnvClick() {
   try {
     const r = await $fetch<{ compliance: any }>('/api/compliance');
     complianceStatus.value = r.compliance?.status || null;
+    // Somebody who verified yesterday shouldn't be asked again — the endpoint
+    // would return the cached result, but the form would look like it had
+    // forgotten them.
+    if (r.compliance?.ninVerifiedAt) {
+      ninVerified.value = true;
+      ninName.value = r.compliance.ninName || r.compliance.directorName || '';
+    }
     // Where they stand on the sandbox allowance — makes the reason to go live
     // concrete rather than abstract.
     try { sbx.value = (await $fetch<any>('/api/go-live'))?.sandbox || null; } catch { sbx.value = null; }
@@ -301,6 +362,9 @@ const vClickOutside = {
 </script>
 
 <style scoped>
+.cmp-nin { border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+.cmp-nin-done { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; }
+.cmp-nin-err { font-size: 12.5px; color: #a33; margin: 10px 0 0; line-height: 1.5; }
 .topbar {
   height: var(--topbar-h); border-bottom: 1px solid var(--rule);
   background: var(--paper);
