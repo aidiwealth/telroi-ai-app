@@ -153,7 +153,13 @@ async function loadMoreCalls() {
   } catch { /* */ }
   finally { loadingMore.value = false; }
 }
-function setKind(k: 'system' | 'call' | 'audit') { kind.value = k; load(); }
+function setKind(k: 'system' | 'call' | 'audit' | 'webhook' | 'pbx') {
+  kind.value = k;
+  // The webhook and PBX tabs are components that load their own data; calling
+  // load() here would fetch system logs nobody is looking at.
+  if (k === 'webhook' || k === 'pbx') return;
+  load();
+}
 onMounted(async () => {
   try { const r = await $fetch<any>('/api/admin/me'); isSuper.value = r?.admin?.role === 'superadmin'; } catch { /* */ }
   await load();
