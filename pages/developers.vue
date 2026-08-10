@@ -5,8 +5,13 @@
       <p class="page-sub">Build on Telroi. Your API key authenticates against the same infrastructure the dashboard uses — calls, numbers, agents and Virtual AI Numbers, one REST API.</p>
     </div>
 
+    <nav class="dev-tabs">
+      <button class="dev-tab" :class="{ on: tab === 'api' }" @click="tab = 'api'">API keys</button>
+      <button class="dev-tab" :class="{ on: tab === 'hooks' }" @click="tab = 'hooks'">Webhooks</button>
+    </nav>
+
     <!-- API keys -->
-    <div class="card dev-card">
+    <div v-show="tab === 'api'" class="card dev-card">
       <div class="card-head">
         <span class="card-title">API keys</span>
         <button class="btn btn-signal btn-sm" @click="showCreate = true">+ New key</button>
@@ -34,7 +39,7 @@
     <!-- Webhooks. Only the events they ask for, because at volume the
          difference between a useful integration and a flood is what you
          subscribe to. -->
-    <div class="card dev-card">
+    <div v-show="tab === 'hooks'" class="card dev-card">
       <div class="card-head">
         <span class="card-title">Webhooks</span>
         <button v-if="!hooks.endpoints?.length" class="btn btn-signal btn-sm" @click="showHook = true">+ Add endpoint</button>
@@ -79,6 +84,9 @@
       </div>
     </div>
 
+    <!-- Documentation sits with the keys: both are what you reach for when
+         starting, and webhooks are what you reach for once running. -->
+    <div v-show="tab === 'api'">
     <!-- Full API documentation lives at /api/docs (public, standalone). The
          dashboard page is just keys + settings; no inline docs duplicated here. -->
     <div class="card dev-card">
@@ -90,6 +98,8 @@
         <a href="https://developers.telroi.ai" target="_blank" rel="noopener" class="btn btn-signal btn-sm">View API docs →</a>
       </div>
     </div>
+    </div>
+
 
     <!-- Add endpoint modal -->
     <div v-if="showHook" class="modal-overlay" @click.self="showHook = false">
@@ -160,6 +170,7 @@ const baseUrl = useRuntimeConfig().public.appBaseUrl;
 const pending = ref(true);
 const keys = ref<any[]>([]);
 
+const tab = ref('api');
 const hooks = ref<any>({ endpoints: [], deliveries: [], eventTypes: [] });
 const showHook = ref(false);
 const hookSaving = ref(false);
@@ -255,13 +266,19 @@ onMounted(load);
 <style scoped>
 .dev-note { font-size: 13px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 14px; max-width: 72ch; }
 .dev-hook { border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
-.dev-hook-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.dev-hook-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; }
+.dev-hook-head .mono { word-break: break-all; min-width: 0; flex: 1; font-size: 13px; line-height: 1.5; }
+.dev-hook-head .btn { flex: none; }
 .dev-hook-events { display: flex; gap: 6px; flex-wrap: wrap; }
 .dev-hook-off { margin-top: 12px; padding: 10px 12px; border-radius: var(--radius); background: rgba(180,45,45,.08); font-size: 13px; display: flex; align-items: center; gap: 10px; justify-content: space-between; }
 .dev-deliveries { margin-top: 22px; }
 .dev-sub { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin: 0 0 10px; }
 .dev-resp { display: block; font-size: 12px; color: var(--ink-soft); margin-top: 2px; }
 .dev-ev { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: 13.5px; }
+.dev-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin: 22px 0 20px; }
+.dev-tab { padding: 10px 16px; font-size: 14px; color: var(--ink-soft); border: 0; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.dev-tab.on { color: var(--signal); border-bottom-color: var(--signal); font-weight: 500; }
+.sip-secret-box code { word-break: break-all; }
 .dev-card { margin-bottom: 24px; overflow: hidden; }
 .loading-pad { padding: 16px 24px; display: flex; flex-direction: column; gap: 10px; }
 .skel-row { height: 20px; }
