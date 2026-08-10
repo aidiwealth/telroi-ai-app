@@ -447,3 +447,36 @@ export async function sendBillingSuspendedEmail(to: string, opts: {
   `, { preheader: `${opts.amount} outstanding — calls paused` });
   await sendVia({ to, subject, html, text });
 }
+
+// ── Money arrived. Sent for every top-up whatever the provider, because a
+// client who transfers into a bank account and hears nothing has no way to know
+// it landed — and mentions the invoice in the same breath when one was cleared,
+// rather than sending two emails about one payment.
+export async function sendPaymentReceivedEmail(to: string, opts: {
+  workspace: string; amount: string; balance: string; method: string;
+  invoiceNumber?: string | null; invoiceId?: string | null; suspensionLifted?: boolean;
+}) {
+  const appBase = (useRuntimeConfig().public as any).appBaseUrl || 'https://app.telroi.ai';
+  const settled = !!opts.invoiceNumber;
+  const subject = settled
+    ? `Payment received — invoice ${opts.invoiceNumber} settled`
+    : `Payment received — ${opts.amount}`;
+
+  const text = `We've received ${opts.amount} for ${opts.workspace} by ${opts.method}.\n\n`
+    + (settled ? `That settles invoice ${opts.invoiceNumber}.\n` : '')
+    + (opts.suspensionLifted ? `Calling is back on — nothing to switch back on.\n` : '')
+    + `\nBalance: ${opts.balance}\n\n${appBase}/wallet`;
+
+  const html = shell(`
+    ${h1('Payment received')}
+    ${para(`We've received <strong>${opts.amount}</strong> for <strong>${opts.workspace}</strong> by ${opts.method}.`)}
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr><td style="background:${BRAND.signalSoft};border:1px solid ${BRAND.rule};border-radius:12px;padding:16px 22px;">
+      <span style="font-family:Geist,monospace;font-size:26px;font-weight:600;color:${BRAND.signal2};">${opts.amount}</span>
+      <div style="font-size:13px;color:#666;margin-top:4px;">Balance now ${opts.balance}</div>
+    </td></tr></table>
+    ${settled ? para(`This settles invoice <strong>${opts.invoiceNumber}</strong>.`) : ''}
+    ${opts.suspensionLifted ? para('Calling is back on — there was nothing for you to switch back on.') : ''}
+    ${button(settled && opts.invoiceId ? 'View invoice →' : 'View your wallet →', settled && opts.invoiceId ? `${appBase}/invoices/${opts.invoiceId}` : `${appBase}/wallet`)}
+  `, { preheader: settled ? `${opts.amount} received — ${opts.invoiceNumber} settled` : `${opts.amount} received` });
+  await sendVia({ to, subject, html, text });
+}

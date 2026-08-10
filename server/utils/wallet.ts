@@ -157,9 +157,15 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
       // provider: Paystack, Stripe, Monnify and a card on file all arrive
       // through this one function, and none of them needs to know about
       // invoices at all.
+      let settled: any = null;
+      let liftedSuspension = false;
       try {
         const bal = (r as any).balanceMinor as number;
         if (bal >= 0) {
+          const [before] = await useDb().select({ suspendedAt: schema.tenants.billingSuspendedAt })
+            .from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+          liftedSuspension = !!before?.suspendedAt;
+
           // Paying lifts the suspension. Nothing to switch back on, and nobody
           // to ask — which is the point of tying it to the balance.
           await useDb().update(schema.tenants)
@@ -172,8 +178,38 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
               .set({ status: 'paid', paidAt: new Date(), paidVia: String(meta.provider || reason) })
               .where(eq(schema.invoices.id, inv.id));
           }
+          if (open.length) settled = open[0];
         }
       } catch (e: any) { console.error('[wallet] invoice settlement failed:', e?.message); }
+
+      // Told that it landed. A client who transfers into a bank account and
+      // hears nothing has no way to know it arrived — and one email covering
+      // both the payment and whatever it settled beats two about one event.
+      try {
+        const [w] = await useDb().select().from(schema.wallets).where(eq(schema.wallets.tenantId, tenantId)).limit(1);
+        const [t] = await useDb().select({ name: schema.tenants.name }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+        const [owner] = await useDb().select({ email: schema.users.email })
+          .from(schema.memberships)
+          .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+          .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.role, 'owner')))
+          .limit(1);
+        // Not for play money: a sandbox credit is a simulation, and emailing
+        // somebody that imaginary funds arrived is worse than saying nothing.
+        if (owner?.email && w && meta.simulated !== true) {
+          const sym = w.currency === 'USD' ? '$' : '₦';
+          const fmt = (m: number) => sym + (Math.abs(m) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 });
+          const { sendPaymentReceivedEmail } = await import('./email');
+          await sendPaymentReceivedEmail(owner.email, {
+            workspace: t?.name || 'your workspace',
+            amount: fmt(amountMinor),
+            balance: (w.balanceMinor < 0 ? '−' : '') + fmt(w.balanceMinor),
+            method: String(meta.provider || 'card'),
+            invoiceNumber: settled?.number || null,
+            invoiceId: settled?.id || null,
+            suspensionLifted: liftedSuspension
+          });
+        }
+      } catch (e: any) { console.error('[wallet] payment email failed:', e?.message); }
     }
     return r;
   });
