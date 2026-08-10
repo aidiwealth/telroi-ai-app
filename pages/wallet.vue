@@ -3,7 +3,11 @@
     <div class="page-head wal-pagehead">
       <div>
         <h1 class="page-title">Wallet</h1>
-        <p class="page-sub">Top up and pay as you use — voice, numbers and features bill from here.</p>
+        <p v-if="wallet.postpaid" class="page-sub">
+          Your workspace is billed in arrears. Calls run on account and you settle an invoice each period — you can still pay in advance below, which reduces what you're invoiced.
+          <span v-if="nextInvoiceLabel"><br />Next invoice: <strong>{{ nextInvoiceLabel }}</strong>.</span>
+        </p>
+        <p v-else class="page-sub">Top up and pay as you use — voice, numbers and features bill from here.</p>
       </div>
     </div>
 
@@ -18,9 +22,15 @@
             <svg viewBox="0 0 40 32" width="36" height="28"><rect x="1" y="1" width="38" height="30" rx="5" fill="none" stroke="rgba(255,255,255,0.5)"/><path d="M1 11h12M1 21h12M27 11h12M27 21h12M13 1v30M27 1v30" stroke="rgba(255,255,255,0.4)" fill="none"/></svg>
           </div>
         </div>
-        <div class="wal-card-label">Available balance</div>
+        <div class="wal-card-label">{{ wallet.postpaid ? 'Used this period' : 'Available balance' }}</div>
         <div class="wal-card-balance money" v-if="!pending">
-          <template v-if="bal.neg">−</template>{{ bal.sym }}{{ bal.whole }}<span class="cents">{{ bal.cents }}</span>
+          <!-- On account, the balance goes negative by design. Shown as usage
+               rather than a deficit: a minus sign reads as something broken. -->
+          <template v-if="!wallet.postpaid && bal.neg">−</template>{{ used.sym }}{{ used.whole }}<span class="cents">{{ used.cents }}</span>
+        </div>
+        <div v-if="wallet.postpaid && !pending" class="wal-card-limit">
+          of {{ limit.sym }}{{ limit.whole }} credit
+          <span v-if="creditPct >= 80" class="wal-card-warn">— {{ creditPct }}% used</span>
         </div>
         <div class="skeleton wal-card-skel" v-else />
         <div class="wal-card-foot">
@@ -209,6 +219,28 @@ const copied = ref(false);
 const provider = computed(() => wallet.value.currency === 'NGN' ? 'Paystack' : 'Stripe');
 const quickAmounts = computed(() => wallet.value.currency === 'NGN' ? [5000, 20000, 50000, 100000] : [25, 50, 100, 250]);
 const bal = computed(() => money.parts(wallet.value.balanceMinor, wallet.value.currency));
+
+// On account: what they've run up this period, as a positive figure, against the
+// ceiling where calls stop. A client watching a balance fall past zero with no
+// explanation would reasonably think their account had broken.
+const used = computed(() => {
+  const m = wallet.value.postpaid
+    ? Math.max(0, -(wallet.value.balanceMinor || 0))
+    : Math.abs(wallet.value.balanceMinor || 0);
+  return money.parts(m, wallet.value.currency);
+});
+const limit = computed(() => money.parts(wallet.value.creditLimitMinor || 0, wallet.value.currency));
+const creditPct = computed(() => {
+  const lim = wallet.value.creditLimitMinor || 0;
+  if (!lim) return 0;
+  return Math.min(100, Math.round((Math.max(0, -(wallet.value.balanceMinor || 0)) / lim) * 100));
+});
+const nextInvoiceLabel = computed(() => {
+  if (!wallet.value.nextInvoiceAt) return '';
+  const d = new Date(wallet.value.nextInvoiceAt);
+  const days = Math.ceil((d.getTime() - Date.now()) / 86400000);
+  return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}${days > 0 ? ` — ${days} day${days === 1 ? '' : 's'} away` : ''}`;
+});
 const mIn = computed(() => money.parts(summary.value.moneyInMinor, wallet.value.currency));
 const mOut = computed(() => money.parts(summary.value.moneyOutMinor, wallet.value.currency));
 const avgIn = computed(() => money.parts(summary.value.avgInMinor, wallet.value.currency));
@@ -289,6 +321,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.wal-card-limit { font-size: 13px; color: rgba(255,255,255,.7); margin-top: 2px; }
+.wal-card-warn { color: #ffd479; }
 .wal-pagehead { display: flex; align-items: flex-start; justify-content: space-between; }
 
 .wal-top { display: grid; grid-template-columns: 380px 1fr; gap: 20px; margin-bottom: 32px; }
