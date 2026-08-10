@@ -282,3 +282,24 @@
 .log-tab { padding: 8px 16px; border-radius: var(--radius-sm); font-size: 13.5px; color: var(--ink-soft); border: 1px solid transparent; background: none; cursor: pointer; }
 .log-tab:hover { background: var(--paper-2); }
 .log-tab.active { background: var(--signal-soft); color: var(--signal); }
+
+
+/* Admin cards and tables.
+ *
+ * ad-data-table was referenced across the admin area and defined nowhere, and
+ * set-card lived in three pages' scoped blocks with three slightly different
+ * shapes. Anything new borrowing either name rendered bare — which is what
+ * happened to the SIP, compliance and webhook tables added today.
+ *
+ * Pages that define their own copies still win by specificity, so this changes
+ * nothing for them; it gives everything else a floor to stand on.
+ */
+.set-card { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-lg); overflow: hidden; }
+
+.ad-data-table { width: 100%; border-collapse: collapse; }
+.ad-data-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-mute); font-weight: 500; padding: 12px 18px; border-bottom: 1px solid var(--rule); }
+.ad-data-table td { padding: 13px 18px; font-size: 13.5px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.ad-data-table tbody tr:last-child td { border-bottom: 0; }
+.ad-data-table tbody tr:hover { background: var(--paper-2); }
+.ad-dim { color: var(--ink-soft); }
+.ad-r { text-align: right; }
