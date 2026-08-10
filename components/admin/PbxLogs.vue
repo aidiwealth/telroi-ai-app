@@ -1,6 +1,5 @@
 <template>
   <div>
-    <h1 class="ad-title">PBX live logs</h1>
     <p class="ad-sub">Real-time output from the voice control app, streamed from the PBX. Held in memory only (last 800 lines) — nothing is stored. Filter by text to follow one client, number, or call.</p>
 
     <div class="plog-bar">
@@ -33,8 +32,6 @@
 import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { useAdminApi } from '~/composables/useAdminApi';
 
-definePageMeta({ layout: 'admin', middleware: 'superadmin' });
-useHead({ title: 'PBX live logs — Telroi admin' });
 
 interface LogLine { seq: number; ts: number; level: 'info' | 'error'; text: string; }
 

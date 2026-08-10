@@ -7,7 +7,15 @@
       <button class="log-tab" :class="{ active: kind === 'system' }" @click="setKind('system')">System logs</button>
       <button class="log-tab" :class="{ active: kind === 'call' }" @click="setKind('call')">Call logs</button>
       <button v-if="isSuper" class="log-tab" :class="{ active: kind === 'audit' }" @click="setKind('audit')">Audit log</button>
+      <button class="log-tab" :class="{ active: kind === 'webhook' }" @click="setKind('webhook')">Webhooks</button>
+      <button v-if="isSuper" class="log-tab" :class="{ active: kind === 'pbx' }" @click="setKind('pbx')">PBX live</button>
     </div>
+
+    <!-- Both were their own pages. They are logs, and looking for one meant
+         knowing which of three places to look. PBX stays superadmin-only, as it
+         was when it had its own route. -->
+    <AdminWebhookLogs v-if="kind === 'webhook'" />
+    <AdminPbxLogs v-else-if="kind === 'pbx' && isSuper" />
 
     <!-- Audit search (audit tab only) -->
     <div v-if="kind === 'audit'" class="aud-filters">
@@ -21,7 +29,7 @@
       </select>
     </div>
 
-    <div v-if="pending" class="ad-loading">Loading…</div>
+    <div v-if="pending && kind !== 'webhook' && kind !== 'pbx'" class="ad-loading">Loading…</div>
     <EmptyState v-else-if="kind === 'system' && !logs.length" icon="generic" title="No logs yet" description="Activity across the platform will show up here as it happens." />
     <EmptyState v-else-if="kind === 'call' && !calls.length" icon="calls" title="No calls yet" description="Every call attempt across all clients — including failures — will appear here." />
 

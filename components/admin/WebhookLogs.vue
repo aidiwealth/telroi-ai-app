@@ -1,11 +1,5 @@
 <template>
   <div>
-    <div class="ad-head">
-      <div>
-        <h1 class="ad-title">Webhook log</h1>
-        <p class="ad-sub">What our payment providers sent us, and what we did with it — recorded before the signature is checked, so a refused notification and one that never arrived can be told apart.</p>
-      </div>
-    </div>
 
     <div v-if="pending" class="ad-loading">Loading…</div>
 
@@ -62,8 +56,6 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-definePageMeta({ layout: 'admin' });
-useHead({ title: 'Webhook log — Telroi' });
 
 const events = ref<any[]>([]);
 const summary = ref<any[]>([]);
