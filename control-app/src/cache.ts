@@ -176,7 +176,11 @@ export async function refreshCache(): Promise<void> {
     const eps = await db.select({
       id: schema.sipEndpoints.id,
       tenantId: schema.sipEndpoints.tenantId,
-      sipUsername: schema.sipEndpoints.sipUsername
+      sipUsername: schema.sipEndpoints.sipUsername,
+      // Who this phone belongs to. For a support operator — a platform admin
+      // with no membership — this is the only thread back from a department
+      // member to something we can ring.
+      metaUserId: sql<string | null>`${schema.sipEndpoints.meta}->>'userId'`
     }).from(schema.sipEndpoints);
     for (const e of eps) {
       if (e.sipUsername) {
@@ -206,10 +210,23 @@ export async function refreshCache(): Promise<void> {
           eq(schema.memberships.tenantId, schema.departmentMembers.tenantId)
         )
       );
+    // A membership carries the pbxLogin for a client's own team. Support
+    // operators are platform admins with a SIP endpoint and no membership, so
+    // for them the endpoint's meta.userId is the only thread back to a phone —
+    // without this a support department resolved to nobody and the caller heard
+    // the escalation fail.
+    const epByUser = new Map<string, string>();
+    for (const e of eps) {
+      const uid = (e as any).metaUserId;
+      if (uid && e.sipUsername) epByUser.set(`${e.tenantId}:${uid}`, e.sipUsername);
+    }
+
     for (const m of dm) {
-      if (!m.canTakeCalls || !m.pbxLogin) continue;
+      if (!m.canTakeCalls) continue;
+      const login = m.pbxLogin || epByUser.get(`${m.tenantId}:${m.userId}`);
+      if (!login) continue;
       const arr = deptEndpoints.get(m.departmentId) || [];
-      if (!arr.includes(m.pbxLogin)) arr.push(m.pbxLogin);
+      if (!arr.includes(login)) arr.push(login);
       deptEndpoints.set(m.departmentId, arr);
     }
 

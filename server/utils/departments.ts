@@ -1,7 +1,7 @@
 // server/utils/departments.ts
 // Shared department/team operations, used by both client (self-serve) and admin
 // (operator-on-behalf) endpoints so behaviour is identical.
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, sql, inArray } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 
 export async function listDepartments(tenantId: string) {
@@ -131,9 +131,21 @@ export async function setDepartmentMember(tenantId: string, departmentId: string
   const [dept] = await db.select().from(schema.departments)
     .where(and(eq(schema.departments.id, departmentId), eq(schema.departments.tenantId, tenantId))).limit(1);
   if (!dept) throw new Error('Department not found');
+  // Membership OR a SIP endpoint. Support operators are platform admins with an
+  // endpoint and no membership — several have no users row at all — so requiring
+  // one meant a support department could never have anybody in it. What matters
+  // is whether this person has a phone we can ring for this workspace, and an
+  // endpoint is that evidence just as a membership is.
   const [mem] = await db.select().from(schema.memberships)
     .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.userId, userId))).limit(1);
-  if (!mem) throw new Error('User is not a member of this workspace');
+  if (!mem) {
+    const [ep] = await db.select().from(schema.sipEndpoints)
+      .where(and(
+        eq(schema.sipEndpoints.tenantId, tenantId),
+        sql`${schema.sipEndpoints.meta}->>'userId' = ${userId}`
+      )).limit(1);
+    if (!ep) throw new Error('That person has no phone on this workspace');
+  }
 
   const [existing] = await db.select().from(schema.departmentMembers)
     .where(and(eq(schema.departmentMembers.departmentId, departmentId), eq(schema.departmentMembers.userId, userId))).limit(1);
