@@ -90,14 +90,14 @@
       <div class="card ov-money-card">
         <div class="ov-money-label">Wallet float held</div>
         <div class="ov-money-vals">
-          <span v-for="(amt, cur) in d.walletFloat" :key="cur" class="ov-money-val mono">{{ sym(cur) }}{{ fmtMinor(amt) }}<small>{{ cur }}</small></span>
+          <span v-for="(amt, cur) in d.walletFloat" :key="cur" class="ov-money-val">{{ sym(cur) }}{{ fmtMinor(amt) }}<small>{{ cur }}</small></span>
           <span v-if="!hasFloat" class="muted">—</span>
         </div>
       </div>
       <div class="card ov-money-card">
         <div class="ov-money-label">Revenue · last 30 days</div>
         <div class="ov-money-vals">
-          <span v-for="(amt, cur) in d.revenue30" :key="cur" class="ov-money-val mono">{{ sym(cur) }}{{ fmtMinor(amt) }}<small>{{ cur }}</small></span>
+          <span v-for="(amt, cur) in d.revenue30" :key="cur" class="ov-money-val">{{ sym(cur) }}{{ fmtMinor(amt) }}<small>{{ cur }}</small></span>
           <span v-if="!hasRev" class="muted">No payments yet</span>
         </div>
       </div>
