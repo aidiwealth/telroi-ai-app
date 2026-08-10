@@ -174,6 +174,10 @@
       <EmptyState v-else icon="generic" title="No transactions yet" description="Top up to get started — your activity will show here." />
     </div>
 
+    <!-- queryKey, because the invoices tab will want paging too and two tables
+         sharing one URL parameter would move together. -->
+    <Pagination v-bind="ledgerMeta" query-key="tx" @change="goLedgerPage" />
+
     </div>
 
     <!-- Invoices -->
@@ -277,6 +281,13 @@ const auth = useAuthStore();
 const pending = ref(true);
 const wallet = ref<any>({ currency: 'USD', balanceMinor: 0, plan: 'startup' });
 const ledger = ref<any[]>([]);
+const ledgerPage = ref(Number(useRoute().query.tx) || 1);
+const ledgerMeta = ref({ page: 1, pages: 1, total: 0, perPage: 50 });
+
+async function goLedgerPage(p: number) {
+  ledgerPage.value = p;
+  await load();
+}
 
 const summary = ref<any>({ moneyInMinor: 0, moneyOutMinor: 0, avgInMinor: 0, avgOutMinor: 0 });
 const selected = ref<any>(null);
@@ -379,8 +390,13 @@ async function loadSummary() {
 async function load() {
   pending.value = true;
   try {
-    const [w, l] = await Promise.all([api.get<any>('/api/wallet'), api.get<any[]>('/api/wallet/ledger')]);
-    wallet.value = w; ledger.value = l;
+    const [w, l] = await Promise.all([
+      api.get<any>('/api/wallet'),
+      api.get<any>(`/api/wallet/ledger?page=${ledgerPage.value}`)
+    ]);
+    wallet.value = w;
+    ledger.value = l.items || [];
+    ledgerMeta.value = { page: l.page, pages: l.pages, total: l.total, perPage: l.perPage };
     await loadSummary();
     if (w.currency === 'NGN') await loadAccount();
   } catch (e: any) { toast.err(e.message); }
