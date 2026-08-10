@@ -4,8 +4,8 @@
       <div>
         <h1 class="page-title">Wallet</h1>
         <p v-if="wallet.postpaid" class="page-sub">
-          Your workspace is billed in arrears. Any balance you hold is used first; after that, calls continue on credit up to your limit and you settle an invoice each period. Topping up below is optional — it simply reduces what you're invoiced.
-          <span v-if="nextInvoiceLabel"><br />Next invoice: <strong>{{ nextInvoiceLabel }}</strong>.</span>
+          Billed in arrears — your balance is used first, then credit.
+          <span v-if="nextInvoiceLabel" class="wal-next">Next invoice {{ nextInvoiceLabel }}</span>
         </p>
         <p v-else class="page-sub">Top up and pay as you use — voice, numbers and features bill from here.</p>
       </div>
@@ -219,7 +219,7 @@
           <thead><tr><th>Invoice</th><th>Period</th><th>Amount</th><th>Due</th><th>Status</th></tr></thead>
           <tbody>
             <tr v-for="i in invoices" :key="i.id">
-              <td class="mono">{{ i.number }}</td>
+              <td class="mono"><NuxtLink :to="`/invoices/${i.id}`" class="wal-inv-link">{{ i.number }}</NuxtLink></td>
               <td class="muted">{{ shortDate(i.periodStart) }} – {{ shortDate(i.periodEnd) }}</td>
               <td class="mono">{{ invAmount(i) }}</td>
               <td :class="{ 'wal-overdue': i.status === 'open' && new Date(i.dueAt) < new Date() }">{{ shortDate(i.dueAt) }}</td>
@@ -447,6 +447,9 @@ onMounted(async () => {
 .wal-inv-badge.paid { background: rgba(34,139,84,.12); color: #1c7a49; }
 .wal-overdue { color: #a33; font-weight: 500; }
 .wal-inv-lede { font-size: 13px; margin: 0 0 14px; max-width: 70ch; }
+.wal-inv-link { color: var(--signal); text-decoration: none; }
+.wal-inv-link:hover { text-decoration: underline; }
+.wal-next { display: inline-block; margin-left: 10px; padding: 2px 10px; border-radius: 999px; background: var(--paper-2); font-size: 12.5px; color: var(--ink-soft); }
 .wal-card-limit { font-size: 13px; color: rgba(255,255,255,.7); margin-top: 2px; }
 .wal-card-warn { color: #ffd479; }
 .wal-pagehead { display: flex; align-items: flex-start; justify-content: space-between; }

@@ -85,3 +85,28 @@ p { margin: 0; }
   .ad-data-table, .table, table.ad-mini { min-width: 520px; }
   .ad-table-wrap, .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
+
+
+/* Printing.
+ *
+ * An invoice a client saves as a PDF should be the document, not a photograph
+ * of our application — so the sidebar, top bar and every floating panel step
+ * out of the way and the content takes the page. Written globally rather than
+ * per page: anything worth printing later gets this for free.
+ */
+@media print {
+  .shell { display: block; background: #fff; }
+  .shell-panel { margin: 0; border-radius: 0; box-shadow: none; }
+  .shell-content, .shell-inner { padding: 0; margin: 0; max-width: none; }
+
+  .sidebar, .shell-overlay, .topbar,
+  .todo-dock, .setup-modal, .copilot-dock, .toast-stack, .no-print {
+    display: none !important;
+  }
+
+  /* Cards become plain sections on paper; borders and fills waste ink and make
+     a document look like a screenshot. */
+  .card { border: 0; box-shadow: none; background: transparent; }
+
+  a[href]::after { content: ''; }
+}
