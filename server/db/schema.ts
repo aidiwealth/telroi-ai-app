@@ -267,6 +267,10 @@ export const tenants = pgTable('tenants', {
   // negotiates its own terms, and a default nobody chose is a poor thing to
   // enforce against them.
   paymentTermsDays: integer('payment_terms_days'),
+  // Set when an invoice passes its due date unpaid. Separate from the postpaid
+  // flag so their terms survive a suspension — and cleared when the balance
+  // comes back to zero, which happens on payment without anyone intervening.
+  billingSuspendedAt: timestamp('billing_suspended_at', { withTimezone: true }),
   postpaidSince: timestamp('postpaid_since', { withTimezone: true }),
   sandboxMode: boolean('sandbox_mode').notNull().default(true),
   // Null = inherit the platform default. Set per-client to extend a trial.

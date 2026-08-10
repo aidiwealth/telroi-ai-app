@@ -99,10 +99,16 @@ p { margin: 0; }
   .shell-panel { margin: 0; border-radius: 0; box-shadow: none; }
   .shell-content, .shell-inner { padding: 0; margin: 0; max-width: none; }
 
+  /* Named elements, and then a catch-all: anything positioned over the page is
+     chrome, not content, and listing them one by one means the next component
+     somebody adds turns up in a client's PDF. */
   .sidebar, .shell-overlay, .topbar,
-  .todo-dock, .setup-modal, .copilot-dock, .toast-stack, .no-print {
+  .todo-dock, .setup-modal, .copilot-dock, .toast-stack, .no-print,
+  .shell > *:not(.shell-panel) {
     display: none !important;
   }
+  .shell-panel [style*="position: fixed"],
+  .shell-panel [style*="position:fixed"] { display: none !important; }
 
   /* Cards become plain sections on paper; borders and fills waste ink and make
      a document look like a screenshot. */

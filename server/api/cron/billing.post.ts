@@ -32,5 +32,16 @@ export default defineEventHandler(async (event) => {
     invoicing = { error: e?.message };
   }
 
-  return { ok: true, ...result, invoicing };
+  // Chasing and stopping, after issuing — so an invoice raised today is never
+  // also chased today.
+  let dunning: any = null;
+  try {
+    const { runDunning } = await import('~/server/utils/invoicing');
+    dunning = await runDunning();
+  } catch (e: any) {
+    console.error('[cron] dunning failed:', e?.message);
+    dunning = { error: e?.message };
+  }
+
+  return { ok: true, ...result, invoicing, dunning };
 });

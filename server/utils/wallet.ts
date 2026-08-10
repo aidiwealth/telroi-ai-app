@@ -61,7 +61,10 @@ export interface DebitArgs {
  *  limit set is treated as having none rather than unlimited: a credit decision
  *  nobody made shouldn't default to unbounded.
  */
-export function canSpend(tenant: { postpaid?: boolean | null; creditLimitMinor?: number | null } | null, balanceMinor: number, amountMinor: number): boolean {
+export function canSpend(tenant: { postpaid?: boolean | null; creditLimitMinor?: number | null; billingSuspendedAt?: Date | null } | null, balanceMinor: number, amountMinor: number): boolean {
+  // An unpaid invoice past its due date stops spending outright, whatever
+  // headroom the limit would otherwise allow. They were told twice.
+  if (tenant?.billingSuspendedAt) return false;
   if (!tenant?.postpaid) return balanceMinor >= amountMinor;
   const floor = -(tenant.creditLimitMinor ?? 0);
   return (balanceMinor - amountMinor) >= floor;
@@ -92,7 +95,8 @@ export async function debit(args: DebitArgs) {
     // same headroom and collectively exceed it.
     const [tenant] = await tx.select({
       postpaid: schema.tenants.postpaid,
-      creditLimitMinor: schema.tenants.creditLimitMinor
+      creditLimitMinor: schema.tenants.creditLimitMinor,
+      billingSuspendedAt: schema.tenants.billingSuspendedAt
     }).from(schema.tenants).where(eq(schema.tenants.id, args.tenantId)).limit(1);
 
     if (!canSpend(tenant, wallet.balanceMinor, args.amountMinor)) {
@@ -156,6 +160,11 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
       try {
         const bal = (r as any).balanceMinor as number;
         if (bal >= 0) {
+          // Paying lifts the suspension. Nothing to switch back on, and nobody
+          // to ask — which is the point of tying it to the balance.
+          await useDb().update(schema.tenants)
+            .set({ billingSuspendedAt: null })
+            .where(eq(schema.tenants.id, tenantId));
           const open = await useDb().select().from(schema.invoices)
             .where(and(eq(schema.invoices.tenantId, tenantId), eq(schema.invoices.status, 'open')));
           for (const inv of open) {

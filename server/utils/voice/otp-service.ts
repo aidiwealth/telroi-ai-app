@@ -115,7 +115,8 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
     const { canSpend } = await import('~/server/utils/wallet');
     const [t] = await db.select({
       postpaid: schema.tenants.postpaid,
-      creditLimitMinor: schema.tenants.creditLimitMinor
+      creditLimitMinor: schema.tenants.creditLimitMinor,
+      billingSuspendedAt: schema.tenants.billingSuspendedAt
     }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
     if (!canSpend(t, wallet.balanceMinor, chargeMinor)) {
       return { ok: false, error: 'insufficient_funds' };

@@ -60,7 +60,8 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
     // while their calls run on credit — everything lands on the same invoice.
     const [t] = await db.select({
       postpaid: schema.tenants.postpaid,
-      creditLimitMinor: schema.tenants.creditLimitMinor
+      creditLimitMinor: schema.tenants.creditLimitMinor,
+      billingSuspendedAt: schema.tenants.billingSuspendedAt
     }).from(schema.tenants).where(eq(schema.tenants.id, sub.tenantId)).limit(1);
     if (!canSpend(t, wallet.balanceMinor, amount)) {
       // A postpaid client at their ceiling has the charge deferred, not their
@@ -131,7 +132,8 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
     if (dupe) { result.plans.skipped++; continue; }
     const [pt] = await db.select({
       postpaid: schema.tenants.postpaid,
-      creditLimitMinor: schema.tenants.creditLimitMinor
+      creditLimitMinor: schema.tenants.creditLimitMinor,
+      billingSuspendedAt: schema.tenants.billingSuspendedAt
     }).from(schema.tenants).where(eq(schema.tenants.id, t.id)).limit(1);
     if (!canSpend(pt, wallet.balanceMinor, planAmount)) { result.plans.unpaid++; continue; } // leave anchor; retry next run
     const after = wallet.balanceMinor - planAmount;

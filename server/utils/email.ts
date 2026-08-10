@@ -370,3 +370,80 @@ async function capture(fn: () => Promise<void>): Promise<{ subject: string; html
   const r = __capture; __capture = null;
   return r || { subject: '', html: '' };
 }
+
+// ── Billing on account. Three emails, deliberately plain: an amount and a date
+// buried in pleasantries is the thing a client skims past, and then losing
+// service feels like an ambush rather than something they watched approaching.
+
+function invoiceBox(amount: string, dueLabel: string) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr><td style="background:${BRAND.signalSoft};border:1px solid ${BRAND.rule};border-radius:12px;padding:16px 22px;">
+    <span style="font-family:Geist,monospace;font-size:26px;font-weight:600;color:${BRAND.signal2};">${amount}</span>
+    <div style="font-size:13px;color:#666;margin-top:4px;">${dueLabel}</div>
+  </td></tr></table>`;
+}
+
+function bankBlock(bank: { bankName?: string | null; accountNumber?: string | null; accountName?: string | null } | null) {
+  if (!bank?.accountNumber) return '';
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-collapse:collapse;">
+    <tr><td style="font-size:13px;color:#666;padding:2px 18px 2px 0;">Bank</td><td style="font-size:13px;">${bank.bankName || ''}</td></tr>
+    <tr><td style="font-size:13px;color:#666;padding:2px 18px 2px 0;">Account number</td><td style="font-size:13px;font-family:Geist,monospace;">${bank.accountNumber}</td></tr>
+    <tr><td style="font-size:13px;color:#666;padding:2px 18px 2px 0;">Account name</td><td style="font-size:13px;">${bank.accountName || ''}</td></tr>
+  </table>`;
+}
+
+export async function sendInvoiceIssuedEmail(to: string, opts: {
+  workspace: string; number: string; amount: string; dueDate: string;
+  periodLabel: string; invoiceId: string; bank?: any;
+}) {
+  const appBase = (useRuntimeConfig().public as any).appBaseUrl || 'https://app.telroi.ai';
+  const link = `${appBase}/invoices/${opts.invoiceId}`;
+  const subject = `Invoice ${opts.number} — ${opts.amount} due ${opts.dueDate}`;
+  const text = `Invoice ${opts.number} for ${opts.workspace}.\n\nAmount due: ${opts.amount}\nFor: ${opts.periodLabel}\nDue by: ${opts.dueDate}\n\nView it: ${link}\n\nAnything you pay clears what you owe — the invoice settles once your balance is back to zero.`;
+  const html = shell(`
+    ${h1('Your invoice is ready')}
+    ${para(`For <strong>${opts.workspace}</strong>, covering ${opts.periodLabel}.`)}
+    ${invoiceBox(opts.amount, `Due by ${opts.dueDate}`)}
+    ${bankBlock(opts.bank)}
+    ${button('View invoice →', link)}
+    ${para('Anything you pay clears what you owe — this invoice settles once your balance is back to zero. You can also pay by card from your wallet.')}
+  `, { preheader: `${opts.amount} due ${opts.dueDate}` });
+  await sendVia({ to, subject, html, text });
+}
+
+export async function sendInvoiceReminderEmail(to: string, opts: {
+  workspace: string; number: string; amount: string; dueDate: string;
+  daysLeft: number; invoiceId: string; bank?: any;
+}) {
+  const appBase = (useRuntimeConfig().public as any).appBaseUrl || 'https://app.telroi.ai';
+  const link = `${appBase}/invoices/${opts.invoiceId}`;
+  const when = opts.daysLeft === 1 ? 'tomorrow' : `in ${opts.daysLeft} days`;
+  const subject = `Invoice ${opts.number} is due ${when} — ${opts.amount}`;
+  const text = `Invoice ${opts.number} for ${opts.workspace} is due ${when} (${opts.dueDate}).\n\nAmount due: ${opts.amount}\n\nView it: ${link}\n\nCalls stop if it goes unpaid past the due date.`;
+  const html = shell(`
+    ${h1(`Due ${when}`)}
+    ${para(`Invoice ${opts.number} for <strong>${opts.workspace}</strong> hasn't been settled yet.`)}
+    ${invoiceBox(opts.amount, `Due ${opts.dueDate}`)}
+    ${bankBlock(opts.bank)}
+    ${button('View invoice →', link)}
+    ${para('Calls stop if it goes unpaid past the due date, so this is worth clearing before then.')}
+  `, { preheader: `${opts.amount} due ${opts.dueDate}` });
+  await sendVia({ to, subject, html, text });
+}
+
+export async function sendBillingSuspendedEmail(to: string, opts: {
+  workspace: string; number: string; amount: string; invoiceId: string; bank?: any;
+}) {
+  const appBase = (useRuntimeConfig().public as any).appBaseUrl || 'https://app.telroi.ai';
+  const link = `${appBase}/invoices/${opts.invoiceId}`;
+  const subject = `Calls paused on ${opts.workspace} — invoice ${opts.number} unpaid`;
+  const text = `Invoice ${opts.number} for ${opts.workspace} passed its due date, so calls are paused.\n\nAmount due: ${opts.amount}\n\nPay it and everything resumes automatically: ${link}`;
+  const html = shell(`
+    ${h1('Calls are paused')}
+    ${para(`Invoice ${opts.number} for <strong>${opts.workspace}</strong> passed its due date, so we've paused outbound calling. Your numbers and settings are untouched.`)}
+    ${invoiceBox(opts.amount, 'Outstanding')}
+    ${bankBlock(opts.bank)}
+    ${button('View invoice →', link)}
+    ${para('Everything resumes as soon as the balance is clear — there is nothing to switch back on.')}
+  `, { preheader: `${opts.amount} outstanding — calls paused` });
+  await sendVia({ to, subject, html, text });
+}
