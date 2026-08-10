@@ -912,6 +912,21 @@ export const speechJobs = pgTable('speech_jobs', {
 // What a postpaid client owes for a period. Generated from the ledger rather
 // than accumulated separately, so it can always be reconciled against the calls
 // that produced it.
+// Every webhook that arrives, whether or not we accept it. A notification that
+// fails silently is indistinguishable from one that never came — the row is
+// written before the signature is checked, so a rejection leaves a trace too.
+export const webhookEvents = pgTable('webhook_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  provider: text('provider').notNull(),
+  eventType: text('event_type'),
+  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'set null' }),
+  signatureOk: boolean('signature_ok'),
+  outcome: text('outcome').notNull().default('received'), // received | accepted | rejected | ignored | error
+  detail: text('detail'),
+  bodyExcerpt: text('body_excerpt'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const invoices = pgTable('invoices', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
