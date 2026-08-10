@@ -104,16 +104,26 @@
           </div>
           <p class="cmp-lede" v-if="complianceStatus === 'pending'">Your documents are under review. You'll be able to switch to live once approved.</p>
           <template v-else>
-            <p class="cmp-lede">Going live requires business verification. Upload your documents to request live access.</p>
-            <div class="field-float">
-              <input v-model="cmp.officialName" class="input" placeholder=" " id="cmp-name" />
-              <label for="cmp-name">Official company name</label>
+            <!-- Three steps rather than one wall. Everything asked here is
+                 required, but meeting it one thing at a time is the difference
+                 between a form somebody finishes and one they close. -->
+            <div class="cmp-steps">
+              <span v-for="(l, i) in stepLabels" :key="l" class="cmp-step" :class="{ on: shownStep === i, done: shownStep > i }">{{ l }}</span>
             </div>
+
+            <template v-if="step === 0">
+              <p class="cmp-lede">Going live requires business verification. This takes a few minutes.</p>
+              <div class="field-float">
+                <input v-model="cmp.officialName" class="input" placeholder=" " id="cmp-name" />
+                <label for="cmp-name">Official company name</label>
+              </div>
+              <button class="btn btn-signal btn-block" :disabled="!cmp.officialName.trim()" @click="step = regRequired ? 1 : 2">Continue</button>
+            </template>
             <!-- Nigerian workspaces verify the director first. Asked before the
                  files because the endpoint refuses without it, and discovering
                  that after choosing documents would be a poor way to find out.
                  NIMC is a Nigerian register, so nobody else is asked. -->
-            <div v-if="regRequired" class="cmp-nin">
+            <div v-if="step === 1 && regRequired" class="cmp-nin">
               <template v-if="ninVerified">
                 <div class="cmp-nin-done">
                   <strong>Director verified</strong>
@@ -137,7 +147,12 @@
               </template>
             </div>
 
-            <div class="field">
+            <div v-if="step === 1" class="cmp-nav">
+              <button class="btn btn-ghost btn-sm" @click="step = 0">Back</button>
+              <button class="btn btn-signal btn-sm" :disabled="regRequired && !ninVerified" @click="step = 2">Continue</button>
+            </div>
+
+            <div v-if="step === 2" class="field">
               <label class="cmp-file-label">Business license <span class="cmp-req">required</span></label>
               <label class="cmp-drop" :class="{ filled: businessFile }">
                 <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="cmp-file-input" @change="onBusinessFile" />
@@ -145,7 +160,7 @@
                 <span v-else class="cmp-drop-file">📄 {{ businessFile.name }}</span>
               </label>
             </div>
-            <div class="field">
+            <div v-if="step === 2" class="field">
               <label class="cmp-file-label">Regulatory license <span v-if="regRequired" class="cmp-req">required</span><span v-else class="cmp-opt">optional</span></label>
               <label class="cmp-drop" :class="{ filled: regulatoryFile }">
                 <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="cmp-file-input" @change="onRegulatoryFile" />
@@ -153,10 +168,15 @@
                 <span v-else class="cmp-drop-file">📄 {{ regulatoryFile.name }}</span>
               </label>
             </div>
-            <button class="btn btn-signal btn-block" :disabled="submitting || !cmp.officialName || !businessFile || (regRequired && !regulatoryFile) || (regRequired && !ninVerified)" @click="submitCompliance">
-              {{ submitting ? 'Uploading…' : 'Submit for review' }}
-            </button>
-            <p class="cmp-note muted">An operator reviews submissions before live access is granted. Your documents are stored securely and only accessed for verification.</p>
+            <template v-if="step === 2">
+              <div class="cmp-nav">
+                <button class="btn btn-ghost btn-sm" @click="step = regRequired ? 1 : 0">Back</button>
+              </div>
+              <button class="btn btn-signal btn-block" :disabled="submitting || !cmp.officialName || !businessFile || (regRequired && !regulatoryFile) || (regRequired && !ninVerified)" @click="submitCompliance">
+                {{ submitting ? 'Uploading…' : 'Submit for review' }}
+              </button>
+              <p class="cmp-note muted">An operator reviews submissions before live access is granted. Your documents are stored securely and only accessed for verification.</p>
+            </template>
           </template>
         </div>
       </div>
@@ -255,6 +275,14 @@ const showCompliance = ref(false);
 const complianceStatus = ref<string | null>(null);
 const submitting = ref(false);
 const cmp = ref({ officialName: '' });
+
+const step = ref(0);
+// A workspace outside Nigeria has no NIN step, so the middle one is skipped
+// entirely rather than shown empty.
+const stepLabels = computed(() => regRequired.value ? ['Company', 'Director', 'Documents'] : ['Company', 'Documents']);
+// Documents are step 2 either way, so outside Nigeria that has to light the
+// second pill rather than a third that isn't there.
+const shownStep = computed(() => (!regRequired.value && step.value === 2) ? 1 : step.value);
 
 const nin = ref({ directorName: '', number: '' });
 const ninChecking = ref(false);
@@ -362,6 +390,11 @@ const vClickOutside = {
 </script>
 
 <style scoped>
+.cmp-steps { display: flex; gap: 6px; margin-bottom: 18px; }
+.cmp-step { flex: 1; font-size: 11.5px; text-align: center; padding: 6px 4px; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); }
+.cmp-step.on { background: var(--signal-soft); color: var(--signal2); font-weight: 500; }
+.cmp-step.done { color: var(--ink); }
+.cmp-nav { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
 .cmp-nin { border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
 .cmp-nin-done { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; }
 .cmp-nin-err { font-size: 12.5px; color: #a33; margin: 10px 0 0; line-height: 1.5; }
