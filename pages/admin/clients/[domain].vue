@@ -284,6 +284,36 @@
           <button class="btn btn-signal btn-sm" :disabled="priceBusy" @click="saveOverride">{{ priceBusy ? '…' : 'Save' }}</button>
         </div>
       </section>
+      <!-- Postpaid. A credit decision, which is why it lives here and not in
+           anything the client can reach. The wallet simply goes negative and the
+           negative balance is the debt — so the limit below is the only thing
+           standing between a bad month and an unbounded one. -->
+      <section class="ad-panel ad-control">
+        <h3 class="ad-panel-h">Postpaid billing</h3>
+        <div class="ad-adjust-row">
+          <label class="ad-ovr"><span>Bill in arrears</span>
+            <select v-model="ppForm.postpaid" class="ad-ctl">
+              <option :value="false">No — pay as you go</option>
+              <option :value="true">Yes — invoice monthly</option>
+            </select>
+          </label>
+          <label class="ad-ovr" v-if="ppForm.postpaid"><span>Credit limit ({{ data.wallet?.currency || 'NGN' }})</span>
+            <input v-model.number="ppForm.creditLimit" class="ad-ctl" type="number" min="0" placeholder="0" />
+          </label>
+          <label class="ad-ovr" v-if="ppForm.postpaid"><span>Invoice on day</span>
+            <select v-model.number="ppForm.billingDay" class="ad-ctl">
+              <option v-for="d in 28" :key="d" :value="d">{{ d }}</option>
+            </select>
+          </label>
+          <button class="btn btn-signal btn-sm" :disabled="ppBusy" @click="savePostpaid">{{ ppBusy ? '…' : 'Save' }}</button>
+        </div>
+        <p v-if="ppForm.postpaid" class="ad-none" style="margin-top:10px">
+          Calls stop once the balance reaches −{{ money(ppForm.creditLimit || 0) }}. Currently
+          <strong>{{ money(data.wallet?.balanceMinor ?? 0, true) }}</strong>{{ (data.wallet?.balanceMinor ?? 0) < 0 ? ' owing' : '' }}.
+          Capped at the 28th so February never skips a month.
+        </p>
+      </section>
+
       <!-- Plan & trial -->
       <section class="ad-panel ad-control">
         <h3 class="ad-panel-h">Plan &amp; trial</h3>
@@ -645,6 +675,42 @@ const ovr = ref<Record<string, boolean>>({});
 const priceOvr = ref({ voice: '' as any, did: '' as any, channel: '' as any });
 const priceBusy = ref(false);
 const planForm = ref({ plan: 'startup', trialDays: 7 });
+const ppForm = ref({ postpaid: false, creditLimit: 0, billingDay: 1 });
+const ppBusy = ref(false);
+
+/** Amounts are written inline all over this page; postpaid needs to show a
+ *  negative as a debt rather than a minus sign, so it gets a helper. */
+function money(minor: number, signed = false) {
+  const sym = data.value?.wallet?.currency === 'USD' ? '$' : '₦';
+  const v = Math.abs(minor) / 100;
+  const s = sym + v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return signed && minor < 0 ? s : s;
+}
+
+async function savePostpaid() {
+  const tid = data.value?.tenant?.id;
+  ppBusy.value = true;
+  try {
+    await $fetch(`/api/admin/plan/${tid}`, { method: 'POST', body: {
+      postpaid: ppForm.value.postpaid,
+      creditLimitMinor: ppForm.value.postpaid ? Math.round((ppForm.value.creditLimit || 0) * 100) : null,
+      billingDay: ppForm.value.postpaid ? ppForm.value.billingDay : null
+    } });
+    data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
+    syncPostpaidForm();
+  } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }
+  finally { ppBusy.value = false; }
+}
+
+/** Reflect what's stored, so the form doesn't quietly propose changing it. */
+function syncPostpaidForm() {
+  const t: any = data.value?.tenant || {};
+  ppForm.value = {
+    postpaid: !!t.postpaid,
+    creditLimit: t.creditLimitMinor ? t.creditLimitMinor / 100 : 0,
+    billingDay: t.billingDay || 1
+  };
+}
 const planBusy = ref(false);
 const gatewayForm = ref('default');
 const gatewayBusy = ref(false);
@@ -934,6 +1000,7 @@ onMounted(async () => {
     data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
     countryEdit.value = data.value?.tenant?.country || '';
     syncCapForm();
+    syncPostpaidForm();
     await loadWallet();
     await loadPlan();
     await loadSipVendors();

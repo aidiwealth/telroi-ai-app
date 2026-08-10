@@ -8,6 +8,12 @@ import { apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 const Body = z.object({
   plan: z.enum(['startup', 'growth', 'custom']).optional(),
+  // Postpaid is a credit decision, so it lives here with the other things only
+  // an operator sets. Nulls are meaningful: turning it off should clear the
+  // limit and the billing day rather than leave them lying around.
+  postpaid: z.boolean().optional(),
+  creditLimitMinor: z.number().int().min(0).nullable().optional(),
+  billingDay: z.number().int().min(1).max(28).nullable().optional(),
   trialDays: z.number().int().refine((n) => [7, 14, 30].includes(n), 'trialDays must be 7, 14 or 30').optional(),
   startTrial: z.boolean().optional(),  // (re)start a growth trial of trialDays length
   // Per-client payment gateway override. 'default' clears it (use platform default).
@@ -32,6 +38,22 @@ export default defineEventHandler(async (event) => {
   const patch: any = {};
   applyOverrides(TENANT_OVERRIDES, p.data as any, patch);
   if (p.data.trialDays) patch.trialDays = p.data.trialDays;
+
+  // Postpaid. Turning it off clears the limit and the billing day rather than
+  // leaving them behind: a stale credit limit on a prepaid account is a number
+  // that means nothing until somebody turns postpaid back on and trusts it.
+  if (p.data.postpaid !== undefined) {
+    patch.postpaid = p.data.postpaid;
+    if (p.data.postpaid) {
+      if (!t.postpaidSince) patch.postpaidSince = new Date();
+    } else {
+      patch.creditLimitMinor = null;
+      patch.billingDay = null;
+      patch.postpaidSince = null;
+    }
+  }
+  if (p.data.creditLimitMinor !== undefined && p.data.postpaid !== false) patch.creditLimitMinor = p.data.creditLimitMinor;
+  if (p.data.billingDay !== undefined && p.data.postpaid !== false) patch.billingDay = p.data.billingDay;
   if (p.data.plan) { patch.plan = p.data.plan; patch.trialPlan = null; patch.trialEndsAt = null; }
   if (p.data.startTrial) {
     const days = p.data.trialDays || t.trialDays || 7;
