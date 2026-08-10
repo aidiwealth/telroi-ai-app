@@ -121,7 +121,8 @@ export default defineNuxtConfig({
   components: [
     { path: '~/components', pathPrefix: false },
     { path: '~/components/app', pathPrefix: false },
-    { path: '~/components/ui', pathPrefix: false }
+    { path: '~/components/ui', pathPrefix: false },
+    { path: '~/components/admin', pathPrefix: false }
   ],
 
   nitro: {

@@ -14,8 +14,11 @@
     <!-- Both were their own pages. They are logs, and looking for one meant
          knowing which of three places to look. PBX stays superadmin-only, as it
          was when it had its own route. -->
-    <AdminWebhookLogs v-if="kind === 'webhook'" />
-    <AdminPbxLogs v-else-if="kind === 'pbx' && isSuper" />
+    <!-- Named by filename, not path: nuxt.config sets pathPrefix false, so an
+         Admin-prefixed tag resolves to nothing and Vue renders an empty tab
+         without failing the build. -->
+    <WebhookLogs v-if="kind === 'webhook'" />
+    <PbxLogs v-else-if="kind === 'pbx' && isSuper" />
 
     <!-- Audit search (audit tab only) -->
     <div v-if="kind === 'audit'" class="aud-filters">
