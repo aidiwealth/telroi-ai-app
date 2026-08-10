@@ -188,10 +188,6 @@ onMounted(async () => {
 .ad-title { font-family: var(--font-display); font-size: 30px; color: var(--ink); letter-spacing: -0.02em; }
 .ad-sub { color: var(--ink-mute); font-size: 14px; margin: 4px 0 20px; }
 .ad-loading, .ad-empty { color: var(--ink-mute); padding: 40px 0; }
-.log-tabs { display: flex; gap: 6px; margin-bottom: 18px; }
-.log-tab { padding: 8px 16px; border-radius: var(--radius-sm); font-size: 13.5px; color: var(--ink-soft); border: 1px solid transparent; }
-.log-tab:hover { background: var(--paper-2); }
-.log-tab.active { background: var(--signal-soft); color: var(--signal); }
 .set-card { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-lg); overflow: hidden; }
 .log-table { width: 100%; border-collapse: collapse; }
 .log-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-mute); font-weight: 500; padding: 12px 18px; border-bottom: 1px solid var(--rule); }
