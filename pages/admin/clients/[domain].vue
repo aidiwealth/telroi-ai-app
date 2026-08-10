@@ -262,15 +262,6 @@
             {{ adjBusy ? '…' : 'Apply' }}
           </button>
         </div>
-        <table v-if="ledger.length" class="ad-mini ad-ledger">
-          <tr v-for="l in ledger" :key="l.id">
-            <td class="ad-dim">{{ fmtDate(l.createdAt) }}</td>
-            <td>{{ l.reason }}</td>
-            <td class="mono" :class="l.kind === 'credit' ? 'ad-cr' : 'ad-db'">{{ l.kind === 'credit' ? '+' : '−' }}{{ (l.amountMinor / 100).toFixed(2) }}</td>
-            <td class="mono ad-dim">{{ (l.balanceAfterMinor / 100).toFixed(2) }}</td>
-          </tr>
-        </table>
-        <p v-else class="ad-none">No transactions yet.</p>
       </section>
 
       <!-- Per-client pricing override -->
@@ -511,6 +502,23 @@
 
       <!-- Last, and quiet until it's opened. A panel that's permanently red stops
            meaning anything; the colour should arrive with the decision. -->
+      <!-- Transactions last: the controls above are a fixed set somebody reads
+           top to bottom, and this list only grows. Sitting mid-panel it pushed
+           everything after it further down every month. -->
+      <section class="ad-panel ad-control">
+        <h3 class="ad-panel-h">Transactions <span class="ad-count">{{ ledgerMeta.total }}</span></h3>
+        <table v-if="ledger.length" class="ad-mini ad-ledger">
+          <tr v-for="l in ledger" :key="l.id">
+            <td class="ad-dim">{{ fmtDate(l.createdAt) }}</td>
+            <td>{{ l.reason }}</td>
+            <td class="mono" :class="l.kind === 'credit' ? 'ad-cr' : 'ad-db'">{{ l.kind === 'credit' ? '+' : '−' }}{{ (l.amountMinor / 100).toFixed(2) }}</td>
+            <td class="mono ad-dim">{{ (l.balanceAfterMinor / 100).toFixed(2) }}</td>
+          </tr>
+        </table>
+        <p v-else class="ad-none">No transactions yet.</p>
+        <Pagination v-bind="ledgerMeta" query-key="tx" @change="goLedgerPage" />
+      </section>
+
       <section class="ad-panel ad-danger">
         <h3 class="ad-panel-h">Delete workspace</h3>
         <p class="ad-danger-note">
@@ -655,6 +663,9 @@ const tabs = [
   { id: 'access', label: 'Access & Compliance' }
 ];
 const ledger = ref<any[]>([]);
+const ledgerPage = ref(1);
+const ledgerMeta = ref({ page: 1, pages: 1, total: 0, perPage: 25 });
+async function goLedgerPage(p: number) { ledgerPage.value = p; await loadWallet(); }
 const adjust = ref({ direction: 'credit', amount: null as number | null, reason: '' });
 const adjBusy = ref(false);
 
@@ -967,8 +978,9 @@ async function loadWallet() {
   const tid = data.value?.tenant?.id;
   if (!tid) return;
   try {
-    const w = await $fetch<any>(`/api/admin/wallet/${tid}`);
+    const w = await $fetch<any>(`/api/admin/wallet/${tid}?page=${ledgerPage.value}`);
     ledger.value = w.ledger || [];
+    ledgerMeta.value = { page: w.page || 1, pages: w.pages || 1, total: w.total || 0, perPage: w.perPage || 25 };
     const o = await $fetch<any>(`/api/admin/pricing/${tid}`);
     if (o.override) {
       priceOvr.value = {
