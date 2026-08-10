@@ -11,7 +11,7 @@
       <div class="filter-grid">
         <div class="field mb0">
           <label>Period</label>
-          <select v-model="days" class="select" @change="load">
+          <select v-model="days" class="select" @change="onDaysChange">
             <option :value="1">Today</option>
             <option :value="7">Last 7 days</option>
             <option :value="30">Last 30 days</option>
@@ -53,6 +53,7 @@
           </tr>
         </tbody>
       </table>
+      <Pagination v-bind="meta" query-key="otp" @change="goPage" />
     </div>
   </div>
 </template>
@@ -63,6 +64,15 @@ useHead({ title: 'Verification calls — Telroi' });
 const api = useApi();
 
 const days = ref(30);
+const page = ref(Number(useRoute().query.otp) || 1);
+const meta = ref({ page: 1, pages: 1, total: 0, perPage: 50 });
+
+async function goPage(p: number) { page.value = p; await load(); }
+
+// Narrowing the window from thirty days to seven while on page four would land
+// somebody on a page that no longer exists, which looks like a bug and isn't
+// quite one.
+function onDaysChange() { page.value = 1; load(); }
 const loading = ref(true);
 const items = ref<any[]>([]);
 const summary = reactive<any>({ total: 0, delivered: 0, verified: 0, failed: 0, chargedMinor: 0 });
@@ -80,8 +90,9 @@ function when(v: string | null) {
 async function load() {
   loading.value = true;
   try {
-    const r = await api.get<any>('/api/voice/otp', { days: days.value });
+    const r = await api.get<any>('/api/voice/otp', { days: days.value, page: page.value });
     items.value = r.items || [];
+    meta.value = { page: r.page || 1, pages: r.pages || 1, total: r.total || 0, perPage: r.perPage || 50 };
     Object.assign(summary, r.summary || {});
     try { const w = await api.get<any>('/api/wallet'); currency.value = w?.currency || 'NGN'; } catch { /* default */ }
   } catch { items.value = []; }
