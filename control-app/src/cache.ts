@@ -180,10 +180,7 @@ export async function refreshCache(): Promise<void> {
       // Who this phone belongs to. For a support operator — a platform admin
       // with no membership — this is the only thread back from a department
       // member to something we can ring.
-      // Cast, because the column reaches the query untyped and Postgres has no
-      // ->> for an unknown — the error names the operator rather than the column,
-      // which is a confusing way to be told the type was lost.
-      metaUserId: sql<string | null>`(${schema.sipEndpoints.meta}::jsonb->>'userId')`
+      metaUserId: sql<string | null>`${schema.sipEndpoints.meta}->>'userId'`
     }).from(schema.sipEndpoints);
     for (const e of eps) {
       if (e.sipUsername) {
