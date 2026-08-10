@@ -23,7 +23,10 @@ export default defineEventHandler(async (event) => {
   // have.
   const [tnt] = await db.select({ country: schema.tenants.country })
     .from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
-  if ((tnt?.country || '').toUpperCase() === 'NG') {
+  // 'nigeria', not 'NG': the column holds the country's name, and the form
+  // decides the same way. A second convention here meant the gate never fired —
+  // the form asked and the endpoint didn't care, which is the wrong way round.
+  if ((tnt?.country || '').toLowerCase() === 'nigeria') {
     const [comp] = await db.select({ ninVerifiedAt: schema.compliance.ninVerifiedAt })
       .from(schema.compliance).where(eq(schema.compliance.tenantId, s.tenantId)).limit(1);
     if (!comp?.ninVerifiedAt) {
