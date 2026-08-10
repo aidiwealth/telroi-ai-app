@@ -14,7 +14,17 @@ export default defineEventHandler(async (event) => {
     regulatoryLicenseKey: schema.compliance.regulatoryLicenseKey,
     status: schema.compliance.status, submittedAt: schema.compliance.submittedAt,
     reviewedAt: schema.compliance.reviewedAt, notes: schema.compliance.notes,
-    workspace: schema.tenants.name
+    // Identity verification, for the NIN view. The attempt count matters as much
+    // as the result: five failures is somebody struggling, and worth a call
+    // before they give up on going live.
+    directorName: schema.compliance.directorName,
+    ninVerifiedAt: schema.compliance.ninVerifiedAt,
+    ninName: schema.compliance.ninName,
+    ninReference: schema.compliance.ninReference,
+    ninAttempts: schema.compliance.ninAttempts,
+    ninLastAttemptAt: schema.compliance.ninLastAttemptAt,
+    workspace: schema.tenants.name,
+    country: schema.tenants.country
   }).from(schema.compliance)
     .leftJoin(schema.tenants, eq(schema.compliance.tenantId, schema.tenants.id))
     .orderBy(desc(schema.compliance.submittedAt));

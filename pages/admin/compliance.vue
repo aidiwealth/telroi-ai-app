@@ -3,7 +3,36 @@
     <h1 class="ad-title">Compliance review</h1>
     <p class="ad-sub">Go-live requests. Approving unlocks live mode for that workspace.</p>
 
+    <div class="log-tabs">
+      <button class="log-tab" :class="{ active: tab === 'docs' }" @click="tab = 'docs'">Documents</button>
+      <button class="log-tab" :class="{ active: tab === 'nin' }" @click="tab = 'nin'">Identity (NIN)</button>
+    </div>
+
     <div v-if="pending" class="ad-loading">Loading…</div>
+
+    <!-- Identity. Who has verified, who hasn't, and who is struggling — the
+         attempt count is the useful column, since somebody on their fourth try
+         is worth a call before they give up. -->
+    <template v-else-if="tab === 'nin'">
+      <EmptyState v-if="!ninRows.length" icon="quality" title="Nothing to show" description="Nigerian workspaces appear here once they begin verification." />
+      <div v-else class="set-card ad-table-wrap">
+        <table class="ad-data-table">
+          <thead><tr><th>Workspace</th><th>Director</th><th>Verified</th><th>Attempts</th></tr></thead>
+          <tbody>
+            <tr v-for="r in ninRows" :key="r.id">
+              <td>{{ r.workspace || r.officialName }}</td>
+              <td>{{ r.directorName || '—' }}<span v-if="r.ninName && r.ninName !== r.directorName" class="ad-dim"> · {{ r.ninName }}</span></td>
+              <td>
+                <span v-if="r.ninVerifiedAt" class="ad-status approved">verified {{ fmt(r.ninVerifiedAt) }}</span>
+                <span v-else class="ad-status pending">not verified</span>
+              </td>
+              <td class="ad-dim">{{ r.ninAttempts || 0 }}<span v-if="r.ninLastAttemptAt" class="ad-dim"> · last {{ fmt(r.ninLastAttemptAt) }}</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
     <EmptyState v-else-if="!subs.length" icon="quality" title="No submissions yet" description="When clients submit verification documents, they'll appear here for review." />
     <div v-else class="ad-list">
       <div v-for="s in subs" :key="s.id" class="ad-sub-card" :class="s.status">
@@ -42,6 +71,12 @@ useHead({ title: 'Compliance — Telroi Operator' });
 
 const pending = ref(true);
 const subs = ref<any[]>([]);
+const tab = ref('docs');
+
+// Nigerian workspaces only: NIMC is a Nigerian register, so a Ghanaian client
+// listed as "not verified" would be a criticism of something we never asked
+// them for.
+const ninRows = computed(() => subs.value.filter((r) => (r.country || '').toUpperCase() === 'NG'));
 const notes = ref<Record<string, string>>({});
 const busy = ref<string | null>(null);
 
