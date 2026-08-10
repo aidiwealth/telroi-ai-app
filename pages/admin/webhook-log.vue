@@ -17,29 +17,25 @@
         </div>
       </div>
 
-      <div class="ad-adjust-row wl-filters">
-        <label class="ad-ovr"><span>Provider</span>
-          <select v-model="filters.provider" class="ad-ctl" @change="load">
-            <option value="">All</option>
-            <option value="monnify">Monnify</option>
-            <option value="paystack">Paystack</option>
-            <option value="stripe">Stripe</option>
-          </select>
-        </label>
-        <label class="ad-ovr"><span>Outcome</span>
-          <select v-model="filters.outcome" class="ad-ctl" @change="load">
-            <option value="">All</option>
-            <option value="accepted">Accepted</option>
-            <option value="rejected">Rejected</option>
-            <option value="ignored">Ignored</option>
-            <option value="error">Error</option>
-          </select>
-        </label>
+      <div class="wl-filters">
+        <select v-model="filters.provider" class="wl-select" @change="load">
+          <option value="">All providers</option>
+          <option value="monnify">Monnify</option>
+          <option value="paystack">Paystack</option>
+          <option value="stripe">Stripe</option>
+        </select>
+        <select v-model="filters.outcome" class="wl-select" @change="load">
+          <option value="">All outcomes</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+          <option value="ignored">Ignored</option>
+          <option value="error">Error</option>
+        </select>
       </div>
 
       <EmptyState v-if="!events.length" icon="generic" title="Nothing recorded yet" description="Notifications appear here as providers send them." />
-      <div v-else class="set-card ad-table-wrap">
-        <table class="ad-data-table">
+      <div v-else class="ad-panel">
+        <table class="ad-table wl-table">
           <thead><tr><th>Provider</th><th>Outcome</th><th>Workspace</th><th>Detail</th><th>When</th></tr></thead>
           <tbody>
             <tr v-for="e in events" :key="e.id" class="wl-row" @click="open = open === e.id ? null : e.id">
@@ -100,7 +96,9 @@ onMounted(load);
 .wl-stat-l { font-size: 12px; color: var(--ink-soft); text-transform: capitalize; }
 .wl-stat.rejected .wl-stat-n, .wl-stat.error .wl-stat-n { color: #a33; }
 .wl-stat.accepted .wl-stat-n { color: #1c7a49; }
-.wl-filters { margin-bottom: 16px; }
+.wl-filters { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.wl-select { padding: 10px 14px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 14px; background: var(--paper); color: var(--ink); cursor: pointer; }
+.wl-table td { vertical-align: top; }
 .wl-row { cursor: pointer; }
 .wl-badge { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); text-transform: capitalize; }
 .wl-badge.accepted { background: rgba(34,139,84,.12); color: #1c7a49; }
