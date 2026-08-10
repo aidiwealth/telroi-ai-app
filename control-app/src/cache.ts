@@ -180,10 +180,10 @@ export async function refreshCache(): Promise<void> {
       // Who this phone belongs to. For a support operator — a platform admin
       // with no membership — this is the only thread back from a department
       // member to something we can ring.
-      // Cast, because the column reaches the query untyped and Postgres has no
-      // ->> for an unknown — the error names the operator rather than the column,
-      // which is a confusing way to be told the type was lost.
-      metaUserId: sql<string | null>`(${schema.sipEndpoints.meta}::jsonb->>'userId')`
+      // The whole column, read in JavaScript. Two attempts at ->> in SQL failed
+      // because drizzle binds the column as a parameter rather than naming it,
+      // and there is no reason to fight that for one field out of a small table.
+      meta: schema.sipEndpoints.meta
     }).from(schema.sipEndpoints);
     for (const e of eps) {
       if (e.sipUsername) {
@@ -220,7 +220,7 @@ export async function refreshCache(): Promise<void> {
     // the escalation fail.
     const epByUser = new Map<string, string>();
     for (const e of eps) {
-      const uid = (e as any).metaUserId;
+      const uid = (e as any).meta?.userId;
       if (uid && e.sipUsername) epByUser.set(`${e.tenantId}:${uid}`, e.sipUsername);
     }
 
