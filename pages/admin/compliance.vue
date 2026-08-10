@@ -65,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 definePageMeta({ layout: 'admin' });
 useHead({ title: 'Compliance — Telroi Operator' });
 
