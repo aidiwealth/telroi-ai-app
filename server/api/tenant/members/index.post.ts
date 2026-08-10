@@ -29,8 +29,15 @@ export default defineEventHandler(async (event) => {
 
   await db.insert(schema.memberships).values({ userId: user.id, tenantId: s.tenantId, role: p.data.role });
 
-  // Send a sign-in link (best-effort; never blocks the invite).
-  try { await startLogin(email); } catch { /* email failure shouldn't block */ }
+  // An invite, not a bare sign-in link. The recipient may never have heard of
+  // us: an unexpected login email for an account they didn't create reads like
+  // a phishing attempt, and saying who invited them and to what is the whole
+  // difference between that and something they'll act on.
+  const [ws] = await db.select({ name: schema.tenants.name })
+    .from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
+  try {
+    await startLogin(email, { workspace: ws?.name || 'a Telroi workspace', invitedBy: s.email });
+  } catch { /* email failure shouldn't block the invite */ }
 
   await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'member.invited', summary: `Invited ${email} as ${p.data.role}` });
   return { ok: true, member: { email, role: p.data.role } };

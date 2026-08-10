@@ -182,13 +182,19 @@ export async function sendLoginEmail(to: string, magicLink: string, otp: string)
   await sendVia({ to, subject, html, text, otp });
 }
 
-export async function sendInviteEmail(to: string, workspace: string, link: string) {
+export async function sendInviteEmail(to: string, workspace: string, link: string, opts: { otp?: string; invitedBy?: string | null } = {}) {
+  const by = opts.invitedBy ? ` by ${opts.invitedBy}` : '';
   const subject = `You've been invited to ${workspace} on Telroi`;
-  const text = `You've been invited to join ${workspace} on Telroi.\n\nAccept: ${link}`;
+  const text = `You've been invited${by} to join ${workspace} on Telroi.\n\n`
+    + `Accept: ${link}\n`
+    + (opts.otp ? `\nOr sign in at telroi.ai with this code: ${opts.otp}\n` : '')
+    + `\nIf you weren't expecting this, you can ignore it — nothing happens until you sign in.`;
   const html = shell(`
     ${h1(`Join ${workspace}`)}
-    ${para(`You've been invited to the <strong>${workspace}</strong> team on Telroi. Sign in with your email to get started — no password needed.`)}
+    ${para(`You've been invited${by} to the <strong>${workspace}</strong> team on Telroi. Sign in with your email to get started — no password needed.`)}
     ${button('Accept invite →', link, true)}
+    ${opts.otp ? para(`Or enter this code when signing in: <strong style="font-family:Geist,monospace;letter-spacing:0.08em;">${opts.otp}</strong>`) : ''}
+    ${para(`If you weren't expecting this, you can ignore it — nothing happens until you sign in.`)}
   `, { preheader: `Join the ${workspace} team on Telroi` });
   await sendVia({ to, subject, html, text });
 }

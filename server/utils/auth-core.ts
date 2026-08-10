@@ -10,7 +10,15 @@ import type { H3Event } from 'h3';
 const TOKEN_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_OTP_ATTEMPTS = 5;
 
-export async function startLogin(email: string) {
+/** Begin a sign-in.
+ *
+ *  `invite` changes only which email goes out, not how the token works: an
+ *  invited person gets the same magic link and code, wrapped in something that
+ *  says who invited them and to what. Without it they receive an unexpected
+ *  sign-in email for an account they never made, which reads like a phishing
+ *  attempt and is reasonably ignored.
+ */
+export async function startLogin(email: string, invite?: { workspace: string; invitedBy?: string | null }) {
   const db = useDb();
   const normalized = email.trim().toLowerCase();
   const token = randomToken();
@@ -34,7 +42,12 @@ export async function startLogin(email: string) {
   // The magic link hits the server verifier directly, which validates the token,
   // sets the session cookie, and redirects to the dashboard or onboarding.
   const magicLink = `${base}/api/auth/magic?token=${encodeURIComponent(token)}`;
-  await sendLoginEmail(normalized, magicLink, otp);
+  if (invite) {
+    const { sendInviteEmail } = await import('./email');
+    await sendInviteEmail(normalized, invite.workspace, magicLink, { otp, invitedBy: invite.invitedBy || null });
+  } else {
+    await sendLoginEmail(normalized, magicLink, otp);
+  }
 }
 
 /** Verify a magic-link token. Returns the email on success. */
