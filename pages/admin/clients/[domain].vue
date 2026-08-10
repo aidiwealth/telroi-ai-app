@@ -305,6 +305,13 @@
               <option v-for="d in 28" :key="d" :value="d">{{ d }}</option>
             </select>
           </label>
+          <label class="ad-ovr" v-if="ppForm.postpaid"><span>Payment terms</span>
+            <select v-model.number="ppForm.termsDays" class="ad-ctl">
+              <option :value="7">7 days</option>
+              <option :value="14">14 days</option>
+              <option :value="30">30 days</option>
+            </select>
+          </label>
           <button class="btn btn-signal btn-sm" :disabled="ppBusy" @click="savePostpaid">{{ ppBusy ? '…' : 'Save' }}</button>
         </div>
         <p v-if="ppForm.postpaid" class="ad-none" style="margin-top:10px">
@@ -675,7 +682,7 @@ const ovr = ref<Record<string, boolean>>({});
 const priceOvr = ref({ voice: '' as any, did: '' as any, channel: '' as any });
 const priceBusy = ref(false);
 const planForm = ref({ plan: 'startup', trialDays: 7 });
-const ppForm = ref({ postpaid: false, creditLimit: 0, billingDay: 1 });
+const ppForm = ref({ postpaid: false, creditLimit: 0, billingDay: 1, termsDays: 7 });
 const ppBusy = ref(false);
 
 /** Amounts are written inline all over this page; postpaid needs to show a
@@ -694,7 +701,8 @@ async function savePostpaid() {
     await $fetch(`/api/admin/plan/${tid}`, { method: 'POST', body: {
       postpaid: ppForm.value.postpaid,
       creditLimitMinor: ppForm.value.postpaid ? Math.round((ppForm.value.creditLimit || 0) * 100) : null,
-      billingDay: ppForm.value.postpaid ? ppForm.value.billingDay : null
+      billingDay: ppForm.value.postpaid ? ppForm.value.billingDay : null,
+      paymentTermsDays: ppForm.value.postpaid ? ppForm.value.termsDays : null
     } });
     data.value = await $fetch(`/api/admin/clients/${encodeURIComponent(route.params.domain as string)}`);
     syncPostpaidForm();
@@ -708,7 +716,8 @@ function syncPostpaidForm() {
   ppForm.value = {
     postpaid: !!t.postpaid,
     creditLimit: t.creditLimitMinor ? t.creditLimitMinor / 100 : 0,
-    billingDay: t.billingDay || 1
+    billingDay: t.billingDay || 1,
+    termsDays: t.paymentTermsDays || 7
   };
 }
 const planBusy = ref(false);

@@ -36,7 +36,7 @@
             <span v-if="creditPct >= 80" class="wal-card-warn">— {{ creditPct }}% used</span>
           </template>
           <template v-else>
-            then {{ limit.sym }}{{ limit.whole }} on account
+            then {{ limit.sym }}{{ limit.whole }} credit limit
           </template>
         </div>
         <div class="skeleton wal-card-skel" v-else />

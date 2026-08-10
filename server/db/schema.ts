@@ -263,6 +263,10 @@ export const tenants = pgTable('tenants', {
   postpaid: boolean('postpaid').notNull().default(false),
   creditLimitMinor: bigint('credit_limit_minor', { mode: 'number' }),
   billingDay: integer('billing_day'),
+  // Days from issue to due. Set per client because a large account often
+  // negotiates its own terms, and a default nobody chose is a poor thing to
+  // enforce against them.
+  paymentTermsDays: integer('payment_terms_days'),
   postpaidSince: timestamp('postpaid_since', { withTimezone: true }),
   sandboxMode: boolean('sandbox_mode').notNull().default(true),
   // Null = inherit the platform default. Set per-client to extend a trial.

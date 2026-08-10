@@ -14,6 +14,7 @@ const Body = z.object({
   postpaid: z.boolean().optional(),
   creditLimitMinor: z.number().int().min(0).nullable().optional(),
   billingDay: z.number().int().min(1).max(28).nullable().optional(),
+  paymentTermsDays: z.number().int().min(1).max(90).nullable().optional(),
   trialDays: z.number().int().refine((n) => [7, 14, 30].includes(n), 'trialDays must be 7, 14 or 30').optional(),
   startTrial: z.boolean().optional(),  // (re)start a growth trial of trialDays length
   // Per-client payment gateway override. 'default' clears it (use platform default).
@@ -49,11 +50,13 @@ export default defineEventHandler(async (event) => {
     } else {
       patch.creditLimitMinor = null;
       patch.billingDay = null;
+      patch.paymentTermsDays = null;
       patch.postpaidSince = null;
     }
   }
   if (p.data.creditLimitMinor !== undefined && p.data.postpaid !== false) patch.creditLimitMinor = p.data.creditLimitMinor;
   if (p.data.billingDay !== undefined && p.data.postpaid !== false) patch.billingDay = p.data.billingDay;
+  if (p.data.paymentTermsDays !== undefined && p.data.postpaid !== false) patch.paymentTermsDays = p.data.paymentTermsDays;
   if (p.data.plan) { patch.plan = p.data.plan; patch.trialPlan = null; patch.trialEndsAt = null; }
   if (p.data.startTrial) {
     const days = p.data.trialDays || t.trialDays || 7;

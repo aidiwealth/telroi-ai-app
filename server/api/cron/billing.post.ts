@@ -19,5 +19,18 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb();
   const result = await runMonthlyBilling(db);
-  return { ok: true, ...result };
+
+  // Invoices ride the same daily trigger rather than needing a scheduler of
+  // their own. Best-effort: a failure here shouldn't undo the billing that has
+  // already succeeded, and the next run picks up whatever was missed.
+  let invoicing: any = null;
+  try {
+    const { runInvoicing } = await import('~/server/utils/invoicing');
+    invoicing = await runInvoicing();
+  } catch (e: any) {
+    console.error('[cron] invoicing failed:', e?.message);
+    invoicing = { error: e?.message };
+  }
+
+  return { ok: true, ...result, invoicing };
 });
