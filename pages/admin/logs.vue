@@ -26,7 +26,7 @@
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="5"/><path d="M11 11l3.5 3.5" stroke-linecap="round"/></svg>
         <input v-model="auditQ" class="aud-input" placeholder="Search operator, action, or path…" @input="debouncedAudit" />
       </div>
-      <select v-model="auditActor" class="aud-select" @change="loadAudit">
+      <select v-model="auditActor" class="aud-select" @change="onAuditFilter">
         <option value="">All operators</option>
         <option v-for="a in auditActors" :key="a" :value="a">{{ a }}</option>
       </select>
@@ -91,6 +91,7 @@
           <tr v-if="!audit.length"><td colspan="5" class="log-summary" style="text-align:center;padding:20px;color:var(--ink-mute)">No audit entries match.</td></tr>
         </tbody>
       </table>
+      <Pagination v-bind="auditMeta" query-key="aud" @change="goAuditPage" />
     </div>
   </div>
 </template>
@@ -121,14 +122,16 @@ async function loadAudit() {
     const params = new URLSearchParams();
     if (auditQ.value.trim()) params.set('q', auditQ.value.trim());
     if (auditActor.value) params.set('actor', auditActor.value);
+    params.set('page', String(auditPage.value));
     const r = await $fetch<any>(`/api/admin/audit?${params.toString()}`);
     audit.value = r.entries || [];
+    auditMeta.value = { page: r.page || 1, pages: r.pages || 1, total: r.total || 0, perPage: r.perPage || 50 };
     if (r.actors?.length) auditActors.value = r.actors;
   } catch (e: any) {
     if (e?.statusCode === 403) { kind.value = 'system'; await load(); } // not a superadmin
   } finally { pending.value = false; }
 }
-function debouncedAudit() { clearTimeout(auditTimer); auditTimer = setTimeout(loadAudit, 300); }
+function debouncedAudit() { clearTimeout(auditTimer); auditTimer = setTimeout(onAuditFilter, 300); }
 
 function fmt(d: string) {
   const dt = new Date(d);
@@ -159,6 +162,14 @@ async function loadMoreCalls() {
   } catch { /* */ }
   finally { loadingMore.value = false; }
 }
+const auditPage = ref(Number(useRoute().query.aud) || 1);
+const auditMeta = ref({ page: 1, pages: 1, total: 0, perPage: 50 });
+async function goAuditPage(p: number) { auditPage.value = p; await loadAudit(); }
+
+// Searching or changing operator starts again at the first page: page four of
+// an unfiltered list is rarely page four of a filtered one.
+function onAuditFilter() { auditPage.value = 1; loadAudit(); }
+
 const logPage = ref(Number(useRoute().query.log) || 1);
 const logMeta = ref({ page: 1, pages: 1, total: 0, perPage: 100 });
 async function goLogPage(p: number) { logPage.value = p; await load(); }
