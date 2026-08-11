@@ -22,7 +22,16 @@ export default defineEventHandler(async (event) => {
   // all, and none of them could be added to a department.
   try {
     const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
-    await ensureUserWebrtcEndpoint(ws.tenantId, String((admin as any).id));
+    // The operator's users id, not their platform admin id. meta.userId is
+    // named for a user and every consumer treats it as one — the department
+    // cache, the membership check — so storing an admin id here is the fault
+    // those places were working around. Each console session was also minting a
+    // fresh endpoint under the wrong id, so a corrected row was immediately
+    // joined by a new broken one.
+    const { userIdForAdmin } = await import('~/server/utils/platform');
+    const uid = await userIdForAdmin(String((admin as any).id));
+    if (!uid) throw apiError('no_user', 'Could not identify you as a user to attach a phone to.', 500);
+    await ensureUserWebrtcEndpoint(ws.tenantId, uid);
   } catch (e: any) {
     throw apiError('voice_not_configured', e?.message || 'Browser calling could not be set up. Try again.', 503);
   }
