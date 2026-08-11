@@ -371,7 +371,27 @@ async function main() {
       // agents. The caller already spoke to the AI (over another carrier) and
       // asked for a human, so re-running the route would loop them back to it.
       if (isEscalation) {
-        const allUsers = resolveTenantEndpoints(route.tenantId);
+        // The team the AI named, carried from the media adapter as a SIP header
+        // and put on the channel by the dialplan. Without it a caller who asked
+        // for billing reached whoever was free — the name was decided correctly
+        // and then lost crossing back to us, since the address had no room for
+        // it. An unknown name falls through to everyone rather than nobody: a
+        // department we cannot find is a reason to ring wider, not to give up.
+        let deptName: string | null = null;
+        try { deptName = (await channel.getChannelVar({ variable: 'TELROI_DEPT' }) as any)?.value || null; }
+        catch { /* older handoffs carry no header */ }
+
+        let allUsers = resolveTenantEndpoints(route.tenantId);
+        if (deptName) {
+          const members = resolveDepartmentByName(route.tenantId, deptName);
+          if (members.length) {
+            log(`  [esc ${chId}] department "${deptName}" -> ${members.length} member(s)`);
+            allUsers = members;
+          } else {
+            log(`  [esc ${chId}] no department matched "${deptName}" — ringing everyone`);
+          }
+        }
+
         const freeEsc = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
         let endpoints = await freeEsc();
         log(`  [esc ${chId}] ringing agents — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);

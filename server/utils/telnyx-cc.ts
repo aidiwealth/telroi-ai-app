@@ -97,5 +97,14 @@ export const telnyxGather = (callId: string, prompt: string, menuNodeId: string)
   });
 
 // Transfer to a SIP/PSTN destination (person/department escalation target).
-export const telnyxTransfer = (callId: string, to: string) =>
-  cmd(callId, 'transfer', { to });
+export const telnyxTransfer = (callId: string, to: string, headers?: Record<string, string>) =>
+  cmd(callId, 'transfer', {
+    to,
+    // Telnyx puts these on the SIP INVITE, which is how a department name
+    // survives the hop back to our PBX. The user part is already carrying the
+    // DID and the call id, and a third field there would be one delimiter too
+    // many.
+    ...(headers && Object.keys(headers).length
+      ? { custom_headers: Object.entries(headers).map(([name, value]) => ({ name, value })) }
+      : {})
+  });

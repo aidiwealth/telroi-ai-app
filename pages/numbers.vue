@@ -195,10 +195,26 @@
                 <div class="buy-row buy-total"><span>Due now (first month)</span><span class="mono">{{ money(didMonthly + buy.channels * channelMonthly) }}</span></div>
                 <div class="buy-row buy-airtime muted"><span>Airtime</span><span>{{ airtimeLabel }} / min, billed per call</span></div>
               </div>
-              <button class="btn btn-signal btn-block" :disabled="buying" @click="purchase">
-                {{ buying ? 'Processing…' : 'Buy & charge wallet' }}
-              </button>
-              <p class="muted buy-note">Charged now, then monthly. A low balance blocks the purchase.</p>
+              <!-- A trial sees the prices but not the button: the server refuses
+                   the purchase until verification is approved, and a button that
+                   fails teaches somebody the product is broken rather than that
+                   there is a step first. -->
+              <template v-if="approved">
+                <button class="btn btn-signal btn-block" :disabled="buying" @click="purchase">
+                  {{ buying ? 'Processing…' : 'Buy & charge wallet' }}
+                </button>
+                <p class="muted buy-note">Charged now, then monthly. A low balance blocks the purchase.</p>
+              </template>
+              <div v-else class="buy-gate">
+                <p class="buy-gate-h">{{ complianceStatus === 'pending' ? 'Your verification is under review' : 'Verification comes first' }}</p>
+                <p class="buy-gate-p">
+                  {{ complianceStatus === 'pending'
+                    ? 'Numbers open up as soon as it is approved — usually within a working day.'
+                    : 'Numbers carry a real identity on the network, so we verify a business before selling one.' }}
+                  <template v-if="demoNumber"> Meanwhile you can place test calls from <strong class="mono">{{ demoNumber }}</strong>.</template>
+                </p>
+                <button v-if="complianceStatus !== 'pending'" class="btn btn-signal btn-block" @click="goVerify">Start verification</button>
+              </div>
             </template>
           </template>
         </div>
@@ -219,6 +235,23 @@ const pending = ref(true);
 const numbers = ref<TelroiNumber[]>([]);
 const channels = ref<{ capacity: number; inUse: number; available: number } | null>(null);
 const subs = ref<any[]>([]);
+const approved = ref(false);
+const complianceStatus = ref<string | null>(null);
+const demoNumber = ref<string | null>(null);
+
+// The go-live endpoint already knows all three; a client refused a purchase
+// needs to know what to do next and what they can still do meanwhile.
+async function loadGoLive() {
+  try {
+    const r = await api.get<any>('/api/go-live');
+    approved.value = !!r.approved;
+    complianceStatus.value = r.complianceStatus || null;
+    demoNumber.value = r.demoNumber || null;
+  } catch { /* the list is still worth showing */ }
+}
+
+function goVerify() { navigateTo('/settings?tab=compliance'); }
+
 const channelMonthly = ref(2);          // per channel/month, in the workspace's currency
 const didMonthly = ref(1.7);            // per number/month, same
 const airtimePerMin = ref(0.0102);
@@ -364,6 +397,7 @@ onMounted(async () => {
     try { departments.value = await api.get<any[]>('/api/departments'); } catch { /* */ }
     try { escalationTargets.value = (await api.get<{ targets: any[] }>('/api/voice/escalation-targets')).targets || []; } catch { /* */ }
     try {
+      loadGoLive();
       const pr = await api.get<any>('/api/pricing');
       if (pr) {
         currencySym.value = pr.currency === 'NGN' ? '₦' : '$';
@@ -386,6 +420,9 @@ onMounted(async () => {
 .modal { width: 100%; max-width: 420px; background: var(--paper); }
 .modal-x { color: var(--ink-mute); }
 .buy-pricing { border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; margin: 4px 0 18px; }
+.buy-gate { border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px; background: var(--paper-2); }
+.buy-gate-h { font-size: 14px; font-weight: 500; margin: 0 0 6px; }
+.buy-gate-p { font-size: 13px; color: var(--ink-soft); line-height: 1.6; margin: 0 0 12px; }
 .buy-row { display: flex; justify-content: space-between; font-size: 13.5px; padding: 5px 0; }
 .buy-total { border-top: 1px solid var(--rule-2); margin-top: 6px; padding-top: 10px; font-weight: 600; }
 .buy-airtime { font-size: 12px; }

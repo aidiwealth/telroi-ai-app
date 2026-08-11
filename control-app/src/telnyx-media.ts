@@ -206,7 +206,12 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
             // Let the "connecting you" line finish before the call moves.
             const waited = Date.now();
             while (playing && Date.now() - waited < 12000) await new Promise((r) => setTimeout(r, 100));
-            if (callId && await telnyxTransfer(callId, target)) {
+            // The department the model named, carried on the INVITE. The user
+            // part already holds the DID and the call id; a third field there
+            // would be one delimiter too many, and this is what headers are for.
+            const dept = (t as any).transferDepartment || null;
+            if (dept) log(`transfer names department "${dept}"`);
+            if (callId && await telnyxTransfer(callId, target, dept ? { 'X-Telroi-Department': String(dept).slice(0, 60) } : undefined)) {
               handedOff = true;
               playback?.cancel(); playing = false;
               log('handed off to a human — AI stopping');
