@@ -151,6 +151,12 @@ export const platformSettings = pgTable('platform_settings', {
   // What we tell a client to point their PBX at. A setting rather than a source
   // constant: moving the PBX shouldn't need a deploy, and a client reading a
   // stale address would spend a day on a firewall rule that was never wrong.
+  // What a sandbox client places test calls from, before buying a number.
+  // Shared across every trial rather than allocated: a number costs us monthly,
+  // and somebody who signs up and never returns would take one out of
+  // circulation. Outbound only.
+  demoNumberNg: text('demo_number_ng'),
+  demoNumberIntl: text('demo_number_intl'),
   sipPublicHost: text('sip_public_host'),
   sipPublicIp: text('sip_public_ip'),
   ttsVendor: text('tts_vendor').notNull().default('telroi'),              // telroi | elevenlabs | openai | google | azure | custom

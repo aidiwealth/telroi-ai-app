@@ -325,6 +325,34 @@
       </div>
     </section>
 
+    <!-- Demo numbers. Shared across every sandbox client rather than allocated
+         per trial, and outbound only. -->
+    <section v-show="activeTab === 'voice'" class="set-card">
+      <div class="set-card-head">
+        <div>
+          <h2 class="set-card-title">Demo numbers</h2>
+          <p class="set-card-desc">What a client in sandbox places test calls from, before they have bought a number of their own. Shared by every trial and outbound only, so nobody can dial in and reach the wrong one. Reserve the number under Inventory first, or it can be sold from under you.</p>
+        </div>
+      </div>
+      <div class="set-card-body">
+        <div class="set-grid">
+          <label class="ad-field"><span>Nigerian demo number</span>
+            <select v-model="sp.demoNumberNg" class="ad-input">
+              <option value="">None — Nigerian trials cannot place test calls</option>
+              <option v-for="n in ngNumbers" :key="n" :value="n">{{ n }}</option>
+            </select>
+          </label>
+          <label class="ad-field"><span>International demo number</span>
+            <select v-model="sp.demoNumberIntl" class="ad-input">
+              <option value="">None — international trials cannot place test calls</option>
+              <option v-for="n in [...(intlNumbers.twilio || []), ...(intlNumbers.telnyx || [])]" :key="n" :value="n">{{ n }}</option>
+            </select>
+          </label>
+        </div>
+        <p class="ad-hint">A trial that can place calls to anywhere is a way to make free calls, so test calls announce themselves to whoever answers.</p>
+      </div>
+    </section>
+
     <!-- Identity verification. A lookup costs money on every call, so the
          client-facing flow caches and caps attempts — this is only the key. -->
     <section v-show="activeTab === 'security'" class="set-card">

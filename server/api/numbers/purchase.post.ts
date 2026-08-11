@@ -26,6 +26,21 @@ export default defineEventHandler(async (event) => {
   if (!p.success) throw apiError('invalid', 'Select a number to buy');
   const db = useDb();
 
+  // Verification first. A number is a real identity on a real network and a
+  // standing monthly cost — selling one to an unverified account means unwinding
+  // it if the documents don't hold up, and carriers hold us to who is behind
+  // their numbers. The message points at what to do rather than only refusing:
+  // a trial can still test on the demo number meanwhile.
+  const [comp] = await db.select({ status: schema.compliance.status })
+    .from(schema.compliance).where(eq(schema.compliance.tenantId, s.tenantId)).limit(1);
+  if (comp?.status !== 'approved') {
+    throw apiError('compliance_required',
+      comp?.status === 'pending'
+        ? 'Your verification is under review. You can keep testing on the demo number, and numbers open up as soon as it is approved.'
+        : 'Numbers open up once your business verification is approved. You can test on the demo number meanwhile.',
+      403);
+  }
+
   // Atomically claim the inventory row: only succeeds if still 'available'.
   const [claimed] = await db.update(schema.numberInventory)
     .set({ status: 'sold', soldToTenantId: s.tenantId })
