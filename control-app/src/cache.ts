@@ -176,11 +176,7 @@ export async function refreshCache(): Promise<void> {
     const eps = await db.select({
       id: schema.sipEndpoints.id,
       tenantId: schema.sipEndpoints.tenantId,
-      sipUsername: schema.sipEndpoints.sipUsername,
-      // Whose phone this is. Read as a plain column and picked apart in
-      // JavaScript: ->> through drizzle binds the column as a parameter and
-      // Postgres refuses it, which cost several attempts to establish.
-      meta: schema.sipEndpoints.meta
+      sipUsername: schema.sipEndpoints.sipUsername
     }).from(schema.sipEndpoints);
     for (const e of eps) {
       if (e.sipUsername) {
@@ -210,23 +206,10 @@ export async function refreshCache(): Promise<void> {
           eq(schema.memberships.tenantId, schema.departmentMembers.tenantId)
         )
       );
-    // A client's own team member carries a pbxLogin on their membership. A
-    // support operator has no membership at all — their only thread back to a
-    // phone is the endpoint's meta.userId — so without this a support
-    // department resolved to nobody and the caller heard the escalation fail.
-    // Guests have no meta, hence the check before reading it.
-    const epByUser = new Map<string, string>();
-    for (const e of eps) {
-      const uid = e.meta && typeof e.meta === 'object' ? (e.meta as any).userId : null;
-      if (uid && e.sipUsername && e.tenantId) epByUser.set(`${e.tenantId}:${uid}`, e.sipUsername);
-    }
-
     for (const m of dm) {
-      if (!m.canTakeCalls) continue;
-      const login = m.pbxLogin || epByUser.get(`${m.tenantId}:${m.userId}`);
-      if (!login) continue;
+      if (!m.canTakeCalls || !m.pbxLogin) continue;
       const arr = deptEndpoints.get(m.departmentId) || [];
-      if (!arr.includes(login)) arr.push(login);
+      if (!arr.includes(m.pbxLogin)) arr.push(m.pbxLogin);
       deptEndpoints.set(m.departmentId, arr);
     }
 
