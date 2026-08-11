@@ -374,6 +374,24 @@
         </div>
         <p class="ad-none" style="margin-top:10px" v-if="data.tenant.paymentProviderOverride">This client is forced to use <strong>{{ data.tenant.paymentProviderOverride }}</strong>, overriding the site default.</p>
       </section>
+
+      <!-- Transactions last: the controls above are a fixed set somebody reads
+           top to bottom, and this list only grows. Sitting mid-panel it pushed
+           everything after it further down every month. -->
+      <section class="ad-panel ad-control">
+        <h3 class="ad-panel-h">Transactions <span class="ad-count">{{ ledgerMeta.total }}</span></h3>
+        <table v-if="ledger.length" class="ad-mini ad-ledger">
+          <tr v-for="l in ledger" :key="l.id">
+            <td class="ad-dim">{{ fmtDate(l.createdAt) }}</td>
+            <td>{{ l.reason }}</td>
+            <td class="mono" :class="l.kind === 'credit' ? 'ad-cr' : 'ad-db'">{{ l.kind === 'credit' ? '+' : '−' }}{{ (l.amountMinor / 100).toFixed(2) }}</td>
+            <td class="mono ad-dim">{{ (l.balanceAfterMinor / 100).toFixed(2) }}</td>
+          </tr>
+        </table>
+        <p v-else class="ad-none">No transactions yet.</p>
+        <Pagination v-bind="ledgerMeta" query-key="tx" @change="goLedgerPage" />
+      </section>
+
       </div>
 
       <!-- Tab: Access & Compliance -->
@@ -502,23 +520,6 @@
 
       <!-- Last, and quiet until it's opened. A panel that's permanently red stops
            meaning anything; the colour should arrive with the decision. -->
-      <!-- Transactions last: the controls above are a fixed set somebody reads
-           top to bottom, and this list only grows. Sitting mid-panel it pushed
-           everything after it further down every month. -->
-      <section class="ad-panel ad-control">
-        <h3 class="ad-panel-h">Transactions <span class="ad-count">{{ ledgerMeta.total }}</span></h3>
-        <table v-if="ledger.length" class="ad-mini ad-ledger">
-          <tr v-for="l in ledger" :key="l.id">
-            <td class="ad-dim">{{ fmtDate(l.createdAt) }}</td>
-            <td>{{ l.reason }}</td>
-            <td class="mono" :class="l.kind === 'credit' ? 'ad-cr' : 'ad-db'">{{ l.kind === 'credit' ? '+' : '−' }}{{ (l.amountMinor / 100).toFixed(2) }}</td>
-            <td class="mono ad-dim">{{ (l.balanceAfterMinor / 100).toFixed(2) }}</td>
-          </tr>
-        </table>
-        <p v-else class="ad-none">No transactions yet.</p>
-        <Pagination v-bind="ledgerMeta" query-key="tx" @change="goLedgerPage" />
-      </section>
-
       <section class="ad-panel ad-danger">
         <h3 class="ad-panel-h">Delete workspace</h3>
         <p class="ad-danger-note">

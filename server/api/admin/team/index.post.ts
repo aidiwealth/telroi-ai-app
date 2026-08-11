@@ -24,6 +24,14 @@ export default defineEventHandler(async (event) => {
   if (existing) throw apiError('exists', 'That email is already on the operator team');
 
   const [row] = await db.insert(schema.platformAdmins).values({ email, role: p.data.role }).returning();
+
+  // Tell them. Adding an operator wrote a row and nothing else, so somebody
+  // could be given access to every client's data and never know unless a
+  // colleague mentioned it.
+  import('~/server/utils/email').then(({ sendOperatorAddedEmail }) =>
+    sendOperatorAddedEmail(email, { role: p.data.role, addedBy: admin.email })
+  ).catch((e) => console.error('operator email failed', e));
+
   await logEvent({ kind: 'system', action: 'team.add', summary: `${admin.email} added operator ${email} (${p.data.role})` });
   return { ok: true, admin: { id: row.id, email: row.email, role: row.role, createdAt: row.createdAt } };
 });

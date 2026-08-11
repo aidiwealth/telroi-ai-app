@@ -153,10 +153,6 @@ export const platformSettings = pgTable('platform_settings', {
   // stale address would spend a day on a firewall rule that was never wrong.
   sipPublicHost: text('sip_public_host'),
   sipPublicIp: text('sip_public_ip'),
-  // The carrier's SIP host travels with the trunk: Ruach answers on a hostname
-  // and Kasooko on an IP, so switching trunks without it dialled the new carrier
-  // at the old one's address.
-  otpNgHost: text('otp_ng_host'),   // telroi | twilio | telnyx | vonage | custom
   ttsVendor: text('tts_vendor').notNull().default('telroi'),              // telroi | elevenlabs | openai | google | azure | custom
   sttVendor: text('stt_vendor').notNull().default('telroi'),             // telroi | deepgram | openai | google | azure | custom
   otpVoiceVendorCredsEnc: text('otp_voice_vendor_creds_enc'),            // AES-256-GCM vendor creds blob

@@ -486,3 +486,28 @@ export async function sendPaymentReceivedEmail(to: string, opts: {
   `, { preheader: settled ? `${opts.amount} received — ${opts.invoiceNumber} settled` : `${opts.amount} received` });
   await sendVia({ to, subject, html, text });
 }
+
+// ── Added to the operator team. Distinct from a client invite: an operator
+// already works here, so "you've been invited to Telroi" reads oddly. What they
+// need is that it happened, what it lets them do, and where to sign in.
+export async function sendOperatorAddedEmail(to: string, opts: { role: string; addedBy: string }) {
+  const appBase = (useRuntimeConfig().public as any).appBaseUrl || 'https://app.telroi.ai';
+  const link = `${appBase}/admin/login`;
+  const isSuper = opts.role === 'superadmin';
+  const subject = 'You now have access to the Telroi operator console';
+  const text = `${opts.addedBy} has given you ${isSuper ? 'superadmin' : 'staff'} access to the Telroi operator console.\n\n`
+    + `Sign in at ${link} with this email address — you'll get a code, no password needed.\n\n`
+    + (isSuper
+      ? 'As a superadmin you can manage clients, pricing, carriers and the operator team itself.'
+      : 'You can review clients, take support calls and work through compliance submissions.');
+  const html = shell(`
+    ${h1('You have operator access')}
+    ${para(`<strong>${opts.addedBy}</strong> has given you ${isSuper ? '<strong>superadmin</strong>' : 'staff'} access to the Telroi operator console.`)}
+    ${para(isSuper
+      ? 'You can manage clients, pricing, carriers and the operator team itself.'
+      : 'You can review clients, take support calls and work through compliance submissions.')}
+    ${button('Sign in to the console →', link, true)}
+    ${para(`Use this email address to sign in — you will get a code, and there is no password to set.`)}
+  `, { preheader: 'Operator access to the Telroi console' });
+  await sendVia({ to, subject, html, text });
+}
