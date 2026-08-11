@@ -58,7 +58,12 @@ export const sipEndpoints = pgTable('sip_endpoints', {
   kind: text('kind').notNull(),
   label: text('label'),
   sipUsername: text('sip_username'),
-  domain: text('domain')
+  domain: text('domain'),
+  // Whose phone this is. Absent here — this is the control app's own trimmed
+  // schema, not the web app's — selecting it handed drizzle an undefined column
+  // and it failed inside Object.entries, which surfaced as "Cannot convert
+  // undefined or null to object" and cost three wrong theories.
+  meta: jsonb('meta')
 });
 
 // Minimal: membership links a user to a tenant and holds their PBX login
