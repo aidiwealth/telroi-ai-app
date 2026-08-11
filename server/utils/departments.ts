@@ -125,7 +125,7 @@ export async function deleteDepartment(tenantId: string, id: string) {
   return { ok: true };
 }
 
-export async function setDepartmentMember(tenantId: string, departmentId: string, userId: string, caps: { canMakeCalls?: boolean; canTakeCalls?: boolean; canOperate?: boolean }) {
+export async function setDepartmentMember(tenantId: string, departmentId: string, userId: string, caps: { canMakeCalls?: boolean; canTakeCalls?: boolean; canOperate?: boolean }, adminId?: string) {
   const db = useDb();
   // Validate the department + user both belong to the tenant.
   const [dept] = await db.select().from(schema.departments)
@@ -139,11 +139,18 @@ export async function setDepartmentMember(tenantId: string, departmentId: string
   const [mem] = await db.select().from(schema.memberships)
     .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.userId, userId))).limit(1);
   if (!mem) {
-    const [ep] = await db.select().from(schema.sipEndpoints)
-      .where(and(
-        eq(schema.sipEndpoints.tenantId, tenantId),
-        sql`${schema.sipEndpoints.meta}->>'userId' = ${userId}`
-      )).limit(1);
+    // Either id. An operator's endpoint carries their platform admin id in
+    // meta.userId, while the row we are about to write needs their users id —
+    // checking only one of those meant the lookup was always for the id the
+    // endpoint does not hold.
+    // Read the endpoints and compare in JavaScript. An array bound into SQL
+    // through drizzle arrives as one parameter rather than a Postgres array, and
+    // fighting that cost four rounds elsewhere today — this is a handful of rows
+    // and the comparison is trivial.
+    const ids = new Set([userId, adminId].filter(Boolean) as string[]);
+    const eps = await db.select({ meta: schema.sipEndpoints.meta })
+      .from(schema.sipEndpoints).where(eq(schema.sipEndpoints.tenantId, tenantId));
+    const ep = eps.find((e) => ids.has(String((e.meta as any)?.userId || '')));
     if (!ep) throw new Error('That person has no phone on this workspace');
   }
 

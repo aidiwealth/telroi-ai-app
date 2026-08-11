@@ -18,5 +18,5 @@ export default defineEventHandler(async (event) => {
   const { userIdForAdmin } = await import('~/server/utils/platform');
   const userId = await userIdForAdmin(p.data.userId) || p.data.userId;
 
-  return { member: await setDepartmentMember(ws.tenantId, id, userId, { canTakeCalls: p.data.canTakeCalls ?? true }) };
+  return { member: await setDepartmentMember(ws.tenantId, id, userId, { canTakeCalls: p.data.canTakeCalls ?? true }, p.data.userId) };
 });
