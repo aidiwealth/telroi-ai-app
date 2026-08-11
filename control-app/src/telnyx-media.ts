@@ -57,14 +57,14 @@ interface Meta { agentId?: string; tenantId?: string; telnum?: string; escalateT
 // line by this point, so we just issue the Call Control transfer. Note Telnyx can
 // only dial a PSTN number or SIP URI — an internal dashboard-agent endpoint needs
 // the SIP-handoff path instead (not wired yet).
-async function telnyxTransfer(callControlId: string, to: string): Promise<boolean> {
+async function telnyxTransfer(callControlId: string, to: string, headers?: Record<string, string>): Promise<boolean> {
   // Goes through the web app: it holds the Telnyx credentials (encrypted platform
   // settings), so the PBX box never needs a copy of the API key.
   try {
     const res = await fetch(`${WEBAPP_URL}/api/voice/ai/telnyx-transfer`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
-      body: JSON.stringify({ callId: callControlId, to })
+      body: JSON.stringify({ callId: callControlId, to, headers })
     });
     const j = await res.json().catch(() => ({})) as any;
     if (!res.ok || !j?.ok) { log(`transfer -> ${to} failed:`, j?.error || `HTTP ${res.status}`); return false; }
