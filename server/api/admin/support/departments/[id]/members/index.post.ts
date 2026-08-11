@@ -12,5 +12,11 @@ export default defineEventHandler(async (event) => {
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'A user is required');
   const ws = await ensureSupportWorkspace();
-  return { member: await setDepartmentMember(ws.tenantId, id, p.data.userId, { canTakeCalls: p.data.canTakeCalls ?? true }) };
+  // The team list offers operators, whose ids are platform admin ids — and this
+  // column is a foreign key into users. Resolved by email, which also creates
+  // the users row for an operator who has never signed in as a client.
+  const { userIdForAdmin } = await import('~/server/utils/platform');
+  const userId = await userIdForAdmin(p.data.userId) || p.data.userId;
+
+  return { member: await setDepartmentMember(ws.tenantId, id, userId, { canTakeCalls: p.data.canTakeCalls ?? true }) };
 });

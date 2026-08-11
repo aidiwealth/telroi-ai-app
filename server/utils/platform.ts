@@ -111,3 +111,34 @@ export async function paymentCreds(tenantId?: string) {
   }
   return { mode, stripe, stripeWebhookSecret, paystack, monnify, override };
 }
+
+/** The users row for an operator, by email.
+ *
+ *  A platform admin and a user are separate records with separate ids, and
+ *  several places store what they call a userId against a foreign key into
+ *  users — passing an admin id there fails, which is why adding an operator to
+ *  a department and leaving a CRM note both broke.
+ *
+ *  Resolved by email rather than by minting a users row with the admin's id:
+ *  two of our operators already have users rows under different ids, and
+ *  forcing the admin id would give them two identities with the same address.
+ */
+export async function userIdForAdmin(adminId: string): Promise<string | null> {
+  const { useDb, schema } = await import('~/server/db');
+  const { eq } = await import('drizzle-orm');
+  const db = useDb();
+
+  const [admin] = await db.select({ email: schema.platformAdmins.email })
+    .from(schema.platformAdmins).where(eq(schema.platformAdmins.id, adminId)).limit(1);
+  if (!admin?.email) return null;
+
+  const [existing] = await db.select({ id: schema.users.id })
+    .from(schema.users).where(eq(schema.users.email, admin.email)).limit(1);
+  if (existing) return existing.id;
+
+  // No row yet: an operator who has never signed in as a client. Created here
+  // rather than refusing, because the alternative is telling somebody their
+  // colleague cannot be added to a team for reasons about our schema.
+  const [made] = await db.insert(schema.users).values({ email: admin.email }).returning({ id: schema.users.id });
+  return made?.id || null;
+}

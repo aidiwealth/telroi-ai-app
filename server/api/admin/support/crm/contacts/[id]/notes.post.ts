@@ -21,6 +21,13 @@ export default defineEventHandler(async (event) => {
   const ws = await ensureSupportWorkspace();
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'A note body is required');
-  const author = (admin as any).id || ws.tenantId;
+  // author_user_id is a foreign key into users, and an operator's id is a
+  // platform admin id — so this failed for every operator leaving a note. The
+  // old fallback was worse still: with no admin id it wrote the tenant id,
+  // which is not a user either.
+  const { userIdForAdmin } = await import('~/server/utils/platform');
+  const author = await userIdForAdmin((admin as any).id);
+  if (!author) throw apiError('no_author', 'Could not identify you as a user to attribute this note to.', 500);
+
   return { note: await addNote(ws.tenantId, getRouterParam(event, 'id')!, author, p.data.body, p.data.kind || 'note', p.data.callUid) };
 });
