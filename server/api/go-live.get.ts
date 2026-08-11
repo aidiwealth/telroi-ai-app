@@ -4,6 +4,8 @@
 import { requireTenant } from '~/server/utils/api';
 import { goLiveState } from '~/server/utils/go-live';
 import { sandboxStatus } from '~/server/utils/sandbox-limits';
+import { useDb, schema } from '~/server/db';
+import { eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
@@ -46,5 +48,16 @@ export default defineEventHandler(async (event) => {
     ? { endsAt: full.trialEndsAt, daysLeft: trialDaysLeft(full as any) }
     : null;
 
-  return { ...live, sandbox, pricing, trial };
+  // The demo number this workspace can test on, chosen by country. Returned
+  // here because a client refused a purchase needs to know what they can still
+  // do — a gate that only says no is a reason to give up.
+  const { platformSettings } = await import('~/server/utils/platform');
+  const ps: any = await platformSettings().catch(() => null);
+  const [tnt] = await useDb().select({ country: schema.tenants.country })
+    .from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
+  const demoNumber = (tnt?.country || '').toLowerCase() === 'nigeria'
+    ? (ps?.demoNumberNg || null)
+    : (ps?.demoNumberIntl || null);
+
+  return { ...live, sandbox, pricing, trial, demoNumber };
 });

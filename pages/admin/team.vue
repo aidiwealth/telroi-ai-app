@@ -61,7 +61,14 @@
             <td class="ad-dim">{{ d.description || '— nothing for the AI to route on' }}</td>
             <td>
               <span v-if="!(d.members || []).length" class="ad-dim">nobody</span>
-              <span v-else>{{ (d.members || []).map((m) => m.user?.name || m.user?.email || m.email).join(', ') }}</span>
+              <!-- Chips rather than a joined string: a member added by mistake
+                   had no way out, and the delete endpoint already existed. -->
+              <span v-else class="dept-members">
+                <span v-for="m in d.members" :key="m.userId || m.id" class="dept-chip">
+                  {{ m.user?.email || m.user?.name || m.email || m.userId }}
+                  <button class="dept-chip-x" title="Remove from this team" @click="removeDeptMember(d, m)">×</button>
+                </span>
+              </span>
             </td>
             <td class="ad-r dept-actions">
               <select :value="''" class="team-role-select" @change="addDeptMember(d, $event)">
@@ -184,6 +191,17 @@ async function addDeptMember(d: any, ev: Event) {
   catch (e: any) { alert(e?.data?.error?.message || 'Could not add'); }
 }
 
+async function removeDeptMember(d: any, m: any) {
+  const who = m.user?.email || m.user?.name || m.email || 'this person';
+  if (!confirm(`Remove ${who} from ${d.name}? Calls escalated to this team will stop ringing them.`)) return;
+  try {
+    // The stored id, not the admin id: an operator is resolved to their users
+    // row when added, and that is what the membership row holds.
+    await $fetch(`/api/admin/support/departments/${d.id}/members`, { method: 'DELETE', body: { userId: m.userId } });
+    await loadDepts();
+  } catch (e: any) { alert(e?.data?.error?.message || 'Could not remove'); }
+}
+
 function fmt(d: string) { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); }
 
 async function load() {
@@ -227,6 +245,10 @@ onMounted(() => { load(); loadDepts(); });
 </script>
 
 <style scoped>
+.dept-members { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.dept-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--paper-2); border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 12.5px; }
+.dept-chip-x { border: 0; background: none; cursor: pointer; color: var(--ink-soft); font-size: 15px; line-height: 1; padding: 0 4px; }
+.dept-chip-x:hover { color: #a33; }
 .dept-head { margin-top: 40px; }
 .dept-title { font-size: 20px; }
 .dept-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
