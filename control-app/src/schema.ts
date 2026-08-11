@@ -11,6 +11,17 @@
 // point at the same Postgres tables). Only the columns the control app actually
 // reads or writes are declared here. If you add a routing column in the main
 // app that the control app needs, mirror it here.
+//
+// Forgetting is unusually expensive: selecting a column that is missing here
+// hands drizzle an undefined and it fails inside Object.entries with "Cannot
+// convert undefined or null to object" — a message that names neither the
+// column nor the table. The cache catches it and keeps serving stale data, so
+// routing continues and nothing looks broken. A missing departments table cost
+// one session; a missing meta column cost three attempts in another.
+//
+// When a cache query fails, run the select on its own before theorising:
+//   node --experimental-strip-types -e "import('./control-app/src/db.ts')..."
+// The real stack names the line in drizzle and the answer follows immediately.
 import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 
 // We only need tenant id for FK targets; declared minimally.
