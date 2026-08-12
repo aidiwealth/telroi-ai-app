@@ -42,7 +42,11 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   routeAgentId: uuid('route_agent_id'),
   routeEscalateMode: text('route_escalate_mode').notNull().default('none'),
   routeEscalateTo: text('route_escalate_to'),
-  routeEscalateAfter: integer('route_escalate_after').default(0)
+  routeEscalateAfter: integer('route_escalate_after').default(0),
+  // Mirrored because the PBX decides whether to record, and a column missing
+  // here fails the whole cache refresh with an error naming neither table nor
+  // column — see the note at the top of this file.
+  recordCalls: boolean('record_calls').notNull().default(false)
 }, (t) => ({
   telnumIdx: uniqueIndex('number_subs_telnum_idx').on(t.telnum)
 }));

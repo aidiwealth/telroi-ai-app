@@ -1104,6 +1104,33 @@ export const platformDocuments = pgTable('platform_documents', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
+// Recordings. Separate from callEvents because a call may have several legs and
+// the file outlives the row's usefulness — and because pruning by age is a query
+// over this table rather than a scan of every call ever placed.
+export const callRecordings = pgTable('call_recordings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  callid: text('callid').notNull(),
+  telnum: text('telnum'),
+  direction: text('direction'),
+  phone: text('phone'),
+  objectKey: text('object_key'),
+  contentType: text('content_type'),
+  sizeBytes: integer('size_bytes'),
+  durationSeconds: integer('duration_seconds'),
+  carrier: text('carrier'),
+  status: text('status').notNull().default('pending'),
+  transcript: text('transcript'),
+  transcriptStatus: text('transcript_status'),
+  // Set from the plan when the recording is stored, so changing plans does not
+  // retroactively delete what somebody already has.
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  tenantIdx: index('call_recordings_tenant_idx').on(t.tenantId, t.createdAt),
+  callIdx: index('call_recordings_callid_idx').on(t.callid)
+}));
+
 export const compliance = pgTable('compliance', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -1203,6 +1230,9 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   routeEscalateMode: text('route_escalate_mode').notNull().default('none'), // none | endpoint | phone | ring_all
   routeEscalateTo: text('route_escalate_to'),                 // AI: human handoff target (endpoint id / phone)
   routeEscalateAfter: integer('route_escalate_after').default(0),
+  // Per number and off by default: a client should choose which lines are
+  // recorded rather than discovering all of them were.
+  recordCalls: boolean('record_calls').notNull().default(false),
   // Lazy provisioning: numbers are 'local' until first used after go-live, then
   // provisioned on the country's vendor and billed from that point.
   provisionState: text('provision_state').notNull().default('local'), // local | provisioning | provisioned
