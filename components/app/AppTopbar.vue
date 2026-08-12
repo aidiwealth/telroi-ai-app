@@ -85,9 +85,9 @@
     </div>
 
     <!-- Compliance gate modal (shown when going live without approval) -->
-    <div v-if="showCompliance" class="modal-overlay" @click.self="showCompliance = false">
+    <div v-if="showCompliance" class="modal-overlay" @click.self="closeCompliance()">
       <div class="modal card cmp-modal">
-        <div class="card-head"><span class="card-title">Activate live mode</span><button class="modal-x" @click="showCompliance = false">✕</button></div>
+        <div class="card-head"><span class="card-title">Activate live mode</span><button class="modal-x" @click="closeCompliance()">✕</button></div>
         <div class="card-pad">
           <div v-if="sbx" class="cmp-quota">
             <div class="cmp-quota-row">
@@ -114,7 +114,7 @@
             <template v-if="step === 0">
               <p class="cmp-lede">Going live requires business verification. This takes a few minutes.</p>
               <div class="field-float">
-                <input v-model="cmp.officialName" class="input" placeholder=" " id="cmp-name" />
+                <input v-model="cmp.officialName" class="input" placeholder=" " id="cmp-name" @input="saveSoon" />
                 <label for="cmp-name">Official company name</label>
               </div>
               <!-- What the line is for and who it reaches. The NCC cares, and an
@@ -122,11 +122,11 @@
                    with no idea what the number would be used for. -->
               <div class="field">
                 <label class="cmp-file-label">What will you use the line for?</label>
-                <textarea v-model="cmp.useCase" class="input cmp-ta" rows="2" placeholder="e.g. Loan repayment reminders and customer support for our lending app"></textarea>
+                <textarea v-model="cmp.useCase" class="input cmp-ta" rows="2" @input="saveSoon" placeholder="e.g. Loan repayment reminders and customer support for our lending app"></textarea>
               </div>
               <div class="field">
                 <label class="cmp-file-label">Who will you be calling?</label>
-                <textarea v-model="cmp.callAudience" class="input cmp-ta" rows="2" placeholder="e.g. Our own registered customers who opted in during signup"></textarea>
+                <textarea v-model="cmp.callAudience" class="input cmp-ta" rows="2" @input="saveSoon" placeholder="e.g. Our own registered customers who opted in during signup"></textarea>
               </div>
               <button class="btn btn-signal btn-block" :disabled="!cmp.officialName.trim() || !cmp.useCase.trim() || !cmp.callAudience.trim()" @click="goStep(regRequired ? 1 : 3)">Continue</button>
             </template>
@@ -325,6 +325,34 @@ const nccErr = ref('');
 /** Move on, and remember it. Everything except the licence files survives a
  *  closed tab — a browser will not let us repopulate a file input, but a typed
  *  company name and a verified director should not have to be done twice. */
+// Saved as they type, not only when they press Continue. Somebody who writes a
+// paragraph about their use case and then closes the tab has lost nothing —
+// which matters more here than elsewhere, because this form is abandoned and
+// returned to over days rather than filled in one sitting.
+let saveTimer: any = null;
+function saveSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { saveDraft(); }, 800);
+}
+
+/** Closing is the moment most likely to lose something: the debounce may not
+ *  have fired, and this form gets abandoned mid-sentence more than most. */
+function closeCompliance() {
+  clearTimeout(saveTimer);
+  saveDraft();
+  showCompliance.value = false;
+}
+
+async function saveDraft() {
+  try {
+    await api.post('/api/compliance/progress', {
+      officialName: cmp.value.officialName.trim() || undefined,
+      useCase: cmp.value.useCase.trim() || undefined,
+      callAudience: cmp.value.callAudience.trim() || undefined
+    });
+  } catch { /* they can still press Continue */ }
+}
+
 async function goStep(next: number) {
   step.value = next;
   try {
