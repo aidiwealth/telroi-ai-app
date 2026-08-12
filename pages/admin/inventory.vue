@@ -6,6 +6,21 @@
         <p class="ad-sub">Numbers customers can buy. Search Twilio/Telnyx to buy new ones; add Nigerian (Digidite) numbers manually.</p>
       </div>
       <div class="ad-head-actions">
+        <select v-model="filters.status" class="inv-select" @change="onFilter">
+          <option value="">Any status</option>
+          <option value="available">Available</option>
+          <option value="reserved">Reserved</option>
+          <option value="sold">Sold</option>
+        </select>
+        <select v-model="filters.provider" class="inv-select" @change="onFilter">
+          <option value="">Any carrier</option>
+          <option value="telroi">Telroi</option>
+          <option value="ruach">Ruach</option>
+          <option value="kasooko">Kasooko</option>
+          <option value="sotel">Sotel</option>
+          <option value="twilio">Twilio</option>
+          <option value="telnyx">Telnyx</option>
+        </select>
         <button class="btn btn-signal btn-sm" @click="openModal">+ Add numbers</button>
       </div>
     </div>
@@ -13,12 +28,22 @@
     <div v-if="pending" class="ad-loading">Loading inventory…</div>
     <div v-else-if="rows.length" class="ad-table-wrap">
       <table class="ad-table">
-        <thead><tr><th>Number</th><th>Region</th><th>Carrier</th><th>Provisioned</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Number</th><th>Region</th><th>Carrier</th><th>Held by</th><th>Provisioned</th><th>Status</th><th></th></tr></thead>
         <tbody>
           <tr v-for="r in rows" :key="r.id">
             <td class="mono ad-name">{{ r.telnum }}</td>
             <td>{{ regionLabel(r.region) }}</td>
             <td class="ad-dim">{{ provLabel(r.provider) }}</td>
+            <!-- A released number keeps its holder, and that is exactly when
+                 somebody asks: a call comes in on a number nobody owns and the
+                 useful fact is who had it last week. -->
+            <td>
+              <template v-if="r.holder">
+                <span :class="{ 'ad-dim': r.status !== 'sold' }">{{ r.holder }}</span>
+                <span v-if="r.status !== 'sold'" class="ad-dim"> · released</span>
+              </template>
+              <span v-else class="ad-dim">—</span>
+            </td>
             <td>
               <span class="ad-prov" :class="r.provisionStatus">{{ r.provisionStatus }}</span>
             </td>
@@ -38,6 +63,7 @@
           </tr>
         </tbody>
       </table>
+      <Pagination v-bind="invMeta" query-key="inv" @change="goInvPage" />
     </div>
     <EmptyState v-else icon="numbers" title="No numbers in inventory yet" description="Add numbers so customers can purchase them during onboarding or from their dashboard." />
 
@@ -131,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 const toast = useToast();
 const reserving = ref<string | null>(null);
 
@@ -194,9 +220,27 @@ function providersFor(r: string) { return PROV[r] || ['Telroi']; }
 function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice', ruach: 'Ruach', sotel: 'Sotel', kasooko: 'Kasooko' } as any)[p] || p; }
 function regionLabel(r: string) { return ({ NG: 'Nigeria', US: 'United States', CA: 'Canada', GB: 'United Kingdom' } as any)[r] || r; }
 
+const filters = reactive({ status: '', provider: '', region: '' });
+const invPage = ref(Number(useRoute().query.inv) || 1);
+const invMeta = ref({ page: 1, pages: 1, total: 0, perPage: 50 });
+
+async function goInvPage(p: number) { invPage.value = p; await load(); }
+// Narrowing to one carrier while on page four would land somebody on a page
+// that no longer exists.
+function onFilter() { invPage.value = 1; load(); }
+
 async function load() {
   pending.value = true;
-  try { rows.value = await $fetch('/api/admin/inventory'); }
+  try {
+    const qs = new URLSearchParams();
+    if (filters.status) qs.set('status', filters.status);
+    if (filters.provider) qs.set('provider', filters.provider);
+    if (filters.region) qs.set('region', filters.region);
+    qs.set('page', String(invPage.value));
+    const r = await $fetch<any>(`/api/admin/inventory?${qs}`);
+    rows.value = r.items || [];
+    invMeta.value = { page: r.page, pages: r.pages, total: r.total, perPage: r.perPage };
+  }
   catch (e: any) { /* */ }
   finally { pending.value = false; }
 }
@@ -259,6 +303,8 @@ onMounted(load);
 </script>
 
 <style scoped>
+.inv-select { padding: 7px 12px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13px; background: var(--paper); color: var(--ink); cursor: pointer; }
+.inv-select:focus { outline: none; border-color: var(--signal); }
 .ad-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 22px; }
 .ad-title { font-family: var(--font-display); font-size: 30px; color: var(--ink); letter-spacing: -0.02em; }
 .ad-sub { color: var(--ink-mute); font-size: 14px; margin-top: 4px; }
