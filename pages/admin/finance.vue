@@ -3,6 +3,37 @@
     <h1 class="ad-title">Financial logs</h1>
     <p class="ad-sub">Every float paid in and every debit across the platform, categorised by feature. Amounts are shown in USD for accounting; toggle to see a client's native currency and the exchange rate applied.</p>
 
+    <div class="log-tabs">
+      <button class="log-tab" :class="{ active: tab === 'ledger' }" @click="tab = 'ledger'">Payments &amp; credits</button>
+      <button class="log-tab" :class="{ active: tab === 'accounts' }" @click="tab = 'accounts'">Virtual accounts</button>
+    </div>
+
+    <!-- The reserved accounts we have handed out. The balance is the client's
+         wallet, not the account: a reserved account is a conduit, and money
+         reaching it credits the wallet and leaves nothing behind — labelled
+         plainly, or somebody goes looking for funds that were never there. -->
+    <template v-if="tab === 'accounts'">
+      <EmptyState v-if="!vaLoading && !accounts.length" icon="generic" title="No accounts yet" description="A reserved account is created the first time a client opens their wallet." />
+      <div v-else class="set-card ad-table-wrap">
+        <table class="ad-data-table">
+          <thead><tr><th>Workspace</th><th>Bank</th><th>Account number</th><th>Account name</th><th class="ad-r">Wallet balance</th><th>Created</th></tr></thead>
+          <tbody>
+            <tr v-for="a in accounts" :key="a.id">
+              <td>{{ a.workspace || '—' }}<div class="ad-dim mono">{{ a.slug }}</div></td>
+              <td>{{ a.bankName || '—' }}<div class="ad-dim">{{ a.provider }}</div></td>
+              <td class="mono">{{ a.accountNumber || '—' }}</td>
+              <td class="ad-dim">{{ a.accountName || '—' }}</td>
+              <td class="ad-r mono">{{ a.currency === 'USD' ? '$' : '₦' }}{{ ((a.balanceMinor || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 }) }}</td>
+              <td class="ad-dim mono">{{ fmtDate(a.createdAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <Pagination v-bind="vaMeta" query-key="va" @change="goVaPage" />
+      </div>
+    </template>
+
+    <template v-else>
+
     <!-- Currency view toggle + live rate -->
     <div class="fin-cur">
       <div class="fin-seg">
@@ -68,6 +99,7 @@
         </tbody>
       </table>
     </div>
+    </template>
   </div>
 </template>
 
@@ -80,6 +112,28 @@ const entries = ref<any[]>([]);
 const totals = ref<any>({ creditUsdMinor: 0, debitUsdMinor: 0, byCategoryUsdMinor: {} });
 const currentRate = ref(1600);
 const view = ref<'usd' | 'native'>('usd');
+
+const tab = ref('ledger');
+const accounts = ref<any[]>([]);
+const vaLoading = ref(false);
+const vaPage = ref(Number(useRoute().query.va) || 1);
+const vaMeta = ref({ page: 1, pages: 1, total: 0, perPage: 25 });
+
+async function loadAccounts() {
+  vaLoading.value = true;
+  try {
+    const r = await $fetch<any>(`/api/admin/finance/virtual-accounts?page=${vaPage.value}`);
+    accounts.value = r.items || [];
+    vaMeta.value = { page: r.page, pages: r.pages, total: r.total, perPage: r.perPage };
+  } catch { accounts.value = []; }
+  finally { vaLoading.value = false; }
+}
+
+async function goVaPage(p: number) { vaPage.value = p; await loadAccounts(); }
+
+function fmtDate(d: string) {
+  return d ? new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+}
 const pending = ref(true);
 const kind = ref<'all' | 'credit' | 'debit'>('all');
 const category = ref<string>('all');
@@ -129,7 +183,7 @@ async function load() {
   } finally { pending.value = false; }
 }
 function setKind(k: any) { kind.value = k; load(); }
-onMounted(load);
+onMounted(() => { load(); loadAccounts(); });
 </script>
 
 <style scoped>
