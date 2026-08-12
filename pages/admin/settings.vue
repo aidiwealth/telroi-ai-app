@@ -391,19 +391,24 @@
             <span>Incoming webhook URL {{ cfg.slackWebhookSet ? '· set' : '· not set' }}</span>
             <input v-model="slackWebhook" type="password" class="ad-input mono" :placeholder="cfg.slackWebhookSet ? '•••••••• (blank to keep)' : 'https://hooks.slack.com/services/...'" />
           </label>
-          <!-- Beside the webhook because they answer the same question: where do
+          <label class="ad-field">
+            <span>Payments webhook {{ cfg.slackPaymentsSet ? '· set' : '· optional' }}</span>
+            <input v-model="slackPayments" type="password" class="ad-input mono" :placeholder="cfg.slackPaymentsSet ? '•••••••• (blank to keep)' : 'a second channel, for money only'" />
+          </label>
+          <!-- Beside the webhooks because they answer the same question: where do
                platform notices go. -->
           <label class="ad-field">
             <span>Operations email</span>
             <input v-model="opsEmail" type="email" class="ad-input" placeholder="ops@telroi.ai" />
           </label>
         </div>
-        <p class="ad-hint">Four things are announced: a workspace signing up, one going live, a client asking for SIP access from their own address, and a payment arriving. Slack gets all of them; the operations address gets the signups, go-lives and payments, or nothing if it is blank. Sandbox top-ups are excluded — a client testing would otherwise fill the channel with imaginary money.</p>
+        <p class="ad-hint">Four things are announced: a workspace signing up, one going live, a client asking for SIP access from their own address, and a payment arriving. Payments go to their own channel where one is set and to the general one where it isn't, so a single webhook still works. The operations address gets signups, go-lives and payments, or nothing if it is blank. Sandbox top-ups are excluded — a client testing would otherwise fill the channel with imaginary money.</p>
         <p class="ad-hint">Create it in Slack under your app's Incoming Webhooks, pointed at the channel you want. Test it after saving — a wrong URL fails silently, and the first you would know is a signup that never announced itself.</p>
 
         <div class="set-actions">
           <button class="btn btn-signal" :disabled="savingSlack" @click="saveSlack">{{ savingSlack ? 'Saving…' : 'Save notifications' }}</button>
-          <button class="btn btn-ghost" :disabled="testingSlack || !cfg.slackWebhookSet" @click="testSlack">{{ testingSlack ? 'Sending…' : 'Send a test message' }}</button>
+          <button class="btn btn-ghost" :disabled="testingSlack || !cfg.slackWebhookSet" @click="testSlack('general')">{{ testingSlack ? 'Sending…' : 'Test general channel' }}</button>
+          <button class="btn btn-ghost" :disabled="testingSlack || !cfg.slackPaymentsSet" @click="testSlack('payments')">Test payments channel</button>
         </div>
       </div>
     </section>
@@ -755,6 +760,7 @@ async function savePrembly() {
 }
 
 const slackWebhook = ref('');
+const slackPayments = ref('');
 const opsEmail = ref('');
 const savingSlack = ref(false);
 const testingSlack = ref(false);
@@ -769,9 +775,11 @@ async function saveSlack() {
     // meanings for the same empty box.
     const body: any = { opsEmail: opsEmail.value.trim() };
     if (slackWebhook.value.trim()) body.slackWebhook = slackWebhook.value.trim();
+    if (slackPayments.value.trim()) body.slackPayments = slackPayments.value.trim();
     {
       await $fetch('/api/admin/settings', { method: 'POST', body });
       slackWebhook.value = '';
+      slackPayments.value = '';
       cfg.value = await $fetch<any>('/api/admin/settings');
       opsEmail.value = cfg.value?.opsEmail || '';
     }
@@ -779,10 +787,10 @@ async function saveSlack() {
   finally { savingSlack.value = false; }
 }
 
-async function testSlack() {
+async function testSlack(channel: 'general' | 'payments' = 'general') {
   testingSlack.value = true;
   try {
-    await $fetch('/api/admin/settings/slack-test', { method: 'POST' });
+    await $fetch('/api/admin/settings/slack-test', { method: 'POST', body: { channel } });
     alert('Sent — check the channel. If nothing arrived, the URL is wrong or the channel was deleted.');
   } catch (e: any) { alert(e?.data?.error?.message || 'Could not send'); }
   finally { testingSlack.value = false; }

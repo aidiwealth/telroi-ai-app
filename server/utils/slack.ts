@@ -5,11 +5,19 @@
 import { platformSettings } from './platform';
 import { decrypt } from './crypto';
 
-async function post(blocks: any[], fallback: string): Promise<void> {
+/** Post to a channel.
+ *
+ *  'payments' goes to its own webhook where one is configured and falls back to
+ *  the general channel where it isn't — money and growth are read by different
+ *  people at different times, but somebody running one channel should not have
+ *  to configure two to keep what they had.
+ */
+async function post(blocks: any[], fallback: string, channel: 'general' | 'payments' = 'general'): Promise<void> {
   const ps: any = await platformSettings().catch(() => null);
-  if (!ps?.slackWebhookEnc) return;
+  const enc = (channel === 'payments' && ps?.slackPaymentsEnc) ? ps.slackPaymentsEnc : ps?.slackWebhookEnc;
+  if (!enc) return;
   let url: string;
-  try { url = decrypt(ps.slackWebhookEnc); } catch { return; }
+  try { url = decrypt(enc); } catch { return; }
   if (!url) return;
 
   await fetch(url, {
@@ -84,5 +92,5 @@ export async function slackPaymentReceived(input: {
   await post([
     { type: 'section', text: { type: 'mrkdwn', text: `💰  *${input.amount}* received\n${detail}` } },
     { type: 'context', elements: [{ type: 'mrkdwn', text: when() }] }
-  ], `${input.amount} received — ${input.workspace}`);
+  ], `${input.amount} received — ${input.workspace}`, 'payments');
 }

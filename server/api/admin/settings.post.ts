@@ -80,6 +80,7 @@ const Body = z.object({
   demoNumberNg: z.string().max(24).optional(),
   demoNumberIntl: z.string().max(24).optional(),
   slackWebhook: z.string().url().max(300).optional(),
+  slackPayments: z.string().url().max(300).optional(),
   opsEmail: z.string().email().max(200).optional(),
   premblyApiKey: z.string().min(8).max(200).optional(),
   otpNgCallerId: z.string().max(32).optional(),
@@ -211,6 +212,7 @@ export default defineEventHandler(async (event) => {
   // Encrypted: anyone holding the URL can post to the channel, and it is never
   // read back to the browser — a blank field means unchanged, not cleared.
   if (d.slackWebhook) patch.slackWebhookEnc = encrypt(d.slackWebhook);
+  if (d.slackPayments) patch.slackPaymentsEnc = encrypt(d.slackPayments);
   if (d.opsEmail !== undefined) patch.opsEmail = d.opsEmail || null;
   if (d.premblyApiKey) patch.premblyCredsEnc = encrypt(JSON.stringify({ apiKey: d.premblyApiKey }));
   if (d.otpNgCallerId !== undefined) patch.otpNgCallerId = d.otpNgCallerId || null;

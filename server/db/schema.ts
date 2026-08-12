@@ -146,7 +146,11 @@ export const platformSettings = pgTable('platform_settings', {
   // Slack incoming webhook. Encrypted because anyone holding it can post to the
   // channel, and a setting rather than an env var so the channel can change
   // without a deploy.
+  // Two channels, because money and growth are read by different people at
+  // different times. Payments fall back to the general one when unset, so a
+  // single webhook still works for anybody who only wants one.
   slackWebhookEnc: text('slack_webhook_enc'),
+  slackPaymentsEnc: text('slack_payments_enc'),
   // Where platform notices go — money arriving, chiefly. A setting rather than
   // a constant because who watches that inbox changes.
   opsEmail: text('ops_email'),
