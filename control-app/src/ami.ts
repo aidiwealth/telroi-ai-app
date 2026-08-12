@@ -76,7 +76,12 @@ export function startAmi(): void {
 
 /** Begin recording a channel. Resolves false rather than throwing: a recording
  *  that cannot start is a file nobody gets, not a call nobody gets. */
-export function startRecording(channel: string, file: string): Promise<boolean> {
+export async function startRecording(channel: string, file: string): Promise<boolean> {
+  // Connected on first use rather than at boot: recording is occasional, the
+  // connection costs nothing to hold, and a boot hook is one more thing to
+  // forget — which would leave every recording failing quietly.
+  if (!sock) { connect(); await new Promise((r) => setTimeout(r, 1500)); }
+
   return new Promise((resolve) => {
     if (!sock || !authed) { log('not connected — cannot record'); return resolve(false); }
     const id = String(++actionId);
