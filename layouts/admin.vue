@@ -25,7 +25,7 @@
          workspace so ring_all can reach whichever admins are online. -->
     <IncomingCall token-endpoint="/api/admin/support/voice-token" queue-endpoint="/api/admin/support/queue" />
     <AdminTasks />
-    <IdleLogout mode="admin" />
+    <IdleLogout mode="admin" :idle-ms="60 * 60 * 1000" />
     <TourGuide />
   </div>
 </template>

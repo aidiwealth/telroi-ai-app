@@ -18,11 +18,14 @@ import { useAuthStore } from '~/stores/auth';
 // PBX mid-call). useCallActive is a shared flag set by IncomingCall.
 const callActive = useCallActive();
 
-// Inactivity auto-logout. Defaults: sign out after 5 minutes idle, warn 60s
-// before. Activity (mouse/keyboard/scroll/touch/visibility) resets the timer.
-// Durations are props so they can be tuned without code changes.
+// Inactivity auto-logout. Two hours on a client dashboard, one on the operator
+// console: somebody watching a call log or waiting on a delivery is not moving
+// the mouse, and signing them out mid-task costs more than an unattended tab on
+// their own account risks. The console reaching every client's data is the one
+// where a shorter window earns its place.
+// Activity (mouse/keyboard/scroll/touch/visibility) resets the timer.
 const props = withDefaults(defineProps<{ idleMs?: number; warnMs?: number; mode?: 'client' | 'admin' }>(), {
-  idleMs: 30 * 60 * 1000, // 30 minutes
+  idleMs: 2 * 60 * 60 * 1000, // 2 hours (client)
   warnMs: 60 * 1000,     // warn 60s before logout
   mode: 'client'
 });

@@ -5,7 +5,12 @@ import type { H3Event } from 'h3';
 
 const COOKIE = 'telroi_session';
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days (client sessions)
-const ADMIN_MAX_AGE = 60 * 30;      // 30 min idle (admin) — refreshed on each request
+const ADMIN_MAX_AGE = 60 * 60 * 8;  // 8h idle (admin) — refreshed on each request.
+                                    // Thirty minutes meant being signed out over
+                                    // a coffee, and an operator reading rather
+                                    // than clicking still tripped it. Shorter
+                                    // than a client session because this one
+                                    // reaches every client's data.
 
 export interface SessionClaims {
   userId: string;
