@@ -15,10 +15,16 @@
     <template v-if="tab === 'forms'">
       <div class="set-card card-pad fm-upload">
         <h3 class="ad-panel-h">Upload a form</h3>
+        <!-- The same drop zone clients see in the go-live modal, rather than a
+             raw file input beside three text boxes. -->
+        <label class="fm-drop" :class="{ filled: formFile, over: dragOver }"
+               @dragover.prevent="dragOver = true" @dragleave="dragOver = false" @drop.prevent="onFormDrop">
+          <input type="file" class="fm-file-input" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" @change="onFormFile" />
+          <span v-if="!formFile" class="fm-drop-text">Drop a file here, or click to choose — PDF, Word, PNG or JPG</span>
+          <span v-else class="fm-drop-file">📄 {{ formFile.name }} · {{ Math.round(formFile.size / 1024) }}KB</span>
+        </label>
+
         <div class="fm-grid">
-          <label class="fm-field"><span>File</span>
-            <input type="file" class="ad-ctl" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" @change="onFormFile" />
-          </label>
           <label class="fm-field"><span>Reference</span>
             <input v-model="formUp.slug" class="ad-ctl mono" placeholder="ncc_undertaking" />
           </label>
@@ -129,7 +135,12 @@ const formFile = ref<File | null>(null);
 const formBusy = ref(false);
 const formUp = ref({ slug: '', title: '', description: '', country: '' });
 
+const dragOver = ref(false);
 function onFormFile(e: Event) { formFile.value = (e.target as HTMLInputElement).files?.[0] || null; }
+function onFormDrop(e: DragEvent) {
+  dragOver.value = false;
+  formFile.value = e.dataTransfer?.files?.[0] || null;
+}
 
 async function loadForms() {
   try { forms.value = (await $fetch<any>('/api/admin/documents')).documents || []; }
@@ -195,7 +206,14 @@ onMounted(() => { load(); loadForms(); });
 .fm-field { display: flex; flex-direction: column; gap: 6px; }
 .fm-field > span { font-size: 12px; color: var(--ink-soft); font-weight: 500; }
 .fm-field .ad-ctl { width: 100%; padding: 9px 12px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 14px; background: var(--paper); color: var(--ink); }
-.fm-field input[type="file"].ad-ctl { padding: 7px 10px; font-size: 13px; }
+.fm-field .ad-ctl:focus { outline: none; border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
+/* Matching the modal's drop zone rather than inventing a second one. */
+.fm-drop { display: block; border: 1.5px dashed var(--rule); border-radius: var(--radius); padding: 20px; text-align: center; cursor: pointer; margin-bottom: 16px; transition: border-color 0.14s, background 0.14s; }
+.fm-drop:hover, .fm-drop.over { border-color: var(--signal-bright); background: var(--signal-soft); }
+.fm-drop.filled { border-style: solid; border-color: var(--signal); background: var(--signal-soft); }
+.fm-file-input { display: none; }
+.fm-drop-text { font-size: 12.5px; color: var(--ink-mute); }
+.fm-drop-file { font-size: 13px; color: var(--signal-2); font-weight: 500; word-break: break-all; }
 .fm-desc { margin-bottom: 16px; }
 .fm-upload .ad-none { margin: 0 0 14px; max-width: 68ch; line-height: 1.6; }
 .ad-title { font-family: var(--font-display); font-size: 30px; color: var(--ink); letter-spacing: -0.02em; }
