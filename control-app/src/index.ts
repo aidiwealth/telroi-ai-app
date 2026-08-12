@@ -282,6 +282,31 @@ async function main() {
         return;
       }
 
+      // 1.5) Recording, where the number records. After the route is known —
+      // an earlier attempt put this straight after answer(), which referenced
+      // route before its declaration and ended every call to a recorded number
+      // in five milliseconds. Strip-types does not typecheck, so nothing caught
+      // it but the calls themselves.
+      //
+      // The notice plays before anything else is said: before the AI greets,
+      // before an agent rings, so a caller knows from the outset rather than
+      // after they have already spoken.
+      if (route.recordCalls && !isEscalation) {
+        try { await channel.play({ media: 'sound:telroi-recording-notice' }); }
+        catch { /* a missed notice should not cost the call */ }
+        try {
+          const { startRecording } = await import('./ami.ts');
+          const safe = chId.replace(/[^a-zA-Z0-9._-]/g, '_');
+          // The extension chooses the format; omitting it writes raw PCM that
+          // nothing can play.
+          const ok = await startRecording(channel.name, `/var/spool/asterisk/monitor/${safe}.wav`);
+          log(`  [rec ${chId}] ${ok ? 'recording' : 'could not start'}`);
+        } catch (e: any) {
+          // A lost recording is a lost file; an exception here is a lost call.
+          log(`  [rec ${chId}] error: ${e?.message || e}`);
+        }
+      }
+
       // 2) Anonymous (no caller-id) block — tenant setting
       if (isAnonymousBlocked(route.tenantId, callerNum)) {
         log(`  BLOCKED anonymous caller for tenant ${route.tenantId} - rejecting`);
