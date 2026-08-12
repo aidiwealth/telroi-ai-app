@@ -79,6 +79,7 @@ export default defineEventHandler(async (event) => {
     demoNumberNg: (s?.demoNumberNg as string) || '',
     demoNumberIntl: (s?.demoNumberIntl as string) || '',
     slackWebhookSet: !!s?.slackWebhookEnc,
+    opsEmail: (s?.opsEmail as string) || '',
     premblySet: !!s?.premblyCredsEnc,
     otpNgCallerId: (s?.otpNgCallerId as string) || '',
     ttsVendor: (s?.ttsVendor as string) || 'telroi',

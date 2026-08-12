@@ -66,3 +66,23 @@ export async function slackSipIpRequest(input: {
   ], `SIP access requested for ${input.ipAddress} by ${input.email}`).catch((e) =>
     console.error('[slack] sip request notice failed:', (e as Error)?.message));
 }
+
+/** Money arrived. Real credits only — a client testing in sandbox would
+ *  otherwise fill the channel with imaginary funds. The balance matters as much
+ *  as the amount: somebody adding ₦500 against a ₦6,000 monthly bill is a
+ *  different situation from one clearing their account. */
+export async function slackPaymentReceived(input: {
+  workspace: string; amount: string; balance: string; method: string; invoiceNumber?: string | null;
+}): Promise<void> {
+  const detail = [
+    `*${input.workspace}*`,
+    `via ${input.method}`,
+    `balance now ${input.balance}`,
+    input.invoiceNumber ? `settled ${input.invoiceNumber}` : null
+  ].filter(Boolean).join('  ·  ');
+
+  await post([
+    { type: 'section', text: { type: 'mrkdwn', text: `💰  *${input.amount}* received\n${detail}` } },
+    { type: 'context', elements: [{ type: 'mrkdwn', text: when() }] }
+  ], `${input.amount} received — ${input.workspace}`);
+}

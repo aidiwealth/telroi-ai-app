@@ -212,6 +212,29 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
             suspensionLifted: liftedSuspension
           });
         }
+        // And tell ourselves. A client's receipt says their balance moved; we
+        // need to know somebody paid and how much is left against what they
+        // owe. Sandbox is excluded on the same grounds as the receipt above.
+        if (w && meta.simulated !== true) {
+          const sym = w.currency === 'USD' ? '$' : '₦';
+          const fmt = (m: number) => sym + (Math.abs(m) / 100).toLocaleString('en-US', { minimumFractionDigits: 2 });
+          const detail = {
+            workspace: t?.name || 'a workspace',
+            amount: fmt(amountMinor),
+            balance: (w.balanceMinor < 0 ? '−' : '') + fmt(w.balanceMinor),
+            method: await describeMethod(tenantId, String(meta.provider || 'card')),
+            invoiceNumber: settled?.number || null
+          };
+          const { slackPaymentReceived } = await import('./slack');
+          void slackPaymentReceived(detail).catch(() => { /* a missed notice is not worth an exception */ });
+
+          const { platformSettings } = await import('./platform');
+          const ps: any = await platformSettings().catch(() => null);
+          if (ps?.opsEmail) {
+            const { sendOpsPaymentEmail } = await import('./email');
+            void sendOpsPaymentEmail(ps.opsEmail, detail).catch(() => { /* as above */ });
+          }
+        }
       } catch (e: any) { console.error('[wallet] payment email failed:', e?.message); }
     }
     return r;

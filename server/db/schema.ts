@@ -147,6 +147,9 @@ export const platformSettings = pgTable('platform_settings', {
   // channel, and a setting rather than an env var so the channel can change
   // without a deploy.
   slackWebhookEnc: text('slack_webhook_enc'),
+  // Where platform notices go — money arriving, chiefly. A setting rather than
+  // a constant because who watches that inbox changes.
+  opsEmail: text('ops_email'),
   premblyCredsEnc: text('prembly_creds_enc'),   // {apiKey}
   // What we tell a client to point their PBX at. A setting rather than a source
   // constant: moving the PBX shouldn't need a deploy, and a client reading a

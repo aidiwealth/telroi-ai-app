@@ -391,11 +391,18 @@
             <span>Incoming webhook URL {{ cfg.slackWebhookSet ? '· set' : '· not set' }}</span>
             <input v-model="slackWebhook" type="password" class="ad-input mono" :placeholder="cfg.slackWebhookSet ? '•••••••• (blank to keep)' : 'https://hooks.slack.com/services/...'" />
           </label>
+          <!-- Beside the webhook because they answer the same question: where do
+               platform notices go. -->
+          <label class="ad-field">
+            <span>Operations email</span>
+            <input v-model="opsEmail" type="email" class="ad-input" placeholder="ops@telroi.ai" />
+          </label>
         </div>
+        <p class="ad-hint">A client's payment posts to Slack and to the operations address — both, or Slack alone if the address is blank. Sandbox top-ups are excluded: a client testing would otherwise fill the channel with imaginary money.</p>
         <p class="ad-hint">Create it in Slack under your app's Incoming Webhooks, pointed at the channel you want. Test it after saving — a wrong URL fails silently, and the first you would know is a signup that never announced itself.</p>
 
         <div class="set-actions">
-          <button class="btn btn-signal" :disabled="savingSlack" @click="saveSlack">{{ savingSlack ? 'Saving…' : 'Save webhook' }}</button>
+          <button class="btn btn-signal" :disabled="savingSlack" @click="saveSlack">{{ savingSlack ? 'Saving…' : 'Save notifications' }}</button>
           <button class="btn btn-ghost" :disabled="testingSlack || !cfg.slackWebhookSet" @click="testSlack">{{ testingSlack ? 'Sending…' : 'Send a test message' }}</button>
         </div>
       </div>
@@ -748,6 +755,7 @@ async function savePrembly() {
 }
 
 const slackWebhook = ref('');
+const opsEmail = ref('');
 const savingSlack = ref(false);
 const testingSlack = ref(false);
 
@@ -756,10 +764,16 @@ async function saveSlack() {
   try {
     // Blank means keep what's there — the field can't show the current value,
     // so an empty box has to mean "unchanged" rather than "clear it".
-    if (slackWebhook.value.trim()) {
-      await $fetch('/api/admin/settings', { method: 'POST', body: { slackWebhook: slackWebhook.value.trim() } });
+    // The webhook is write-only, so blank means unchanged. The ops email is
+    // visible, so blank means they cleared it — different fields, different
+    // meanings for the same empty box.
+    const body: any = { opsEmail: opsEmail.value.trim() };
+    if (slackWebhook.value.trim()) body.slackWebhook = slackWebhook.value.trim();
+    {
+      await $fetch('/api/admin/settings', { method: 'POST', body });
       slackWebhook.value = '';
       cfg.value = await $fetch<any>('/api/admin/settings');
+      opsEmail.value = cfg.value?.opsEmail || '';
     }
   } catch (e: any) { alert(e?.data?.error?.message || 'Save failed'); }
   finally { savingSlack.value = false; }
@@ -1108,6 +1122,9 @@ onMounted(async () => {
     keySet.value = s.operatorKeySet;
     pwSet.value = !!s.operatorPasswordSet;
     cfg.value = s;
+    // Populated, or the box looks empty when an address is set — and the next
+    // save in this card would clear it without saying so.
+    opsEmail.value = s?.opsEmail || '';
     hydrateSpeech(s);
     docsDomain.value = s.docsDomain || '';
     statusDomain.value = s.statusDomain || '';

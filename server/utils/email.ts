@@ -511,3 +511,20 @@ export async function sendOperatorAddedEmail(to: string, opts: { role: string; a
   `, { preheader: 'Operator access to the Telroi console' });
   await sendVia({ to, subject, html, text });
 }
+
+// Money arrived, to whoever watches the platform. Separate from the client's
+// own receipt: they need to know their balance moved, we need to know somebody
+// paid us and how much is left against what they owe.
+export async function sendOpsPaymentEmail(to: string, d: {
+  workspace: string; amount: string; balance: string; method: string; invoiceNumber?: string | null;
+}) {
+  const subject = `${d.amount} received — ${d.workspace}`;
+  const text = `${d.workspace} paid ${d.amount} via ${d.method}.\n\nBalance now ${d.balance}.`
+    + (d.invoiceNumber ? `\nSettled invoice ${d.invoiceNumber}.` : '');
+  const html = shell(`
+    ${h1(`${d.amount} received`)}
+    ${para(`<strong>${d.workspace}</strong> paid via ${d.method}.`)}
+    ${para(`Balance now <strong>${d.balance}</strong>.${d.invoiceNumber ? ` Settled invoice ${d.invoiceNumber}.` : ''}`)}
+  `, { preheader: `${d.amount} from ${d.workspace}` });
+  await sendVia({ to, subject, html, text });
+}
