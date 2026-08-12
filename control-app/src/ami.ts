@@ -76,7 +76,16 @@ export function startAmi(): void {
 
 /** Begin recording a channel. Resolves false rather than throwing: a recording
  *  that cannot start is a file nobody gets, not a call nobody gets. */
-export function startRecording(channel: string, file: string): Promise<boolean> {
+export async function startRecording(channel: string, file: string): Promise<boolean> {
+  // Connected on first use. Nothing calls startAmi at boot, so without this the
+  // socket is never opened and every recording reports only that it is not
+  // connected — identically, on every call, which reads like a permission
+  // problem rather than an absent connection.
+  if (sock === null) connect();
+  if (authed === false) {
+    const until = Date.now() + 3000;
+    while (authed === false && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
+  }
   return new Promise((resolve) => {
     if (!sock || !authed) { log('not connected — cannot record'); return resolve(false); }
     const id = String(++actionId);
