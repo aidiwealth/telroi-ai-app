@@ -1078,6 +1078,25 @@ export const virtualAccounts = pgTable('virtual_accounts', {
 /* Compliance submissions — required before a workspace can go from sandbox to
    live. Stores the official company name and uploaded license references.
    Reviewed by an operator; live mode unlocks on approval. */
+// Documents we hand to clients — the NCC undertaking they print, sign on their
+// own letterhead and return. Uploaded by an operator rather than shipped with
+// the code: a regulator's form changes, and a deploy is the wrong thing to need
+// when it does.
+export const platformDocuments = pgTable('platform_documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description'),
+  objectKey: text('object_key').notNull(),
+  filename: text('filename').notNull(),
+  contentType: text('content_type').notNull(),
+  sizeBytes: integer('size_bytes'),
+  country: text('country'),
+  uploadedBy: text('uploaded_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const compliance = pgTable('compliance', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -1097,6 +1116,12 @@ export const compliance = pgTable('compliance', {
   // response: it carries a residential address and a photograph, and holding
   // either would be taking on a duty of care we have no reason to accept. The
   // number is kept so a resubmission doesn't pay for the same lookup twice.
+  // How far they have got. Signing a document on letterhead takes days, and
+  // losing a half-finished form to a closed tab is how somebody gives up.
+  step: integer('step').notNull().default(0),
+  nccUndertakingKey: text('ncc_undertaking_key'),
+  nccUndertakingName: text('ncc_undertaking_name'),
+  nccUndertakingType: text('ncc_undertaking_type'),
   directorName: text('director_name'),
   nin: text('nin'),
   ninVerifiedAt: timestamp('nin_verified_at', { withTimezone: true }),
