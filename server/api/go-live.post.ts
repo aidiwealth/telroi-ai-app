@@ -77,6 +77,20 @@ export default defineEventHandler(async (event) => {
     })
   ).catch((e) => console.error('slack go-live notice failed', e));
 
+  // Same again to the inbox. Also after activation, so nothing announces a
+  // go-live that then failed.
+  import('~/server/utils/platform').then(async ({ platformSettings }) => {
+    const ps: any = await platformSettings().catch(() => null);
+    if (!ps?.opsEmail) return;
+    const { sendOpsWentLiveEmail } = await import('~/server/utils/email');
+    await sendOpsWentLiveEmail(ps.opsEmail, {
+      name: tenant?.name || s.tenantId,
+      slug: (tenant as any)?.slug || '',
+      plan: p.data.plan,
+      email: s.email
+    });
+  }).catch((e) => console.error('ops go-live email failed', e));
+
   return {
     ok: true, plan: p.data.plan, live: true, provisioning,
     // So the client can be told when their plan actually starts charging.

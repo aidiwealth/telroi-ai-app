@@ -398,7 +398,7 @@
             <input v-model="opsEmail" type="email" class="ad-input" placeholder="ops@telroi.ai" />
           </label>
         </div>
-        <p class="ad-hint">A client's payment posts to Slack and to the operations address — both, or Slack alone if the address is blank. Sandbox top-ups are excluded: a client testing would otherwise fill the channel with imaginary money.</p>
+        <p class="ad-hint">Four things are announced: a workspace signing up, one going live, a client asking for SIP access from their own address, and a payment arriving. Slack gets all of them; the operations address gets the signups, go-lives and payments, or nothing if it is blank. Sandbox top-ups are excluded — a client testing would otherwise fill the channel with imaginary money.</p>
         <p class="ad-hint">Create it in Slack under your app's Incoming Webhooks, pointed at the channel you want. Test it after saving — a wrong URL fails silently, and the first you would know is a signup that never announced itself.</p>
 
         <div class="set-actions">

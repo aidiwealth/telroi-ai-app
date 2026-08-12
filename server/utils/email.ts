@@ -528,3 +528,34 @@ export async function sendOpsPaymentEmail(to: string, d: {
   `, { preheader: `${d.amount} from ${d.workspace}` });
   await sendVia({ to, subject, html, text });
 }
+
+// Somebody signed up. Slack carries this already; the email is for whoever
+// reads an inbox rather than a channel, and for having a record that isn't
+// scrolled past.
+export async function sendOpsNewWorkspaceEmail(to: string, d: {
+  name: string; slug: string; email: string; country?: string | null; sector?: string | null; phone?: string | null;
+}) {
+  const detail = [d.country, d.sector, d.phone].filter(Boolean).join(' · ');
+  const subject = `New workspace: ${d.name}`;
+  const text = `${d.name} (${d.slug}) signed up.\n\n${d.email}${detail ? `\n${detail}` : ''}`;
+  const html = shell(`
+    ${h1(`New workspace: ${d.name}`)}
+    ${para(`<strong>${d.email}</strong>${detail ? ` · ${detail}` : ''}`)}
+    ${para(`Workspace <code>${d.slug}</code>. No plan chosen yet — they have arrived, not committed.`)}
+  `, { preheader: `${d.name} signed up` });
+  await sendVia({ to, subject, html, text });
+}
+
+// They chose a plan and went live — the moment that actually earns anything.
+export async function sendOpsWentLiveEmail(to: string, d: {
+  name: string; slug: string; plan: string; email?: string | null;
+}) {
+  const subject = `${d.name} went live on ${d.plan}`;
+  const text = `${d.name} (${d.slug}) went live on the ${d.plan} plan.${d.email ? `\n\n${d.email}` : ''}`;
+  const html = shell(`
+    ${h1(`${d.name} went live`)}
+    ${para(`On the <strong>${d.plan}</strong> plan.${d.email ? ` ${d.email}` : ''}`)}
+    ${para(`Workspace <code>${d.slug}</code>.`)}
+  `, { preheader: `${d.name} went live` });
+  await sendVia({ to, subject, html, text });
+}

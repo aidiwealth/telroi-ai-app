@@ -62,6 +62,19 @@ export default defineEventHandler(async (event) => {
     })
   ).catch((e) => console.error('slack notice failed', e));
 
+  // And the inbox, for whoever reads one rather than a channel — and so there
+  // is a record that isn't scrolled past.
+  import('~/server/utils/platform').then(async ({ platformSettings }) => {
+    const ps: any = await platformSettings().catch(() => null);
+    if (!ps?.opsEmail) return;
+    const { sendOpsNewWorkspaceEmail } = await import('~/server/utils/email');
+    await sendOpsNewWorkspaceEmail(ps.opsEmail, {
+      name: tenant.name, slug: tenant.slug, email: s.email,
+      country: parsed.data.country, sector: parsed.data.sector,
+      phone: parsed.data.businessPhone || null
+    });
+  }).catch((e) => console.error('ops signup email failed', e));
+
   // Email the accepted policy copy (best-effort; never blocks signup).
   sendPolicyEmail(s.email, tenant.name).catch((e) => console.error('policy email failed', e));
   // Warm welcome + guided setup checklist (best-effort).
