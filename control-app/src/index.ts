@@ -227,34 +227,6 @@ async function main() {
     try {
       await channel.answer();
 
-      // Recording, where the number records. The notice plays first — before the
-      // AI speaks, before an agent rings — so a caller knows from the outset
-      // rather than after they have already said something.
-      //
-      // MixMonitor over AMI rather than ARI's own recording: that captures what
-      // a caller says and not what they hear, and its bridge feature exists only
-      // once somebody has answered, which would miss the notice and the whole AI
-      // conversation. Starting it this way leaves the channel in Stasis, where
-      // continuing into the dialplan would take it out and have the routing run
-      // a second time on return.
-      if (route?.recordCalls && !isEscalation) {
-        try { await channel.play({ media: 'sound:telroi-recording-notice' }); }
-        catch { /* a missed notice should not cost the call */ }
-        try {
-          const { startRecording } = await import('./ami.ts');
-          const safe = chId.replace(/[^a-zA-Z0-9._-]/g, '_');
-          // WAV because MixMonitor writes it without transcoding on a box that
-          // is also carrying the call; the extension chooses the format, and
-          // omitting it silently produces raw PCM nothing can play.
-          const started = await startRecording(channel.name, `/var/spool/asterisk/monitor/${safe}.wav`);
-          log(`  [rec ${chId}] ${started ? 'recording' : 'could not start'}`);
-        } catch (e: any) {
-          // A lost recording is a lost file. An exception here would be a lost
-          // call, which is a great deal worse.
-          log(`  [rec ${chId}] error: ${e?.message || e}`);
-        }
-      }
-
       // 0) Live Call widget. There is no DID to resolve — the web app decided the
       // tenant and the route when the visitor clicked, and carried both in the
       // extension. Ring that tenant's agents and bridge; anything the DID lookup
