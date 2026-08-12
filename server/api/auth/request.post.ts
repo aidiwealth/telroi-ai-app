@@ -22,6 +22,14 @@ export default defineEventHandler(async (event) => {
   const email = parsed.data.email.toLowerCase().trim();
   const ip = clientIp(event);
 
+  // Can this address receive anything? Zod checks the shape, which admits
+  // @gmail.con and @google.xx — and each of those costs a send that fails
+  // silently while the person waits for a code that cannot arrive. Before the
+  // captcha, because a typo is worth catching whether or not they are a bot.
+  const { checkEmailDeliverable } = await import('~/server/utils/email-check');
+  const deliverable = await checkEmailDeliverable(email);
+  if (!deliverable.ok) throw apiError('undeliverable', deliverable.reason || 'That email address will not receive our message.');
+
   // Bot gate BEFORE any paid send (email/OTP cost money). Only enforced when a
   // captcha provider is configured; otherwise this is a no-op (dev/local).
   await verifyCaptcha(parsed.data.captchaToken, ip);
