@@ -117,7 +117,7 @@
                 <input v-model="cmp.officialName" class="input" placeholder=" " id="cmp-name" />
                 <label for="cmp-name">Official company name</label>
               </div>
-              <button class="btn btn-signal btn-block" :disabled="!cmp.officialName.trim()" @click="step = regRequired ? 1 : 2">Continue</button>
+              <button class="btn btn-signal btn-block" :disabled="!cmp.officialName.trim()" @click="goStep(regRequired ? 1 : 3)">Continue</button>
             </template>
             <!-- Nigerian workspaces verify the director first. Asked before the
                  files because the endpoint refuses without it, and discovering
@@ -149,10 +149,34 @@
 
             <div v-if="step === 1" class="cmp-nav">
               <button class="btn btn-ghost btn-sm" @click="step = 0">Back</button>
-              <button class="btn btn-signal btn-sm" :disabled="regRequired && !ninVerified" @click="step = 2">Continue</button>
+              <button class="btn btn-signal btn-sm" :disabled="regRequired && !ninVerified" @click="goStep(2)">Continue</button>
             </div>
 
-            <div v-if="step === 2" class="field">
+            <!-- The NCC undertaking. Days rather than minutes: printed, signed on
+                 their own letterhead, scanned. Saved on its own so coming back
+                 does not mean starting the form again. -->
+            <template v-if="step === 2 && regRequired">
+              <p class="cmp-lede">The NCC requires an undertaking from every voice provider's customers. Download it, print it on your company letterhead, sign it, and upload the signed copy.</p>
+              <a class="btn btn-ghost btn-block cmp-dl" :href="`/api/documents/ncc_undertaking`" download>Download the undertaking →</a>
+              <div class="field">
+                <label class="cmp-file-label">Signed undertaking <span class="cmp-req">required</span></label>
+                <label class="cmp-drop" :class="{ filled: nccName }">
+                  <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="cmp-file-input" @change="onNccFile" />
+                  <span v-if="!nccName" class="cmp-drop-text">Click to upload your signed copy — PDF, PNG or JPG</span>
+                  <span v-else class="cmp-drop-file">📄 {{ nccName }}</span>
+                </label>
+                <p v-if="nccErr" class="cmp-nin-err">{{ nccErr }}</p>
+              </div>
+              <p class="cmp-note muted">This is saved as soon as you upload it — you can close this and come back to finish the rest.</p>
+              <div class="cmp-nav">
+                <button class="btn btn-ghost btn-sm" @click="step = 1">Back</button>
+                <button class="btn btn-signal btn-sm" :disabled="!nccName || nccBusy" @click="goStep(3)">
+                  {{ nccBusy ? 'Uploading…' : 'Continue' }}
+                </button>
+              </div>
+            </template>
+
+            <div v-if="step === 3" class="field">
               <label class="cmp-file-label">Business license <span class="cmp-req">required</span></label>
               <label class="cmp-drop" :class="{ filled: businessFile }">
                 <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="cmp-file-input" @change="onBusinessFile" />
@@ -160,7 +184,7 @@
                 <span v-else class="cmp-drop-file">📄 {{ businessFile.name }}</span>
               </label>
             </div>
-            <div v-if="step === 2" class="field">
+            <div v-if="step === 3" class="field">
               <label class="cmp-file-label">Regulatory license <span v-if="regRequired" class="cmp-req">required</span><span v-else class="cmp-opt">optional</span></label>
               <label class="cmp-drop" :class="{ filled: regulatoryFile }">
                 <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" class="cmp-file-input" @change="onRegulatoryFile" />
@@ -168,9 +192,9 @@
                 <span v-else class="cmp-drop-file">📄 {{ regulatoryFile.name }}</span>
               </label>
             </div>
-            <template v-if="step === 2">
+            <template v-if="step === 3">
               <div class="cmp-nav">
-                <button class="btn btn-ghost btn-sm" @click="step = regRequired ? 1 : 0">Back</button>
+                <button class="btn btn-ghost btn-sm" @click="step = regRequired ? 2 : 0">Back</button>
               </div>
               <button class="btn btn-signal btn-block" :disabled="submitting || !cmp.officialName || !businessFile || (regRequired && !regulatoryFile) || (regRequired && !ninVerified)" @click="submitCompliance">
                 {{ submitting ? 'Uploading…' : 'Submit for review' }}
@@ -279,10 +303,44 @@ const cmp = ref({ officialName: '' });
 const step = ref(0);
 // A workspace outside Nigeria has no NIN step, so the middle one is skipped
 // entirely rather than shown empty.
-const stepLabels = computed(() => regRequired.value ? ['Company', 'Director', 'Documents'] : ['Company', 'Documents']);
+const stepLabels = computed(() => regRequired.value
+  ? ['Company', 'Director', 'Undertaking', 'Documents']
+  : ['Company', 'Documents']);
+
+const nccName = ref('');
+const nccBusy = ref(false);
+const nccErr = ref('');
+
+/** Move on, and remember it. Everything except the licence files survives a
+ *  closed tab — a browser will not let us repopulate a file input, but a typed
+ *  company name and a verified director should not have to be done twice. */
+async function goStep(next: number) {
+  step.value = next;
+  try {
+    await api.post('/api/compliance/progress', {
+      officialName: cmp.value.officialName.trim() || undefined,
+      step: next
+    });
+  } catch { /* a failed save should not block them moving on */ }
+}
+
+async function onNccFile(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0];
+  if (!f) return;
+  nccBusy.value = true;
+  nccErr.value = '';
+  try {
+    const fd = new FormData();
+    fd.append('undertaking', f);
+    const r = await api.post<any>('/api/compliance/ncc', fd);
+    nccName.value = r.filename || f.name;
+  } catch (err: any) {
+    nccErr.value = err?.message || 'Could not upload that file';
+  } finally { nccBusy.value = false; }
+}
 // Documents are step 2 either way, so outside Nigeria that has to light the
 // second pill rather than a third that isn't there.
-const shownStep = computed(() => (!regRequired.value && step.value === 2) ? 1 : step.value);
+const shownStep = computed(() => (!regRequired.value && step.value === 3) ? 1 : step.value);
 
 const nin = ref({ directorName: '', number: '' });
 const ninChecking = ref(false);
@@ -333,6 +391,11 @@ async function onEnvClick() {
       ninVerified.value = true;
       ninName.value = r.compliance.ninName || r.compliance.directorName || '';
     }
+    // Pick up where they left off. Somebody who spent a week getting a document
+    // signed should not return to an empty first page.
+    if (r.compliance?.officialName) cmp.value.officialName = r.compliance.officialName;
+    if (r.compliance?.nccUndertakingName) nccName.value = r.compliance.nccUndertakingName;
+    if (r.compliance?.step) step.value = r.compliance.step;
     // Where they stand on the sandbox allowance — makes the reason to go live
     // concrete rather than abstract.
     try { sbx.value = (await $fetch<any>('/api/go-live'))?.sandbox || null; } catch { sbx.value = null; }
@@ -398,6 +461,7 @@ const vClickOutside = {
 .cmp-nin { border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
 .cmp-nin-done { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; }
 .cmp-nin-err { font-size: 12.5px; color: #a33; margin: 10px 0 0; line-height: 1.5; }
+.cmp-dl { margin-bottom: 16px; }
 .topbar {
   height: var(--topbar-h); border-bottom: 1px solid var(--rule);
   background: var(--paper);

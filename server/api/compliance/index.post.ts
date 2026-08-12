@@ -27,10 +27,19 @@ export default defineEventHandler(async (event) => {
   // decides the same way. A second convention here meant the gate never fired —
   // the form asked and the endpoint didn't care, which is the wrong way round.
   if ((tnt?.country || '').toLowerCase() === 'nigeria') {
-    const [comp] = await db.select({ ninVerifiedAt: schema.compliance.ninVerifiedAt })
+    const [comp] = await db.select({
+      ninVerifiedAt: schema.compliance.ninVerifiedAt,
+      // Enumerated by hand, so a check added above without a column added here
+      // would refuse everybody rather than nobody.
+      nccUndertakingKey: schema.compliance.nccUndertakingKey
+    })
       .from(schema.compliance).where(eq(schema.compliance.tenantId, s.tenantId)).limit(1);
     if (!comp?.ninVerifiedAt) {
       throw apiError('nin_required', "Verify the director's NIN before submitting documents.", 428);
+    }
+    // The NCC undertaking is not optional, and a form gate is a suggestion.
+    if (!comp?.nccUndertakingKey) {
+      throw apiError('ncc_required', 'Upload your signed NCC undertaking before submitting.', 428);
     }
   }
 
