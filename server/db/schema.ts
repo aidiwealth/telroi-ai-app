@@ -1049,6 +1049,15 @@ export const pricing = pgTable('pricing', {
   voiceMinuteUsdMicro: integer('voice_minute_usd_micro').notNull().default(10200),  // $0.0102
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor').notNull().default(200), // $2.00
   didMonthlyUsdMinor: integer('did_monthly_usd_minor').notNull().default(170),          // $1.70
+  // Transcription is the only part of recording that costs real money — storage
+  // at Opus rates is pennies a month, transcription is around $0.006/min from
+  // the vendor. Micro like airtime, and charged only when a client asks for one:
+  // most recordings are never listened to, let alone read.
+  transcriptionMinuteUsdMicro: integer('transcription_minute_usd_micro').notNull().default(20000), // $0.02
+  // How long a recording is kept, by plan. A term of the plan, so it lives with
+  // the plan's other terms rather than in a constant needing a deploy.
+  recordingDaysStartup: integer('recording_days_startup').notNull().default(7),
+  recordingDaysGrowth: integer('recording_days_growth').notNull().default(30),
   planStartupUsdMinor: integer('plan_startup_usd_minor').notNull().default(1000),       // $10
   planGrowthUsdMinor: integer('plan_growth_usd_minor').notNull().default(1500),         // $15
   ngnPerUsd: integer('ngn_per_usd').notNull().default(1600),
@@ -1255,6 +1264,7 @@ export const pricingOverrides = pgTable('pricing_overrides', {
   voiceOtpUsdMicro: integer('voice_otp_usd_micro'),               // per OTP call, not per minute
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor'),
   didMonthlyUsdMinor: integer('did_monthly_usd_minor'),
+  transcriptionMinuteUsdMicro: integer('transcription_minute_usd_micro'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 

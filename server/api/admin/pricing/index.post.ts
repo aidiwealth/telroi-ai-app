@@ -11,6 +11,12 @@ const Body = z.object({
   planStartupUsdMinor: z.number().int().positive().optional(),
   planGrowthUsdMinor: z.number().int().positive().optional(),
   ngnPerUsd: z.number().int().positive().optional(),
+  // Micro like airtime: a cent cannot express two thousandths of one.
+  transcriptionMinuteUsdMicro: z.number().int().min(0).optional(),
+  // Bounded because a retention of zero deletes on arrival and a retention of
+  // years is a storage bill nobody chose.
+  recordingDaysStartup: z.number().int().min(1).max(365).optional(),
+  recordingDaysGrowth: z.number().int().min(1).max(365).optional(),
   aiSttPerSecNano: z.number().int().nonnegative().optional(),
   aiLlmInPerTokNano: z.number().int().nonnegative().optional(),
   aiLlmOutPerTokNano: z.number().int().nonnegative().optional(),

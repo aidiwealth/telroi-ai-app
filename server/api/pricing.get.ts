@@ -13,6 +13,11 @@ export default defineEventHandler(async (event) => {
     channelMonthlyUsdMinor: p.channelMonthlyUsdMinor,
     didMonthlyUsdMinor: p.didMonthlyUsdMinor,
     voiceMinuteUsdMinor: p.voiceMinuteUsdMinor,
+    // What a transcript costs, and how long a recording survives — both shown
+    // where a client is deciding, rather than discovered afterwards.
+    transcriptionMinuteUsdMicro: p.transcriptionMinuteUsdMicro,
+    recordingDaysStartup: p.recordingDaysStartup,
+    recordingDaysGrowth: p.recordingDaysGrowth,
     ngnPerUsd: p.ngnPerUsd
   };
 });

@@ -22,6 +22,18 @@
         <div class="ad-field"><label>Growth plan ($/user/mo)</label>
           <input v-model.number="growth" type="number" step="0.01" class="ad-input mono" />
         </div>
+        <div class="ad-field"><label>Transcription — per minute</label>
+          <input v-model.number="transcription" type="number" min="0" step="0.001" class="ad-input mono" />
+          <p class="ad-hint">Charged only when a client asks for a transcript, not on every recording — most are never listened to, let alone read. The vendor costs us about $0.006 a minute, so this is where the margin sits. Storage itself is pennies and is not charged.</p>
+        </div>
+        <div class="ad-field"><label>Recording kept — Startup plan</label>
+          <input v-model.number="recDaysStartup" type="number" min="1" max="365" step="1" class="ad-input mono" />
+          <p class="ad-hint">Days before a recording is deleted. Applies to recordings stored from now on; anything already kept keeps the term it was given, so shortening this does not delete what somebody already has.</p>
+        </div>
+        <div class="ad-field"><label>Recording kept — Growth plan</label>
+          <input v-model.number="recDaysGrowth" type="number" min="1" max="365" step="1" class="ad-input mono" />
+          <p class="ad-hint">The same, for Growth. Transcripts are kept as long as their recording.</p>
+        </div>
         <div class="ad-field"><label>Exchange rate — NGN per USD</label>
           <input v-model.number="ngn" type="number" min="1" step="1" class="ad-input mono" />
           <p class="ad-hint">$1 USD = ₦{{ ngn || 0 }}. This is the platform-wide rate — it drives every USD→Naira conversion for Nigerian wallets, plan fees, number/channel billing and per-minute call charges. Applies immediately on save.</p>
@@ -142,6 +154,10 @@ async function runBilling() {
   finally { running.value = false; }
 }
 
+const transcription = ref(0.02);
+const recDaysStartup = ref(7);
+const recDaysGrowth = ref(30);
+
 async function load() {
   pending.value = true;
   try {
@@ -152,6 +168,11 @@ async function load() {
       startup.value = pricing.planStartupUsdMinor / 100;
       growth.value = pricing.planGrowthUsdMinor / 100;
       ngn.value = pricing.ngnPerUsd;
+      // Micro to dollars for reading, back again on save — the same handling as
+      // airtime, since a cent cannot express two thousandths of one.
+      if (pricing.transcriptionMinuteUsdMicro != null) transcription.value = pricing.transcriptionMinuteUsdMicro / 1e6;
+      if (pricing.recordingDaysStartup != null) recDaysStartup.value = pricing.recordingDaysStartup;
+      if (pricing.recordingDaysGrowth != null) recDaysGrowth.value = pricing.recordingDaysGrowth;
       if (pricing.aiSttPerSecNano != null) aiSttPerMin.value = Math.round((pricing.aiSttPerSecNano / 1e9) * 60 * 1e6) / 1e6;
       if (pricing.aiLlmInPerTokNano != null) aiLlmInPerM.value = Math.round((pricing.aiLlmInPerTokNano / 1000) * 100) / 100;
       if (pricing.aiLlmOutPerTokNano != null) aiLlmOutPerM.value = Math.round((pricing.aiLlmOutPerTokNano / 1000) * 100) / 100;
@@ -174,7 +195,10 @@ async function save() {
       channelMonthlyUsdMinor: Math.round(channel.value * 100),
       planStartupUsdMinor: Math.round(startup.value * 100),
       planGrowthUsdMinor: Math.round(growth.value * 100),
-      ngnPerUsd: Math.round(ngn.value)
+      ngnPerUsd: Math.round(ngn.value),
+      transcriptionMinuteUsdMicro: Math.round(transcription.value * 1e6),
+      recordingDaysStartup: Math.round(recDaysStartup.value),
+      recordingDaysGrowth: Math.round(recDaysGrowth.value)
     });
     saved.value = true;
   } catch (e: any) { alert(e?.message || 'Save failed'); }
