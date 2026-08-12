@@ -63,7 +63,7 @@ export async function uploadRecording(opts: {
       // file behind deliberately: disk is recoverable, a lost recording is not.
       await fs.unlink(path).catch(() => undefined);
     } else {
-      log(`${opts.callid}: upload refused — keeping the file`);
+      log(`${opts.callid}: upload refused (HTTP ${res.status}) ${JSON.stringify(j || {}).slice(0, 200)} — keeping the file`);
     }
   } catch (e: any) {
     log(`${opts.callid}: upload failed (${e?.message || e}) — keeping the file`);
