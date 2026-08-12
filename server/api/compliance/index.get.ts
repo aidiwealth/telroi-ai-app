@@ -17,7 +17,12 @@ export default defineEventHandler(async (event) => {
       // Whether the director has been verified, and who. Not the NIN itself:
       // the form only needs to know it is done, and sending an identity number
       // back to a browser that has no use for it is a habit worth not having.
-      ninVerifiedAt: row.ninVerifiedAt, ninName: row.ninName, directorName: row.directorName
+      ninVerifiedAt: row.ninVerifiedAt, ninName: row.ninName, directorName: row.directorName,
+      // Where they got to, so reopening the modal continues rather than starts
+      // again. The licence files cannot be restored — a browser will not let us
+      // repopulate a file input — but everything else can.
+      step: row.step || 0,
+      nccUndertakingName: row.nccUndertakingName
     },
     policy
   };
