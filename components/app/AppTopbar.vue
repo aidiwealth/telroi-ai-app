@@ -117,7 +117,18 @@
                 <input v-model="cmp.officialName" class="input" placeholder=" " id="cmp-name" />
                 <label for="cmp-name">Official company name</label>
               </div>
-              <button class="btn btn-signal btn-block" :disabled="!cmp.officialName.trim()" @click="goStep(regRequired ? 1 : 3)">Continue</button>
+              <!-- What the line is for and who it reaches. The NCC cares, and an
+                   operator reviewing this otherwise has a name and two licences
+                   with no idea what the number would be used for. -->
+              <div class="field">
+                <label class="cmp-file-label">What will you use the line for?</label>
+                <textarea v-model="cmp.useCase" class="input cmp-ta" rows="2" placeholder="e.g. Loan repayment reminders and customer support for our lending app"></textarea>
+              </div>
+              <div class="field">
+                <label class="cmp-file-label">Who will you be calling?</label>
+                <textarea v-model="cmp.callAudience" class="input cmp-ta" rows="2" placeholder="e.g. Our own registered customers who opted in during signup"></textarea>
+              </div>
+              <button class="btn btn-signal btn-block" :disabled="!cmp.officialName.trim() || !cmp.useCase.trim() || !cmp.callAudience.trim()" @click="goStep(regRequired ? 1 : 3)">Continue</button>
             </template>
             <!-- Nigerian workspaces verify the director first. Asked before the
                  files because the endpoint refuses without it, and discovering
@@ -298,7 +309,7 @@ const crumbs = computed(() => {
 const showCompliance = ref(false);
 const complianceStatus = ref<string | null>(null);
 const submitting = ref(false);
-const cmp = ref({ officialName: '' });
+const cmp = ref({ officialName: '', useCase: '', callAudience: '' });
 
 const step = ref(0);
 // A workspace outside Nigeria has no NIN step, so the middle one is skipped
@@ -319,6 +330,8 @@ async function goStep(next: number) {
   try {
     await api.post('/api/compliance/progress', {
       officialName: cmp.value.officialName.trim() || undefined,
+      useCase: cmp.value.useCase.trim() || undefined,
+      callAudience: cmp.value.callAudience.trim() || undefined,
       step: next
     });
   } catch { /* a failed save should not block them moving on */ }
@@ -394,6 +407,8 @@ async function onEnvClick() {
     // Pick up where they left off. Somebody who spent a week getting a document
     // signed should not return to an empty first page.
     if (r.compliance?.officialName) cmp.value.officialName = r.compliance.officialName;
+    if (r.compliance?.useCase) cmp.value.useCase = r.compliance.useCase;
+    if (r.compliance?.callAudience) cmp.value.callAudience = r.compliance.callAudience;
     if (r.compliance?.nccUndertakingName) nccName.value = r.compliance.nccUndertakingName;
     if (r.compliance?.step) step.value = r.compliance.step;
     // Where they stand on the sandbox allowance — makes the reason to go live
@@ -462,6 +477,7 @@ const vClickOutside = {
 .cmp-nin-done { display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; }
 .cmp-nin-err { font-size: 12.5px; color: #a33; margin: 10px 0 0; line-height: 1.5; }
 .cmp-dl { margin-bottom: 16px; }
+.cmp-ta { resize: vertical; min-height: 58px; font-family: inherit; line-height: 1.5; }
 .topbar {
   height: var(--topbar-h); border-bottom: 1px solid var(--rule);
   background: var(--paper);

@@ -11,6 +11,8 @@ import { useDb, schema } from '~/server/db';
 
 const Body = z.object({
   officialName: z.string().max(200).optional(),
+  useCase: z.string().max(1000).optional(),
+  callAudience: z.string().max(1000).optional(),
   step: z.number().int().min(0).max(6).optional()
 });
 
@@ -28,6 +30,8 @@ export default defineEventHandler(async (event) => {
 
   const patch: any = {};
   if (p.data.officialName !== undefined) patch.officialName = p.data.officialName.trim();
+  if (p.data.useCase !== undefined) patch.useCase = p.data.useCase.trim();
+  if (p.data.callAudience !== undefined) patch.callAudience = p.data.callAudience.trim();
   // Only forward. Reopening the modal and clicking back through it should not
   // tell us they have un-done work they have already finished.
   if (p.data.step !== undefined && p.data.step > (existing?.step || 0)) patch.step = p.data.step;

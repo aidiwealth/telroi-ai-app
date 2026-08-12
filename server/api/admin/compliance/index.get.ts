@@ -18,6 +18,8 @@ export default defineEventHandler(async (event) => {
     // as the result: five failures is somebody struggling, and worth a call
     // before they give up on going live.
     directorName: schema.compliance.directorName,
+    useCase: schema.compliance.useCase,
+    callAudience: schema.compliance.callAudience,
     ninVerifiedAt: schema.compliance.ninVerifiedAt,
     ninName: schema.compliance.ninName,
     ninReference: schema.compliance.ninReference,

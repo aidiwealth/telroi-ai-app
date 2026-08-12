@@ -1122,6 +1122,11 @@ export const compliance = pgTable('compliance', {
   nccUndertakingKey: text('ncc_undertaking_key'),
   nccUndertakingName: text('ncc_undertaking_name'),
   nccUndertakingType: text('ncc_undertaking_type'),
+  // Why they want a line and who they will be calling. The NCC cares what a
+  // number is for, and an operator reviewing a submission otherwise has a
+  // company name and two licences with no idea of the use.
+  useCase: text('use_case'),
+  callAudience: text('call_audience'),
   directorName: text('director_name'),
   nin: text('nin'),
   ninVerifiedAt: timestamp('nin_verified_at', { withTimezone: true }),

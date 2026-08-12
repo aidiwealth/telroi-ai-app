@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
       // again. The licence files cannot be restored — a browser will not let us
       // repopulate a file input — but everything else can.
       step: row.step || 0,
+      useCase: row.useCase, callAudience: row.callAudience,
       nccUndertakingName: row.nccUndertakingName
     },
     policy

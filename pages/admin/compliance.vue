@@ -41,7 +41,6 @@
         <label class="fm-field fm-desc"><span>What they must do with it</span>
           <input v-model="formUp.description" class="ad-ctl" placeholder="Print, sign on your company letterhead and upload the signed copy." />
         </label>
-        <p class="ad-none">Uploading against a reference that already exists replaces the file — a client should always get the current form, and keeping the old one only invites somebody signing the wrong page.</p>
         <button class="btn btn-signal btn-sm" :disabled="formBusy || !formFile || !formUp.slug || !formUp.title" @click="uploadForm">
           {{ formBusy ? 'Uploading…' : 'Upload' }}
         </button>
@@ -90,8 +89,11 @@
       </div>
     </template>
 
-    <EmptyState v-else-if="!subs.length" icon="quality" title="No submissions yet" description="When clients submit verification documents, they'll appear here for review." />
-    <div v-else class="ad-list">
+    <!-- The tab has to be named. Without it this is simply the else of a chain
+         beginning at the loading line, so the Forms tab fell through to the
+         submissions list and showed both at once. -->
+    <EmptyState v-else-if="tab === 'docs' && !subs.length" icon="quality" title="No submissions yet" description="When clients submit verification documents, they'll appear here for review." />
+    <div v-else-if="tab === 'docs'" class="ad-list">
       <div v-for="s in subs" :key="s.id" class="ad-sub-card" :class="s.status">
         <div class="ad-sub-top">
           <div>
@@ -100,6 +102,14 @@
           </div>
           <span class="ad-status" :class="s.status">{{ s.status }}</span>
         </div>
+        <!-- What they say the line is for. The licences prove who they are;
+             this is the part that says what they intend to do, which is what an
+             operator is actually judging. -->
+        <div v-if="s.useCase || s.callAudience" class="ad-sub-use">
+          <div v-if="s.useCase"><span class="ad-doc-label">Use</span>{{ s.useCase }}</div>
+          <div v-if="s.callAudience"><span class="ad-doc-label">Calling</span>{{ s.callAudience }}</div>
+        </div>
+
         <div class="ad-sub-docs">
           <div><span class="ad-doc-label">Business license</span>
             <a v-if="s.hasBusinessDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=business`" target="_blank" rel="noopener" class="ad-doc-link">{{ s.businessLicenseName || 'View document' }} →</a>
@@ -199,6 +209,8 @@ onMounted(() => { load(); loadForms(); });
 </script>
 
 <style scoped>
+.ad-sub-use { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 13px; line-height: 1.55; }
+.ad-sub-use .ad-doc-label { display: block; }
 .fm-upload { margin-bottom: 18px; }
 .fm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 16px; }
 /* Label above input. ad-ovr, borrowed from elsewhere, is defined nowhere at
