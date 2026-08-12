@@ -112,6 +112,11 @@ function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[control-app]', ...args);
 }
 
+// Calls being recorded, so the end handler knows there is a file to collect.
+// In memory rather than the database: a restart loses the mapping, and a file
+// left on disk is a smaller problem than a query on every hangup.
+const recordingCalls = new Map<string, { tenantId: string; telnum: string | null; phone: string | null; startedAt: number }>();
+
 async function main() {
   installLogCapture();  // capture all console output into the ring buffer for the admin live-log viewer
   // -- Start the routing cache first (blocks on initial load) --
@@ -301,6 +306,12 @@ async function main() {
           // nothing can play.
           const ok = await startRecording(channel.name, `/var/spool/asterisk/monitor/${safe}.wav`);
           log(`  [rec ${chId}] ${ok ? 'recording' : 'could not start'}`);
+          // Remembered so the end handler knows there is a file to collect —
+          // it sees only a channel id, and cannot tell a recorded call from any
+          // other.
+          if (ok) recordingCalls.set(chId, {
+            tenantId: route.tenantId, telnum: dialedDid, phone: callerNum || null, startedAt: Date.now()
+          });
         } catch (e: any) {
           // A lost recording is a lost file; an exception here is a lost call.
           log(`  [rec ${chId}] error: ${e?.message || e}`);
@@ -793,7 +804,24 @@ async function main() {
     }
   });
 
-  client.on('StasisEnd', (_e, channel) => log(`   end ${channel.id}`));
+  client.on('StasisEnd', (_e, channel) => {
+    log(`   end ${channel.id}`);
+    // Collect the recording, if this call had one. Deliberately not awaited:
+    // the file takes a moment to close and several seconds to send, and nothing
+    // about ending a call should wait on either.
+    const rec = recordingCalls.get(channel.id);
+    if (rec) {
+      recordingCalls.delete(channel.id);
+      import('./recording-upload.ts').then(({ uploadRecording }) => uploadRecording({
+        callid: channel.id,
+        tenantId: rec.tenantId,
+        telnum: rec.telnum,
+        phone: rec.phone,
+        direction: 'in',
+        durationSeconds: Math.round((Date.now() - rec.startedAt) / 1000)
+      })).catch((e) => log(`   [rec ${channel.id}] upload error: ${e?.message || e}`));
+    }
+  });
 
   client.start(config.ari.appName);
   log(`Listening on Stasis app "${config.ari.appName}". Dial 700 to test.`);
