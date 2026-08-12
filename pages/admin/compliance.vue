@@ -6,9 +6,60 @@
     <div class="log-tabs">
       <button class="log-tab" :class="{ active: tab === 'docs' }" @click="tab = 'docs'">Documents</button>
       <button class="log-tab" :class="{ active: tab === 'nin' }" @click="tab = 'nin'">Identity (NIN)</button>
+      <button class="log-tab" :class="{ active: tab === 'forms' }" @click="tab = 'forms'">Forms we issue</button>
     </div>
 
-    <div v-if="pending" class="ad-loading">Loading…</div>
+    <!-- Blank forms we hand out, as distinct from the documents clients return.
+         Uploaded here rather than shipped with the code: a regulator's form
+         changes and a deploy is the wrong thing to need when it does. -->
+    <template v-if="tab === 'forms'">
+      <div class="set-card card-pad fm-upload">
+        <h3 class="ad-panel-h">Upload a form</h3>
+        <div class="fm-grid">
+          <label class="ad-ovr"><span>File</span>
+            <input type="file" class="ad-ctl" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" @change="onFormFile" />
+          </label>
+          <label class="ad-ovr"><span>Reference</span>
+            <input v-model="formUp.slug" class="ad-ctl mono" placeholder="ncc_undertaking" />
+          </label>
+          <label class="ad-ovr"><span>Title clients see</span>
+            <input v-model="formUp.title" class="ad-ctl" placeholder="NCC undertaking" />
+          </label>
+          <label class="ad-ovr"><span>Shown to</span>
+            <select v-model="formUp.country" class="ad-ctl">
+              <option value="">Everyone</option>
+              <option value="nigeria">Nigerian clients only</option>
+            </select>
+          </label>
+        </div>
+        <label class="ad-ovr fm-desc"><span>What they must do with it</span>
+          <input v-model="formUp.description" class="ad-ctl" placeholder="Print, sign on your company letterhead and upload the signed copy." />
+        </label>
+        <p class="ad-none">Uploading against a reference that already exists replaces the file — a client should always get the current form, and keeping the old one only invites somebody signing the wrong page.</p>
+        <button class="btn btn-signal btn-sm" :disabled="formBusy || !formFile || !formUp.slug || !formUp.title" @click="uploadForm">
+          {{ formBusy ? 'Uploading…' : 'Upload' }}
+        </button>
+      </div>
+
+      <EmptyState v-if="!forms.length" icon="generic" title="No forms yet" description="Upload the NCC undertaking so Nigerian clients can download and sign it." />
+      <div v-else class="set-card ad-table-wrap">
+        <table class="ad-data-table">
+          <thead><tr><th>Title</th><th>Reference</th><th>File</th><th>Shown to</th><th>Updated</th><th></th></tr></thead>
+          <tbody>
+            <tr v-for="d in forms" :key="d.id">
+              <td>{{ d.title }}<div v-if="d.description" class="ad-dim">{{ d.description }}</div></td>
+              <td class="mono">{{ d.slug }}</td>
+              <td class="ad-dim">{{ d.filename }}<span v-if="d.sizeBytes" class="ad-dim"> · {{ Math.round(d.sizeBytes / 1024) }}KB</span></td>
+              <td class="ad-dim">{{ d.country === 'nigeria' ? 'Nigeria' : 'Everyone' }}</td>
+              <td class="ad-dim mono">{{ fmt(d.updatedAt) }}</td>
+              <td class="ad-r"><button class="btn btn-ghost btn-xs" @click="removeForm(d)">Remove</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <div v-if="pending && tab !== 'forms'" class="ad-loading">Loading…</div>
 
     <!-- Identity. Who has verified, who hasn't, and who is struggling — the
          attempt count is the useful column, since somebody on their fourth try
@@ -73,6 +124,43 @@ const pending = ref(true);
 const subs = ref<any[]>([]);
 const tab = ref('docs');
 
+const forms = ref<any[]>([]);
+const formFile = ref<File | null>(null);
+const formBusy = ref(false);
+const formUp = ref({ slug: '', title: '', description: '', country: '' });
+
+function onFormFile(e: Event) { formFile.value = (e.target as HTMLInputElement).files?.[0] || null; }
+
+async function loadForms() {
+  try { forms.value = (await $fetch<any>('/api/admin/documents')).documents || []; }
+  catch { /* the submissions above still matter */ }
+}
+
+async function uploadForm() {
+  formBusy.value = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', formFile.value as File);
+    fd.append('slug', formUp.value.slug.trim());
+    fd.append('title', formUp.value.title.trim());
+    fd.append('description', formUp.value.description.trim());
+    fd.append('country', formUp.value.country);
+    await $fetch('/api/admin/documents', { method: 'POST', body: fd });
+    formUp.value = { slug: '', title: '', description: '', country: '' };
+    formFile.value = null;
+    await loadForms();
+  } catch (e: any) { alert(e?.data?.error?.message || 'Upload failed'); }
+  finally { formBusy.value = false; }
+}
+
+async function removeForm(d: any) {
+  // A client part-way through signing this would find the download gone, so
+  // worth a moment's thought rather than a single click.
+  if (!confirm(`Stop offering "${d.title}"? Anyone part-way through signing it will lose the download.`)) return;
+  try { await $fetch(`/api/admin/documents/${d.slug}`, { method: 'DELETE' }); await loadForms(); }
+  catch (e: any) { alert(e?.data?.error?.message || 'Could not remove'); }
+}
+
 // Nigerian workspaces only: NIMC is a Nigerian register, so a Ghanaian client
 // listed as "not verified" would be a criticism of something we never asked
 // them for.
@@ -96,10 +184,13 @@ async function decide(id: string, decision: string) {
   } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }
   finally { busy.value = null; }
 }
-onMounted(load);
+onMounted(() => { load(); loadForms(); });
 </script>
 
 <style scoped>
+.fm-upload { margin-bottom: 18px; }
+.fm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 12px; }
+.fm-desc { display: block; margin-bottom: 12px; }
 .ad-title { font-family: var(--font-display); font-size: 30px; color: var(--ink); letter-spacing: -0.02em; }
 .ad-sub { color: var(--ink-mute); font-size: 14px; margin: 4px 0 28px; }
 .ad-loading, .ad-empty { color: var(--ink-mute); padding: 40px 0; }
