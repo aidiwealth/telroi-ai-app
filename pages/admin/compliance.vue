@@ -16,23 +16,23 @@
       <div class="set-card card-pad fm-upload">
         <h3 class="ad-panel-h">Upload a form</h3>
         <div class="fm-grid">
-          <label class="ad-ovr"><span>File</span>
+          <label class="fm-field"><span>File</span>
             <input type="file" class="ad-ctl" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" @change="onFormFile" />
           </label>
-          <label class="ad-ovr"><span>Reference</span>
+          <label class="fm-field"><span>Reference</span>
             <input v-model="formUp.slug" class="ad-ctl mono" placeholder="ncc_undertaking" />
           </label>
-          <label class="ad-ovr"><span>Title clients see</span>
+          <label class="fm-field"><span>Title clients see</span>
             <input v-model="formUp.title" class="ad-ctl" placeholder="NCC undertaking" />
           </label>
-          <label class="ad-ovr"><span>Shown to</span>
+          <label class="fm-field"><span>Shown to</span>
             <select v-model="formUp.country" class="ad-ctl">
               <option value="">Everyone</option>
               <option value="nigeria">Nigerian clients only</option>
             </select>
           </label>
         </div>
-        <label class="ad-ovr fm-desc"><span>What they must do with it</span>
+        <label class="fm-field fm-desc"><span>What they must do with it</span>
           <input v-model="formUp.description" class="ad-ctl" placeholder="Print, sign on your company letterhead and upload the signed copy." />
         </label>
         <p class="ad-none">Uploading against a reference that already exists replaces the file — a client should always get the current form, and keeping the old one only invites somebody signing the wrong page.</p>
@@ -189,8 +189,15 @@ onMounted(() => { load(); loadForms(); });
 
 <style scoped>
 .fm-upload { margin-bottom: 18px; }
-.fm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 12px; }
-.fm-desc { display: block; margin-bottom: 12px; }
+.fm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 16px; }
+/* Label above input. ad-ovr, borrowed from elsewhere, is defined nowhere at
+   all — so the labels and controls ran together with no styling whatever. */
+.fm-field { display: flex; flex-direction: column; gap: 6px; }
+.fm-field > span { font-size: 12px; color: var(--ink-soft); font-weight: 500; }
+.fm-field .ad-ctl { width: 100%; padding: 9px 12px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 14px; background: var(--paper); color: var(--ink); }
+.fm-field input[type="file"].ad-ctl { padding: 7px 10px; font-size: 13px; }
+.fm-desc { margin-bottom: 16px; }
+.fm-upload .ad-none { margin: 0 0 14px; max-width: 68ch; line-height: 1.6; }
 .ad-title { font-family: var(--font-display); font-size: 30px; color: var(--ink); letter-spacing: -0.02em; }
 .ad-sub { color: var(--ink-mute); font-size: 14px; margin: 4px 0 28px; }
 .ad-loading, .ad-empty { color: var(--ink-mute); padding: 40px 0; }
