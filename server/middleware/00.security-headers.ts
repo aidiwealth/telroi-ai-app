@@ -27,14 +27,20 @@ export default defineEventHandler((event) => {
     const csp = [
       "default-src 'self'",
       // Inline styles are used by the app; allow them. WebRTC SDKs load from these CDNs.
-      "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+      // Captcha domains for both providers, not only the one configured today:
+      // the policy blocked the script silently, so the widget had never rendered
+      // under either, and switching provider should not resurrect the same hour
+      // of confusion.
+      "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https:",
       // WebRTC + API + websocket signaling for the dialer + booking/intercom widgets.
       "connect-src 'self' https: wss:",
       "media-src 'self' blob:",
-      "frame-src 'self' https://cal.com https://app.cal.com",
+      // The challenge itself renders in an iframe, so script-src alone would
+      // have produced a second silent failure identical to the first.
+      "frame-src 'self' https://cal.com https://app.cal.com https://challenges.cloudflare.com https://www.google.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",
