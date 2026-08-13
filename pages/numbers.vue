@@ -120,6 +120,18 @@
             </select>
           </div>
 
+          <!-- Recording. Off by default, because a client should choose which
+               lines are recorded rather than discover all of them were — and
+               callers are told at the start of every one, which is the law and
+               also simply decent. -->
+          <label class="num-rec">
+            <input type="checkbox" v-model="editing.recordCalls" />
+            <span>
+              <strong>Record calls on this number</strong>
+              <span class="num-rec-note">Callers hear a short notice before the call connects. Recordings are kept for the period your plan allows, and switching this off later does not delete what has already been recorded.</span>
+            </span>
+          </label>
+
           <div v-if="editing.routeType === 'person'" class="field-float">
             <input v-model="editing.target" class="input" placeholder=" " id="num-target" />
             <label for="num-target">Person (name or extension)</label>
@@ -360,6 +372,7 @@ function edit(n: TelroiNumber) {
     id: sub.id,
     telnum: sub.telnum,
     routeType: sub.routeType || 'person',
+    recordCalls: !!sub.recordCalls,
     target: sub.routeTarget || '',
     departmentId: sub.departmentId || '',
     agentId: sub.routeAgentId || '',
@@ -378,7 +391,8 @@ async function save() {
       departmentId: editing.value.departmentId || undefined,
       agentId: editing.value.agentId || undefined,
       escalateTo: editing.value.escalateTo || undefined,
-      escalateAfter: editing.value.escalateAfter || 0
+      escalateAfter: editing.value.escalateAfter || 0,
+      recordCalls: !!editing.value.recordCalls
     });
     toast.ok('Routing saved');
     editing.value = null;
@@ -414,6 +428,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.num-rec { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; margin: 4px 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13.5px; cursor: pointer; }
+.num-rec-note { display: block; font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin-top: 4px; }
 .num-table { overflow: hidden; }
 .num-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(10,10,11,0.32); display: flex; align-items: center; justify-content: center; padding: 24px; }

@@ -1,4 +1,4 @@
-// POST /api/numbers/[id]/routing  { routeType, target?, departmentId?, agentId?, escalateTo?, escalateAfter? }
+// POST /api/numbers/[id]/routing  { routeType, target?, departmentId?, agentId?, escalateTo?, escalateAfter?, recordCalls? }
 // Unified, carrier-agnostic inbound routing for ANY number (Digidite, Sotel,
 // Twilio, Telnyx). One model the customer sees regardless of vendor:
 //   - person      -> ring a person/extension
@@ -18,7 +18,8 @@ const Body = z.object({
   departmentId: z.string().uuid().optional(),
   agentId: z.string().uuid().optional(),  // ai
   escalateTo: z.string().optional(),
-  escalateAfter: z.number().int().min(0).max(600).optional()
+  escalateAfter: z.number().int().min(0).max(600).optional(),
+  recordCalls: z.boolean().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -45,7 +46,8 @@ export default defineEventHandler(async (event) => {
     departmentId: d.routeType === 'department' ? (d.departmentId || null) : sub.departmentId,
     routeAgentId: d.routeType === 'ai' ? (d.agentId || null) : null,
     routeEscalateTo: d.routeType === 'ai' ? (d.escalateTo || null) : null,
-    routeEscalateAfter: d.routeType === 'ai' ? (d.escalateAfter || 0) : 0
+    routeEscalateAfter: d.routeType === 'ai' ? (d.escalateAfter || 0) : 0,
+    ...(d.recordCalls === undefined ? {} : { recordCalls: d.recordCalls })
   }).where(eq(schema.numberSubscriptions.id, sub.id));
 
   // For AI routing, sync a VAN under the hood so the AI runtime + escalation use
