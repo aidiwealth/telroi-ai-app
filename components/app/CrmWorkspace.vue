@@ -137,6 +137,11 @@
             <span class="mono">{{ c.phone }}</span>
             <span class="muted">{{ fmtDateTime(c.startedAt) }}</span>
             <span class="crm-call-status" :class="{ bad: c.status === 'failed' }">{{ c.status }}</span>
+            <!-- The recording sits with the person it concerns: somebody reading
+                 a customer's history can hear the conversation rather than a
+                 summary of it. -->
+            <audio v-if="recordings[c.callid]" class="crm-audio" controls preload="none"
+                   :src="`/api/voice/recordings/${recordings[c.callid]}/audio`"></audio>
           </div>
         </div>
         <p v-else class="muted crm-none">No calls logged yet.</p>
@@ -282,6 +287,19 @@ const board = computed(() => {
   return cols;
 });
 const sel = ref<any>(null);
+
+// Recordings for whichever contact is open, so a conversation can be heard
+// rather than read about. Loaded with the contact rather than the whole board:
+// a hundred contacts' recordings is a request nobody asked for.
+const recordings = ref<Record<string, string>>({});
+async function loadRecordings() {
+  try {
+    const r = await api.get<any>('/api/voice/recordings?perPage=200');
+    const map: Record<string, string> = {};
+    for (const rec of r.items || []) map[rec.callid] = rec.id;
+    recordings.value = map;
+  } catch { /* the history is still worth showing */ }
+}
 const newNote = ref('');
 const showNew = ref(false);
 const saving = ref(false);
@@ -339,7 +357,11 @@ async function load() {
 }
 async function open(c: any) {
   if (dragId.value) return; // ignore the click that can follow a drag
-  try { const r = await api.get<{ contact: any }>(`${props.apiBase}/contacts/${c.id}`); sel.value = r.contact; }
+  try {
+    const r = await api.get<{ contact: any }>(`${props.apiBase}/contacts/${c.id}`);
+    sel.value = r.contact;
+    loadRecordings();
+  }
   catch (e: any) { toast.err('Could not open contact'); }
 }
 async function save(field: string, value: any) {
@@ -453,6 +475,7 @@ onMounted(() => { loadPlan(); load(); });
 </script>
 
 <style scoped>
+.crm-audio { height: 28px; max-width: 180px; margin-left: auto; }
 .crm-pagehead { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .crm-subnav { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }
 .crm-subtab { padding: 9px 16px; font-size: 13px; color: var(--ink-soft); border-bottom: 2px solid transparent; margin-bottom: -1px; }

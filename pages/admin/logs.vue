@@ -58,7 +58,7 @@
     <div v-else-if="kind === 'call'" class="set-card log-table-wrap">
       <table class="log-table">
         <thead>
-          <tr><th>When</th><th>Workspace</th><th>Direction</th><th>Number</th><th>Status</th><th>Reason</th></tr>
+          <tr><th>When</th><th>Workspace</th><th>Direction</th><th>Number</th><th>Status</th><th>Reason</th><th>Recording</th></tr>
         </thead>
         <tbody>
           <tr v-for="c in calls" :key="c.id">
@@ -68,6 +68,15 @@
             <td class="mono">{{ c.phone }}</td>
             <td><span class="chip" :class="c.failed ? 'chip--bad' : 'chip--ok'">{{ c.status }}</span></td>
             <td class="log-summary">{{ c.reason || '—' }}</td>
+            <!-- Inline rather than behind a click: an operator scanning for the
+                 call somebody is complaining about wants to hear it there, not
+                 open a panel first. Loaded only when played — a page of fifty
+                 rows should not fetch fifty recordings nobody asked for. -->
+            <td>
+              <audio v-if="recordings[c.callid]" class="log-audio" controls preload="none"
+                     :src="`/api/admin/recordings/${recordings[c.callid]}/audio`"></audio>
+              <span v-else class="ad-dim">—</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -170,6 +179,18 @@ async function goAuditPage(p: number) { auditPage.value = p; await loadAudit(); 
 // an unfiltered list is rarely page four of a filtered one.
 function onAuditFilter() { auditPage.value = 1; loadAudit(); }
 
+// Recordings, keyed by the call they belong to. Fetched once for the page
+// rather than asked for per row.
+const recordings = ref<Record<string, string>>({});
+async function loadRecordings() {
+  try {
+    const r = await $fetch<any>('/api/admin/recordings?perPage=200');
+    const map: Record<string, string> = {};
+    for (const rec of r.items || []) map[rec.callid] = rec.id;
+    recordings.value = map;
+  } catch { /* the log is still worth showing */ }
+}
+
 const logPage = ref(Number(useRoute().query.log) || 1);
 const logMeta = ref({ page: 1, pages: 1, total: 0, perPage: 100 });
 async function goLogPage(p: number) { logPage.value = p; await load(); }
@@ -185,12 +206,14 @@ function setKind(k: 'system' | 'call' | 'audit' | 'webhook' | 'pbx') {
   load();
 }
 onMounted(async () => {
+  loadRecordings();
   try { const r = await $fetch<any>('/api/admin/me'); isSuper.value = r?.admin?.role === 'superadmin'; } catch { /* */ }
   await load();
 });
 </script>
 
 <style scoped>
+.log-audio { height: 32px; max-width: 220px; }
 /* Audit tab */
 .aud-filters { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .aud-search { position: relative; flex: 1; min-width: 240px; display: flex; align-items: center; }

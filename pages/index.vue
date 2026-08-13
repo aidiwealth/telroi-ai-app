@@ -104,6 +104,12 @@
             <td><span class="chip" :class="statusChip(c.status)">{{ c.status }}</span></td>
             <td class="mono">{{ fmtDur(c.duration) }}</td>
             <td class="muted">{{ fmtTime(c.start) }}</td>
+            <!-- Click stopped, or playing would also open the call. -->
+            <td @click.stop>
+              <audio v-if="recordings[c.uid]" class="dash-audio" controls preload="none"
+                     :src="`/api/voice/recordings/${recordings[c.uid]}/audio`"></audio>
+              <span v-else class="muted">—</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -217,7 +223,19 @@ function syncEnv() {
 }
 function onEnvChange(e: any) { env.value = e.detail === 'live' ? 'live' : 'sandbox'; }
 
+// Recordings, keyed by call. One request for the page rather than one per row.
+const recordings = ref<Record<string, string>>({});
+async function loadRecordings() {
+  try {
+    const r = await api.get<any>('/api/voice/recordings?perPage=100');
+    const map: Record<string, string> = {};
+    for (const rec of r.items || []) map[rec.callid] = rec.id;
+    recordings.value = map;
+  } catch { /* the dashboard is still worth showing */ }
+}
+
 onMounted(async () => {
+  loadRecordings();
   syncEnv();
   if (import.meta.client) window.addEventListener('telroi-env-change', onEnvChange);
   try {
@@ -258,6 +276,7 @@ onUnmounted(() => { if (import.meta.client) window.removeEventListener('telroi-e
 </script>
 
 <style scoped>
+.dash-audio { height: 30px; max-width: 190px; }
 .ov-head { display: flex; align-items: flex-start; justify-content: space-between; }
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
 .stat-value .unit { font-size: 18px; color: var(--ink-mute); margin-left: 2px; }
