@@ -66,7 +66,7 @@
     </div>
 
     <!-- Detail drawer (shared component — same on dashboard) -->
-    <CallDetailDrawer :call="selected" @close="selected = null" @updated="onCallUpdated" @callback="onCallback" />
+    <CallDetailDrawer :call="selected" :recording-id="selected ? (recordings[selected.uid] || null) : null" @close="selected = null" @updated="onCallUpdated" @callback="onCallback" />
     <DialerModal v-if="dialer.open" :initial-phone="dialer.phone" :auto-start="dialer.autoStart" @close="dialer.open = false" />
   </div>
 </template>
@@ -81,6 +81,20 @@ const toast = useToast();
 
 const pending = ref(true);
 const calls = ref<TelroiCall[]>([]);
+
+// Recordings, keyed by the call they belong to. Fetched once and matched rather
+// than asked for per row: a page of fifty calls should not be fifty requests to
+// discover that two of them were recorded.
+const recordings = ref<Record<string, string>>({});
+
+async function loadRecordings() {
+  try {
+    const r = await api.get<any>('/api/voice/recordings?perPage=200');
+    const map: Record<string, string> = {};
+    for (const rec of r.items || []) map[rec.callid] = rec.id;
+    recordings.value = map;
+  } catch { /* the log is still worth showing */ }
+}
 const selected = ref<TelroiCall | null>(null);
 // The shared CallDetailDrawer handles rating/note/callback + persistence and
 // emits 'updated' so we can reflect changes back into the list row.
@@ -158,7 +172,7 @@ function exportCsv() {
   toast.ok('Exported');
 }
 
-onMounted(reload);
+onMounted(() => { reload(); loadRecordings(); });
 </script>
 
 <style scoped>

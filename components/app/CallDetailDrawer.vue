@@ -18,6 +18,14 @@
           <div><dt>Duration</dt><dd class="mono">{{ fmtDur(call.duration) }}</dd></div>
         </dl>
 
+        <!-- The recording, where there is one. An audio element rather than a
+             player of our own: the browser handles seeking, speed and keyboard
+             control better than anything worth building here. -->
+        <div v-if="recordingId" class="drawer-rec">
+          <span class="drawer-rec-label">Recording</span>
+          <audio class="drawer-rec-audio" controls preload="none" :src="`/api/voice/recordings/${recordingId}/audio`"></audio>
+        </div>
+
         <div class="drawer-rate">
           <div class="drawer-sub">Rate this call</div>
           <div class="rate-stars" :class="{ saving: saving }">
@@ -50,7 +58,7 @@
 import { ref, watch } from 'vue';
 import type { TelroiCall } from '~/server/utils/telroi/client';
 
-const props = defineProps<{ call: TelroiCall | null }>();
+const props = defineProps<{ call: TelroiCall | null; recordingId?: string | null }>();
 const emit = defineEmits<{ close: []; updated: [call: TelroiCall]; callback: [phone: string] }>();
 
 const api = useApi();
@@ -100,6 +108,9 @@ function statusChip(status: string) {
 </script>
 
 <style scoped>
+.drawer-rec { margin: 18px 0; padding: 14px 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.drawer-rec-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-mute); margin-bottom: 8px; }
+.drawer-rec-audio { width: 100%; height: 36px; }
 .drawer-overlay { position: fixed; inset: 0; z-index: 150; background: rgba(10,10,11,0.28); display: flex; justify-content: flex-end; }
 .drawer { width: 420px; max-width: 92vw; background: var(--paper); height: 100%; padding: 28px; overflow-y: auto; box-shadow: var(--shadow-pop); }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
