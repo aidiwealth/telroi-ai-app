@@ -128,7 +128,9 @@ export async function syncCallsToContacts(tenantId: string, opts: { days?: numbe
       .from(schema.callEvents)
       .where(and(
         eq(schema.callEvents.tenantId, tenantId),
-        eq(schema.callEvents.direction, 'in'),
+        // Both directions. Inbound only meant somebody you rang who had never
+        // rung you simply was not there — which is half a CRM.
+
         sql`${schema.callEvents.phone} is not null and ${schema.callEvents.phone} <> ''`,
         sql`${schema.callEvents.startedAt} >= ${since.toISOString()}`
       ))

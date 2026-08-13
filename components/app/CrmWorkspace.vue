@@ -3,7 +3,7 @@
     <div class="page-head crm-pagehead">
       <div>
         <h1 class="page-title">CRM</h1>
-        <p class="page-sub">Your customers and leads — every call logged against the right contact, with notes, location and history.</p>
+        <p class="page-sub">Everyone who has called you or been called, gathered by number. A contact appears the first time a call connects, and its history, notes and recordings collect against it. Somebody who has not given their name shows as their number until they do.</p>
       </div>
       <div v-if="!locked" class="crm-head-actions">
         <button class="btn btn-ghost btn-sm" @click="showSettings = true">Settings</button>
@@ -49,7 +49,7 @@
               <td>
                 <div class="crm-id">
                   <span class="crm-avatar">{{ initials(c) }}</span>
-                  <div><div class="crm-name">{{ c.name || 'Unknown' }}</div><div class="crm-company">{{ c.company || '—' }}</div></div>
+                  <div><div class="crm-name">{{ c.name || c.phone || 'Unknown' }}</div><div class="crm-company">{{ c.company || '—' }}</div></div>
                 </div>
               </td>
               <td class="mono">{{ c.phone || '—' }}</td>
@@ -85,7 +85,7 @@
               <div class="crm-kcard-top">
                 <span class="crm-avatar sm">{{ initials(c) }}</span>
                 <div class="crm-kcard-id">
-                  <div class="crm-name">{{ c.name || 'Unknown' }}</div>
+                  <div class="crm-name">{{ c.name || c.phone || 'Unknown' }}</div>
                   <div class="crm-company">{{ c.company || c.phone || '—' }}</div>
                 </div>
               </div>

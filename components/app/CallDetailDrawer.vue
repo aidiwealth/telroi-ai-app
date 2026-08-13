@@ -18,13 +18,6 @@
           <div><dt>Duration</dt><dd class="mono">{{ fmtDur(call.duration) }}</dd></div>
         </dl>
 
-        <!-- The recording, where there is one. An audio element rather than a
-             player of our own: the browser handles seeking, speed and keyboard
-             control better than anything worth building here. -->
-        <div v-if="recordingId" class="drawer-rec">
-          <span class="drawer-rec-label">Recording</span>
-          <audio class="drawer-rec-audio" controls preload="none" :src="`/api/voice/recordings/${recordingId}/audio`"></audio>
-        </div>
 
         <div class="drawer-rate">
           <div class="drawer-sub">Rate this call</div>
@@ -37,13 +30,10 @@
           <button class="btn btn-ghost btn-sm" :disabled="saving" @click="saveNote">{{ saving ? 'Saving…' : 'Save note' }}</button>
         </div>
 
-        <div class="drawer-rec">
+        <div v-if="recordingId" class="drawer-rec">
           <div class="drawer-sub">Recording</div>
-          <template v-if="call.record">
-            <audio controls :src="call.record" class="drawer-audio" />
-            <a :href="call.record" :download="`call-${call.uid}.mp3`" class="rec-download">Download recording</a>
-          </template>
-          <p v-else class="rec-none">No recording available for this call.</p>
+          <audio controls preload="none" :src="`/api/voice/recordings/${recordingId}/audio`" class="drawer-audio" />
+          <a :href="`/api/voice/recordings/${recordingId}/audio`" :download="`call-${call.uid}.wav`" class="rec-download">Download</a>
         </div>
 
         <div class="drawer-actions">

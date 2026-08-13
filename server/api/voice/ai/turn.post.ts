@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!secret || given !== secret) throw createError({ statusCode: 401, statusMessage: 'unauthorized' });
 
   const body = await readBody(event).catch(() => ({} as any));
-  const { agentId, tenantId, first, telnum } = body || {};
+  const { agentId, tenantId, first, telnum, callId } = body || {};
   if (!agentId || !tenantId) throw createError({ statusCode: 400, statusMessage: 'agentId and tenantId required' });
 
   const [agent] = await useDb().select().from(schema.aiAgents)
@@ -135,7 +135,12 @@ export default defineEventHandler(async (event) => {
     '- No markdown, bullets, emoji, or symbols — every character is read aloud.',
     '- Prices/numbers: say them simply and once.',
     '- End your turn. Do not ask multiple questions or stack a question onto a long answer.',
-    'A caller cannot skim audio. Long replies waste their time and feel robotic. Be brief.'
+    'A caller cannot skim audio. Long replies waste their time and feel robotic. Be brief.',
+    '',
+    'NAMES:',
+    'If they tell you their name, end your reply with [name:THEIR NAME] so we can',
+    'label their record. Only when they actually give it — never guess from the',
+    'number, and do not ask for it unless the conversation needs it.'
   ].join('\n');
   // The departments this workspace actually has, so a caller asking about their
   // bill reaches billing without being read a menu. Naming them in the marker
@@ -173,6 +178,47 @@ export default defineEventHandler(async (event) => {
   let clean = reply;
   // [transfer:billing] names a team; [transfer] alone falls back to the VAN's
   // configured target as before.
+  // A name the caller gave. Written to their contact so a board of numbers
+  // becomes a board of people — and only where the contact has none yet, since
+  // an operator who typed a name should not have it overwritten by whatever
+  // somebody said on the phone.
+  let callerName: string | null = null;
+  const nameMatch = reply.match(/\[name:([^\]]+)\]/i);
+  if (nameMatch) {
+    callerName = nameMatch[1].trim().slice(0, 80);
+    reply = reply.replace(/\[name:[^\]]+\]/ig, '').trim();
+  }
+
+  // Write the name to their contact. The caller's number is not in this payload
+  // and threading it through three layers is how a value gets quietly dropped —
+  // callId is already here, and the call knows who rang.
+  if (callerName && callId) {
+    try {
+      const { eq, and, sql, isNull } = await import('drizzle-orm');
+      const db = useDb();
+      const [ev] = await db.select({ phone: schema.callEvents.phone })
+        .from(schema.callEvents)
+        .where(and(eq(schema.callEvents.tenantId, tenantId), eq(schema.callEvents.callid, String(callId))))
+        .limit(1);
+      const last9 = (ev?.phone || '').replace(/\D/g, '').slice(-9);
+      if (last9) {
+        // Only where there is none: an operator who typed a name should not have
+        // it replaced by whatever somebody said on a call.
+        await db.update(schema.crmContacts)
+          .set({ name: callerName })
+          .where(and(
+            eq(schema.crmContacts.tenantId, tenantId),
+            sql`right(regexp_replace(${schema.crmContacts.phone}, '\D', '', 'g'), 9) = ${last9}`,
+            isNull(schema.crmContacts.name)
+          ));
+      }
+    } catch (e: any) {
+      // A name not saved is a card still showing a number. Not worth failing a
+      // live call over.
+      console.error('[turn] contact name write failed:', e?.message);
+    }
+  }
+
   let transferDept: string | null = null;
   const deptMatch = reply.match(/\[transfer:([^\]]+)\]/i);
   if (deptMatch) {
