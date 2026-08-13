@@ -11,6 +11,16 @@ export default defineEventHandler(async (event) => {
 
   const q = getQuery(event);
   const sources = typeof q.sources === 'string' && q.sources ? String(q.sources).split(',') : undefined;
-  const contacts = await listContacts(ws.tenantId, { q: q.q ? String(q.q) : undefined, status: q.status ? String(q.status) : undefined, sources });
-  return { contacts };
+  // listContacts returns { items, total } since paging was added — this endpoint
+  // still passed the whole envelope through as "contacts", so the board received
+  // an object where it expected an array: nothing rendered, and switching view
+  // iterated over it and blanked the page. The client endpoint was updated at
+  // the time; this one was missed.
+  const { items, total } = await listContacts(ws.tenantId, {
+    q: q.q ? String(q.q) : undefined,
+    status: q.status ? String(q.status) : undefined,
+    sources,
+    limit: 200
+  });
+  return { contacts: items, total };
 });
