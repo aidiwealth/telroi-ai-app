@@ -49,6 +49,9 @@ export default defineEventHandler(async (event) => {
 
   const calls = page.map((r) => ({
     id: r.id,
+    // The Asterisk call id, which is what a recording is filed under. The row id
+    // is ours and matches nothing.
+    callid: r.callid,
     workspace: nameById.get(r.tenantId)?.name || '—',
     slug: nameById.get(r.tenantId)?.slug || null,
     direction: r.direction || r.type || 'out',
