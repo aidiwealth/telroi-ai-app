@@ -20,6 +20,11 @@ export default defineEventHandler(async (event) => {
   // does this and the support one didn't, so an operator could open the console,
   // get a token and still have nothing to ring — four of five had no endpoint at
   // all, and none of them could be added to a department.
+  // Declared outside the block that sets it: the token below needs the same id
+  // the endpoint was provisioned against, and a const scoped to the try would
+  // throw when read here — silently, inside a catch.
+  let uid: string | null = null;
+
   try {
     const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
     // The operator's users id, not their platform admin id. meta.userId is
@@ -29,7 +34,7 @@ export default defineEventHandler(async (event) => {
     // fresh endpoint under the wrong id, so a corrected row was immediately
     // joined by a new broken one.
     const { userIdForAdmin } = await import('~/server/utils/platform');
-    const uid = await userIdForAdmin(String((admin as any).id));
+    uid = await userIdForAdmin(String((admin as any).id));
     if (!uid) throw apiError('no_user', 'Could not identify you as a user to attach a phone to.', 500);
     await ensureUserWebrtcEndpoint(ws.tenantId, uid);
   } catch (e: any) {
@@ -40,7 +45,11 @@ export default defineEventHandler(async (event) => {
     // asteriskVoiceToken reads the identity as tenant_<tenantId>_<userId> to find
     // this person's own endpoint — a bare 'support_x' left it looking up a tenant
     // that doesn't exist, so it never found the endpoint we made for them.
-    const ident = `tenant_${ws.tenantId}_${(admin as any).id || 'agent'}`;
+    // The same id the endpoint was provisioned against. Changing provisioning
+    // to the users id without changing this left the token asking for an
+    // endpoint that does not exist — so no operator has registered since, and a
+    // department resolved its member correctly and rang nobody.
+    const ident = `tenant_${ws.tenantId}_${uid}`;
     const tok = await voiceTokenFor(dial.provider, ident);
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready };
   } catch (e: any) {
