@@ -142,6 +142,15 @@ onMounted(load);
 </script>
 
 <style scoped>
+/* Its own copy: inventory's styles are scoped, so a child component inherits
+   none of them and the table rendered bare. */
+.ad-table-wrap { background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius-lg); overflow: hidden; }
+.ad-table { width: 100%; border-collapse: collapse; }
+.ad-table th { text-align: left; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-mute); font-weight: 500; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
+.ad-table td { padding: 14px 16px; border-bottom: 1px solid var(--rule-2); color: var(--ink); font-size: 14px; }
+.ad-table tr:last-child td { border-bottom: 0; }
+.ad-r { text-align: right; }
+.ad-dim { color: var(--ink-soft); }
 .nm-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .nm-field > span { font-size: 12px; color: var(--ink-soft); font-weight: 500; }
 .nm-field .ad-input { width: 100%; padding: 9px 12px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 14px; background: var(--paper); color: var(--ink); }

@@ -303,3 +303,18 @@
 .ad-data-table tbody tr:hover { background: var(--paper-2); }
 .ad-dim { color: var(--ink-soft); }
 .ad-r { text-align: right; }
+
+
+/* Modals.
+ *
+ * card-head and card-pad were global while the overlay was not, so a modal in a
+ * component rendered with its padding and header but no overlay, no centring
+ * and no width — sitting inline in the page, which reads as a dropdown rather
+ * than a dialog. Four pages carry their own copies; those still win by
+ * specificity, so this changes nothing for them and gives everything else a
+ * modal that behaves like one.
+ */
+.modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(10,10,11,0.32); display: flex; align-items: center; justify-content: center; padding: 24px; }
+.modal { width: 100%; max-width: 420px; background: var(--paper); max-height: 88vh; overflow-y: auto; border-radius: var(--radius-lg); }
+.modal-x { color: var(--ink-mute); background: none; border: 0; font-size: 15px; cursor: pointer; padding: 0 4px; }
+.modal-x:hover { color: var(--ink); }
