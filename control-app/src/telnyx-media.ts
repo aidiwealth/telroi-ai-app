@@ -250,7 +250,11 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
         log('START call:', callId, 'agent:', meta.agentId || '?', 'tenant:', meta.tenantId || '?', 'fmt:', JSON.stringify(msg.start?.media_format || {}));
         // Greeting turn (first=true) — STAGE 3 will play the returned audio.
         if (meta.agentId && meta.tenantId) {
-          const g = await callTurn({ agentId: meta.agentId, tenantId: meta.tenantId, telnum: meta.telnum, callId, first: true });
+          // needsNotice rides on the greeting rather than being spoken
+          // separately: Telnyx has no dialplan to play a file from, and a
+          // second synthesis would be another second of silence before anybody
+          // says anything.
+          const g = await callTurn({ agentId: meta.agentId, tenantId: meta.tenantId, telnum: meta.telnum, callId, first: true, needsNotice: !!meta.needsNotice });
           if (g) {
             log(`GREETING: "${String(g.reply || '').slice(0, 120)}" audio=${g.audioBase64 ? 'yes' : 'no'}`);
             if (Array.isArray(g.history)) history = g.history;

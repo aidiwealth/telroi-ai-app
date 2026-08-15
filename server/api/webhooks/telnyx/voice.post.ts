@@ -234,7 +234,12 @@ export default defineEventHandler(async (event) => {
                   // The adapter needs the escalation config to hand off to a human:
                   // without it, the AI says "connecting you" and nothing happens.
                   escalateTo: act.escalateTo || null, escalateAfter: act.escalateAfter || 0,
-                  escalateMode: (act as any).escalateMode || null
+                  escalateMode: (act as any).escalateMode || null,
+                  // Asterisk plays the recording notice from its dialplan before
+                  // any of this. Telnyx has none, so the greeting carries it —
+                  // and the adapter has to be told, since by then it knows only
+                  // what we sent it.
+                  needsNotice: !!(act as any).recordCalls
                 });
               } catch (e: any) {
                 console.error('[telnyx] streaming_start failed:', e?.message || e);

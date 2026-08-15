@@ -72,7 +72,19 @@ export default defineEventHandler(async (event) => {
   const history: ChatMessage[] = Array.isArray(body.history) ? body.history : [];
 
   if (first) {
-    const greeting = agent.greeting || 'Hello, thanks for calling. How can I help you today?';
+    let greeting = agent.greeting || 'Hello, thanks for calling. How can I help you today?';
+
+    // The recording notice, where the carrier cannot play one itself. Asterisk
+    // plays a file from the dialplan before any of this; Telnyx has no dialplan,
+    // so the adapter asks for it here and it rides on the greeting — same voice,
+    // no extra second of silence, and said whether or not a model cooperates.
+    //
+    // Only the caller's side matters legally, and a notice buried after the
+    // conversation has started is not a notice.
+    if (body.needsNotice) {
+      greeting = `Please note, this call is being recorded. ${greeting}`;
+    }
+
     const tts = await ttsSynthesize(tenantId, agent.ttsConnId, greeting, { language: agent.language }, agent.tier === 'managed');
     return { reply: greeting, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history: [{ role: 'assistant', content: greeting }], action: 'continue', callMaxSeconds };
   }
