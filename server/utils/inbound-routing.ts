@@ -20,18 +20,18 @@ export async function resolveInboundRoute(tenantId: string, telnum: string): Pro
   if (!sub) return { type: 'none', telnum, provider: 'telroi' };
   const provider = sub.provider;
   if (sub.routeType === 'ai') {
-    return { type: 'ai', agentId: sub.routeAgentId || null, escalateMode: sub.routeEscalateMode || 'none', escalateTo: sub.routeEscalateTo || null, escalateAfter: sub.routeEscalateAfter || 0, telnum, provider };
+    return { type: 'ai', agentId: sub.routeAgentId || null, escalateMode: sub.routeEscalateMode || 'none', escalateTo: sub.routeEscalateTo || null, escalateAfter: sub.routeEscalateAfter || 0, telnum, provider, recordCalls: !!sub.recordCalls };
   }
   if (sub.routeType === 'department') {
-    return { type: 'department', departmentId: sub.departmentId || null, telnum, provider };
+    return { type: 'department', departmentId: sub.departmentId || null, telnum, provider, recordCalls: !!sub.recordCalls };
   }
   if (sub.routeType === 'ring_all') {
-    return { type: 'ring_all', telnum, provider };
+    return { type: 'ring_all', telnum, provider, recordCalls: !!sub.recordCalls };
   }
   // Anything unrecognised falls through to person — which is why ring_all became
   // a person route with no target, and the call was answered and then dropped in
   // silence.
-  return { type: 'person', target: sub.routeTarget || null, telnum, provider };
+  return { type: 'person', target: sub.routeTarget || null, telnum, provider, recordCalls: !!sub.recordCalls };
 }
 
 // A carrier-agnostic description of what to DO with an inbound call, resolved

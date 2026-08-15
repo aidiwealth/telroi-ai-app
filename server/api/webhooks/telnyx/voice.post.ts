@@ -43,6 +43,52 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Telnyx has finished writing a recording and given us somewhere to fetch it.
+  // Collected here rather than left with them: their URLs expire, and a
+  // recording that lives only on a carrier's storage is a recording you lose
+  // when you change carrier.
+  if (eventType === 'call.recording.saved') {
+    const url = payload.recording_urls?.wav || payload.recording_urls?.mp3
+      || payload.public_recording_urls?.wav || payload.public_recording_urls?.mp3;
+    if (url && callId) {
+      // Deliberately not awaited: Telnyx retries a webhook we are slow to
+      // acknowledge, and fetching several megabytes is not something to do
+      // inside the acknowledgement.
+      void (async () => {
+        try {
+          const { useDb, schema } = await import('~/server/db');
+          const { eq } = await import('drizzle-orm');
+          const [ev] = await useDb().select().from(schema.callEvents)
+            .where(eq(schema.callEvents.callid, callId)).limit(1);
+          if (!ev?.tenantId) { console.warn(`[telnyx] recording for unknown call ${callId}`); return; }
+
+          const res = await fetch(url, { signal: AbortSignal.timeout(120000) });
+          if (!res.ok) { console.error(`[telnyx] recording fetch failed: HTTP ${res.status}`); return; }
+          const audio = Buffer.from(await res.arrayBuffer());
+
+          const cfg = useRuntimeConfig() as any;
+          const store = await $fetch<any>('/api/voice/recording/store', {
+            method: 'POST',
+            headers: { 'x-telroi-internal': (cfg.internalSecret || cfg.provisionAgentSecret) as string },
+            body: {
+              tenantId: ev.tenantId, callid: callId,
+              telnum: ev.telnum || null, direction: ev.direction || null, phone: ev.phone || null,
+              durationSeconds: payload.recording_ended_at && payload.recording_started_at
+                ? Math.round((new Date(payload.recording_ended_at).getTime() - new Date(payload.recording_started_at).getTime()) / 1000)
+                : null,
+              carrier: 'telnyx',
+              audioBase64: audio.toString('base64')
+            }
+          });
+          console.log(`[telnyx] recording stored for ${callId}: ${store?.key || 'ok'}`);
+        } catch (e: any) {
+          console.error('[telnyx] recording store failed:', e?.message || e);
+        }
+      })();
+    }
+    return { ok: true };
+  }
+
   if (eventType === 'call.answered' && payload.client_state) {
     let state = '';
     try { state = Buffer.from(String(payload.client_state), 'base64').toString('utf8'); } catch { /* not ours */ }
@@ -157,6 +203,24 @@ export default defineEventHandler(async (event) => {
               await cc.telnyxTransfer(callId, `sip:esc-${matchedOurNumber}@${sipDomain}`);
               return;
             }
+            // Recording, where the number records. Started before anything is
+            // said or streamed, so the greeting and the whole AI conversation
+            // are in the file — a recording that begins after the interesting
+            // part is worse than none.
+            //
+            // Telnyx records on their side and stops at hangup by itself; a
+            // call.recording.saved webhook follows with a URL to collect.
+            if ((act as any).recordCalls && callId) {
+              try {
+                await cc.telnyxRecordStart(callId);
+                console.log(`[telnyx] recording ${callId}`);
+              } catch (e: any) {
+                // A lost recording is a lost file; a thrown error here would be
+                // a lost call.
+                console.error('[telnyx] record_start failed:', e?.message || e);
+              }
+            }
+
             if (act.action === 'ai') {
               // AI over Telnyx runs through the media adapter on the control-app:
               // Telnyx forks the call audio to our WebSocket, which buffers the

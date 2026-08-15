@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event).catch(() => null) as any;
-  const { tenantId, callid, audioBase64, telnum, direction, phone, durationSeconds } = body || {};
+  const { tenantId, callid, audioBase64, telnum, direction, phone, durationSeconds, carrier } = body || {};
   if (!tenantId || !callid || !audioBase64) {
     throw createError({ statusCode: 400, statusMessage: 'tenantId, callid and audio are required' });
   }
@@ -49,7 +49,10 @@ export default defineEventHandler(async (event) => {
     contentType: 'audio/wav',
     sizeBytes: audio.length,
     durationSeconds: durationSeconds || null,
-    carrier: 'telroi',
+    // Which carrier carried the call. Hardcoded when the PBX was the only
+    // source; a Telnyx recording filed as ours would make an operator look in
+    // the wrong place when something needs explaining.
+    carrier: carrier || 'telroi',
     status: 'stored',
     expiresAt
   });

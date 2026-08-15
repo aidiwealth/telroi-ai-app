@@ -58,6 +58,15 @@ export const telnyxStreamingStart = (
   });
 export const telnyxHangup = (callId: string) => cmd(callId, 'hangup', {});
 
+/** Start recording. Stops on hangup by itself, and a call.recording.saved
+ *  webhook follows with a URL to fetch.
+ *
+ *  Dual channel: the caller on one side and everyone else on the other, which
+ *  makes a disputed conversation far easier to follow than one mixed track, and
+ *  costs nothing extra. */
+export const telnyxRecordStart = (callId: string) =>
+  cmd(callId, 'record_start', { format: 'wav', channels: 'dual' });
+
 // Speak text, then Telnyx fires call.speak.ended (carrying client_state so we advance).
 export const telnyxSpeak = (callId: string, text: string, nextNodeId: string | null) =>
   cmd(callId, 'speak', { payload: text, voice: 'female', language: 'en-US', client_state: encodeState(nextNodeId) });
