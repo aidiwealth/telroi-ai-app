@@ -7,10 +7,10 @@ import { and, eq } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 
 export type InboundRoute =
-  | { type: 'person'; target: string | null; telnum: string; provider: string }
-  | { type: 'department'; departmentId: string | null; telnum: string; provider: string }
-  | { type: 'ring_all'; telnum: string; provider: string }
-  | { type: 'ai'; agentId: string | null; escalateMode: string | null; escalateTo: string | null; escalateAfter: number; telnum: string; provider: string }
+  | { type: 'person'; target: string | null; telnum: string; provider: string; recordCalls?: boolean }
+  | { type: 'department'; departmentId: string | null; telnum: string; provider: string; recordCalls?: boolean }
+  | { type: 'ring_all'; telnum: string; provider: string; recordCalls?: boolean }
+  | { type: 'ai'; agentId: string | null; escalateMode: string | null; escalateTo: string | null; escalateAfter: number; telnum: string; provider: string; recordCalls?: boolean }
   | { type: 'none'; telnum: string; provider: string };
 
 export async function resolveInboundRoute(tenantId: string, telnum: string): Promise<InboundRoute> {
@@ -46,6 +46,9 @@ export interface IvrStep {
 }
 export interface InboundAction {
   action: 'ai' | 'dial_person' | 'dial_department' | 'ring_all' | 'ivr' | 'reject';
+  // Whether this number records. Carried on the action because the webhook that
+  // starts recording has the action and not the route.
+  recordCalls?: boolean;
   ivr?: IvrStep;
   greeting?: string;          // spoken greeting (AI agent greeting or default)
   agentId?: string | null;
@@ -129,7 +132,7 @@ export async function resolveInboundAction(tenantId: string, telnum: string): Pr
         .where(eq(schema.aiAgents.id, route.agentId)).limit(1);
       if (agent?.greeting) greeting = agent.greeting;
     }
-    return { action: 'ai', greeting, agentId: route.agentId, escalateTo: route.escalateTo, escalateAfter: route.escalateAfter, escalateMode: route.escalateMode };
+    return { action: 'ai', greeting, agentId: route.agentId, escalateTo: route.escalateTo, escalateAfter: route.escalateAfter, escalateMode: route.escalateMode, recordCalls: (route as any).recordCalls };
   }
   if (route.type === 'department') {
     let target: string | null = null;
@@ -137,18 +140,18 @@ export async function resolveInboundAction(tenantId: string, telnum: string): Pr
       const [dept] = await db.select({ name: schema.departments.name }).from(schema.departments)
         .where(eq(schema.departments.id, route.departmentId)).limit(1);
       target = route.departmentId; // ring target = department id (PBX/queue resolves members)
-      return { action: 'dial_department', dialTarget: target, greeting: dept?.name ? `Connecting you to ${dept.name}.` : undefined };
+      return { action: 'dial_department', dialTarget: target, greeting: dept?.name ? `Connecting you to ${dept.name}.` : undefined, recordCalls: (route as any).recordCalls };
     }
-    return { action: 'dial_department', dialTarget: null };
+    return { action: 'dial_department', dialTarget: null, recordCalls: (route as any).recordCalls };
   }
   if (route.type === 'person') {
-    return { action: 'dial_person', dialTarget: route.target };
+    return { action: 'dial_person', dialTarget: route.target, recordCalls: (route as any).recordCalls };
   }
   // Ring everyone who's free. The carrier can't reach our agents itself — they're
   // registered to our PBX — so the caller is handed there, the same way an AI call
   // reaches a human.
   if (route.type === 'ring_all') {
-    return { action: 'ring_all' };
+    return { action: 'ring_all', recordCalls: route.recordCalls };
   }
   return { action: 'reject' };
 }
