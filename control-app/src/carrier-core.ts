@@ -165,8 +165,21 @@ ${c.sipGateway2 ? ` ; The carrier's second SBC. Their maintenance windows move t
 
 [from-${c.name}]
 exten => _X.,1,NoOp(Inbound from ${c.displayName || c.name} -> DID \${EXTEN} from \${CALLERID(num)})
+ ; Do we hold this number? A carrier that routes its whole block at us rather
+ ; than the DIDs we bought sends calls for numbers we have never sold — each one
+ ; entering Stasis, being looked up, refused, and filling the log. Dropped here
+ ; instead, before the application sees it.
+ ;
+ ; Only a definite 0 rejects. An empty result is what an unreachable database
+ ; gives, and refusing every inbound call because the database hiccupped would be
+ ; a great deal worse than the problem this solves — so anything else falls
+ ; through and lets Stasis decide, exactly as before.
+ same => n,Set(HELD=\${ODBC_DID_EXISTS(\${EXTEN})})
+ same => n,GotoIf($["\${HELD}" = "0"]?notours)
  same => n,Stasis(telroi,\${EXTEN})
  same => n,Hangup()
+ same => n(notours),NoOp(DID \${EXTEN} is not one of ours - dropping)
+ same => n,Hangup(1)
 `;
 }
 
