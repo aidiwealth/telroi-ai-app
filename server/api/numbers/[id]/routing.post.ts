@@ -45,7 +45,14 @@ export default defineEventHandler(async (event) => {
     routeTarget: d.routeType === 'person' ? (d.target || null) : null,
     departmentId: d.routeType === 'department' ? (d.departmentId || null) : sub.departmentId,
     routeAgentId: d.routeType === 'ai' ? (d.agentId || null) : null,
-    routeEscalateTo: d.routeType === 'ai' ? (d.escalateTo || null) : null,
+    // The mode follows from the target rather than being a separate setting
+    // nobody knew to set — which left every AI number at 'none', answering
+    // calls, deciding somebody needed a person, and having nowhere to send
+    // them. '__all' is the drawer's way of saying anyone available.
+    routeEscalateMode: d.routeType !== 'ai' ? 'none'
+      : d.escalateTo === '__all' ? 'ring_all'
+      : d.escalateTo ? 'endpoint' : 'none',
+    routeEscalateTo: (d.routeType === 'ai' && d.escalateTo && d.escalateTo !== '__all') ? d.escalateTo : null,
     routeEscalateAfter: d.routeType === 'ai' ? (d.escalateAfter || 0) : 0,
     ...(d.recordCalls === undefined ? {} : { recordCalls: d.recordCalls })
   }).where(eq(schema.numberSubscriptions.id, sub.id));

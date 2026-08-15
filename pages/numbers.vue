@@ -159,6 +159,10 @@
               <label>Escalate to (human handoff)</label>
               <select v-model="editing.escalateTo" class="select">
                 <option value="">— No human handoff —</option>
+                <!-- The commonest choice, and it was missing: an AI line with no
+                     fallback answers, decides somebody needs a person, and then
+                     has nowhere to send them. -->
+                <option value="__all">Anyone available</option>
                 <option v-for="t in escalationTargets" :key="t.id" :value="t.id">{{ t.label }}</option>
               </select>
               <span v-if="!escalationTargets.length" class="muted" style="font-size:12px">No people to escalate to yet — add a SIP user first.</span>
@@ -376,7 +380,7 @@ function edit(n: TelroiNumber) {
     target: sub.routeTarget || '',
     departmentId: sub.departmentId || '',
     agentId: sub.routeAgentId || '',
-    escalateTo: sub.routeEscalateTo || '',
+    escalateTo: sub.routeEscalateMode === 'ring_all' ? '__all' : (sub.routeEscalateTo || ''),
     escalateAfter: sub.routeEscalateAfter || 0
   };
 }
