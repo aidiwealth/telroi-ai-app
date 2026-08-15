@@ -1,16 +1,10 @@
 <template>
   <div>
-    <div class="ad-head">
-      <div>
-        <h1 class="ad-title">Our numbers</h1>
-        <p class="ad-sub">The support desk's own lines and how each behaves. These were only ever editable at a database prompt, which is a poor way to run a support line and worse when something needs changing quickly.</p>
-      </div>
-    </div>
 
     <div v-if="pending" class="ad-loading">Loading...</div>
     <EmptyState v-else-if="!numbers.length" icon="calls" title="No numbers yet" description="Assign a number to the support workspace under Inventory." />
-    <div v-else class="set-card ad-table-wrap">
-      <table class="ad-data-table">
+    <div v-else class="ad-table-wrap">
+      <table class="ad-table">
         <thead><tr><th>Number</th><th>Carrier</th><th>Answered by</th><th>Handoff</th><th>Recording</th><th></th></tr></thead>
         <tbody>
           <tr v-for="n in numbers" :key="n.id">
@@ -83,8 +77,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-definePageMeta({ layout: 'admin' });
-useHead({ title: 'Our numbers' });
 
 const numbers = ref<any[]>([]);
 const agents = ref<any[]>([]);

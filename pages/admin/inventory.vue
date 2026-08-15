@@ -3,9 +3,9 @@
     <div class="ad-head">
       <div>
         <h1 class="ad-title">Number inventory</h1>
-        <p class="ad-sub">Numbers customers can buy. Search Twilio/Telnyx to buy new ones; add Nigerian (Digidite) numbers manually.</p>
+        <p class="ad-sub">Every number we hold — the stock clients can buy, and our own support lines. One place to look rather than two.</p>
       </div>
-      <div class="ad-head-actions">
+      <div v-if="view === 'all'" class="ad-head-actions">
         <select v-model="filters.status" class="inv-select" @change="onFilter">
           <option value="">Any status</option>
           <option value="available">Available</option>
@@ -25,8 +25,18 @@
       </div>
     </div>
 
-    <div v-if="pending" class="ad-loading">Loading inventory…</div>
-    <div v-else-if="rows.length" class="ad-table-wrap">
+    <div class="log-tabs">
+      <button class="log-tab" :class="{ active: view === 'all' }" @click="view = 'all'">All numbers</button>
+      <button class="log-tab" :class="{ active: view === 'ours' }" @click="view = 'ours'">Ours</button>
+    </div>
+
+    <!-- The support desk's own lines, alongside the stock rather than on a page
+         of their own — somebody asking where a number is should have one place
+         to look. -->
+    <SupportNumbers v-if="view === 'ours'" />
+
+    <div v-else-if="view === 'all' && pending" class="ad-loading">Loading inventory…</div>
+    <div v-else-if="view === 'all' && rows.length" class="ad-table-wrap">
       <table class="ad-table">
         <thead><tr><th>Number</th><th>Region</th><th>Carrier</th><th>Held by</th><th>Provisioned</th><th>Status</th><th></th></tr></thead>
         <tbody>
@@ -220,6 +230,9 @@ function providersFor(r: string) { return PROV[r] || ['Telroi']; }
 function provLabel(p: string) { return ({ telroi: 'Telroi Voice', twilio: 'Twilio', telnyx: 'Telnyx', asterisk: 'Telroi Voice', ruach: 'Ruach', sotel: 'Sotel', kasooko: 'Kasooko' } as any)[p] || p; }
 function regionLabel(r: string) { return ({ NG: 'Nigeria', US: 'United States', CA: 'Canada', GB: 'United Kingdom' } as any)[r] || r; }
 
+// 'tab' is already the add-numbers modal's, so this one is named for what it
+// switches between rather than competing for the shorter word.
+const view = ref('all');
 const filters = reactive({ status: '', provider: '', region: '' });
 const invPage = ref(Number(useRoute().query.inv) || 1);
 const invMeta = ref({ page: 1, pages: 1, total: 0, perPage: 50 });
