@@ -124,6 +124,17 @@
                lines are recorded rather than discover all of them were — and
                callers are told at the start of every one, which is the law and
                also simply decent. -->
+          <!-- Separate from inbound, because the obligations differ: somebody
+               who rings you chose a recorded line, somebody you ring did not.
+               They are told when they answer, before the conversation. -->
+          <label class="num-rec">
+            <input type="checkbox" v-model="editing.recordOutbound" />
+            <span>
+              <strong>Record calls made from this number</strong>
+              <span class="num-rec-note">The person you call hears a notice when they answer, before you are connected — they did not choose a recorded line, so they are told.</span>
+            </span>
+          </label>
+
           <label class="num-rec">
             <input type="checkbox" v-model="editing.recordCalls" />
             <span>
@@ -377,6 +388,7 @@ function edit(n: TelroiNumber) {
     telnum: sub.telnum,
     routeType: sub.routeType || 'person',
     recordCalls: !!sub.recordCalls,
+    recordOutbound: !!sub.recordOutbound,
     target: sub.routeTarget || '',
     departmentId: sub.departmentId || '',
     agentId: sub.routeAgentId || '',
@@ -396,7 +408,8 @@ async function save() {
       agentId: editing.value.agentId || undefined,
       escalateTo: editing.value.escalateTo || undefined,
       escalateAfter: editing.value.escalateAfter || 0,
-      recordCalls: !!editing.value.recordCalls
+      recordCalls: !!editing.value.recordCalls,
+      recordOutbound: !!editing.value.recordOutbound
     });
     toast.ok('Routing saved');
     editing.value = null;

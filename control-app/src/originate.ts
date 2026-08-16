@@ -28,6 +28,10 @@ export interface OriginateOptions {
   callerId?: string;         // caller ID to present to the destination
   agentRingSec?: number;     // how long to ring the agent before giving up
   destRingSec?: number;      // how long to ring the destination
+  // Whether the number we are presenting as records outbound calls. Decided by
+  // the web app, which chooses the caller ID and so knows which number's setting
+  // applies — the PBX would only be guessing.
+  recordOutbound?: boolean;
 }
 
 export interface OriginateResult {
@@ -57,6 +61,10 @@ export async function originateCall(opts: OriginateOptions): Promise<OriginateRe
   const agentChan = client.Channel();
   let destChan: Ari.Channel | null = null;
   let cleanedUp = false;
+  // Set only once recording actually began. cleanup also runs when a call never
+  // connected, and looking for a file that was never written would log a
+  // failure on every unanswered call.
+  let recordingStartedAt = 0;
 
   const cleanup = async (reason: string) => {
     if (cleanedUp) return;
@@ -66,6 +74,22 @@ export async function originateCall(opts: OriginateOptions): Promise<OriginateRe
     try { await agentChan.hangup(); } catch { /* gone */ }
     try { await bridge.destroy(); } catch { /* gone */ }
     client.removeListener('StasisStart', onStasisStart as never);
+
+    // Collect the recording. Not awaited: the file takes a moment to close and
+    // several seconds to send, and tearing down a finished call should wait on
+    // neither.
+    if (recordingStartedAt && opts.tenantId) {
+      const startedAt = recordingStartedAt;
+      recordingStartedAt = 0;
+      import('./recording-upload.ts').then(({ uploadRecording }) => uploadRecording({
+        callid: bridge.id,
+        tenantId: opts.tenantId!,
+        telnum: opts.callerId || null,
+        phone: to,
+        direction: 'out',
+        durationSeconds: Math.round((Date.now() - startedAt) / 1000)
+      })).catch((e) => log(`  [rec ${bridge.id}] upload error: ${e?.message || e}`));
+    }
   };
 
   // Single StasisStart handler for both legs (matched by channel id).
@@ -105,6 +129,28 @@ export async function originateCall(opts: OriginateOptions): Promise<OriginateRe
       log(`destination ${ch.id} answered -> adding to bridge ${bridge.id}`);
       try {
         await ch.answer().catch(() => {});
+
+        // The person we rang did not choose a recorded line, so they are told
+        // before they are connected — and the recording starts first, so the
+        // notice is in the file as evidence it was given. The agent hears two
+        // seconds of silence; that is the cost of doing this properly.
+        if (opts.recordOutbound) {
+          try {
+            const { startRecording } = await import('./ami.ts');
+            const safe = bridge.id.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const ok = await startRecording(ch.name, `/var/spool/asterisk/monitor/${safe}.wav`);
+            log(`  [rec ${bridge.id}] ${ok ? 'recording outbound' : 'could not start'}`);
+            if (ok) recordingStartedAt = Date.now();
+            if (ok) {
+              try { await ch.play({ media: 'sound:telroi-recording-notice' }); }
+              catch { /* a missed notice should not cost the call */ }
+            }
+          } catch (e: any) {
+            // A lost recording is a lost file; an exception here is a lost call.
+            log(`  [rec ${bridge.id}] error: ${e?.message || e}`);
+          }
+        }
+
         await bridge.addChannel({ channel: ch.id });
         log(`bridged: agent ${agentChan.id} <-> destination ${ch.id}`);
         if (opts.tenantId) {

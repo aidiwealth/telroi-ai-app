@@ -61,6 +61,14 @@
           </template>
 
           <label class="nm-check">
+            <input type="checkbox" v-model="editing.recordOutbound" />
+            <span>
+              <strong>Record calls made from this number</strong>
+              <span class="nm-note">The person called hears a notice when they answer, before being connected - they did not choose a recorded line, so they are told.</span>
+            </span>
+          </label>
+
+          <label class="nm-check">
             <input type="checkbox" v-model="editing.recordCalls" />
             <span>
               <strong>Record calls on this number</strong>
@@ -129,7 +137,8 @@ async function save() {
         target: editing.value.routeTarget || null,
         escalateTo: editing.value.escalateTo || null,
         escalateAfter: editing.value.escalateAfter || 0,
-        recordCalls: !!editing.value.recordCalls
+        recordCalls: !!editing.value.recordCalls,
+        recordOutbound: !!editing.value.recordOutbound
       }
     });
     editing.value = null;

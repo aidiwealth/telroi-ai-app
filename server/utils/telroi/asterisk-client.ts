@@ -83,13 +83,18 @@ export class AsteriskClient {
     // caller ID out over Kasooko gets refused. Fall back to the region map when
     // no caller ID is given or we don't recognise it.
     let trunk = body.trunk || '';
+    let recordOutbound = false;
     if (!trunk && body.clid) {
       const digits = body.clid.replace(/[^\d]/g, '').slice(-9);
-      const subs = await useDb().select({ telnum: schema.numberSubscriptions.telnum, provider: schema.numberSubscriptions.provider })
+      const subs = await useDb().select({ telnum: schema.numberSubscriptions.telnum, provider: schema.numberSubscriptions.provider, recordOutbound: schema.numberSubscriptions.recordOutbound })
         .from(schema.numberSubscriptions)
         .where(eq(schema.numberSubscriptions.tenantId, this.tenantId));
       const owner = subs.find((n: any) => n.telnum.replace(/[^\d]/g, '').endsWith(digits));
       if (owner?.provider && owner.provider !== 'telroi') trunk = `${owner.provider}-endpoint`;
+      // Whether this number records outbound. The same lookup that found the
+      // trunk found the number, so this costs nothing — and the setting belongs
+      // to the number we present as, not the one we are ringing.
+      recordOutbound = !!(owner as any)?.recordOutbound;
     }
     if (!trunk) trunk = trunkForRegion(detectRegion(body.phone));
     const r = await agentOriginate({
@@ -100,7 +105,8 @@ export class AsteriskClient {
       trunk,
       callerId: body.clid,
       tenantId: this.tenantId,
-      user: body.user
+      user: body.user,
+      recordOutbound
     });
     return { callid: r.callid, clid: body.clid };
   }

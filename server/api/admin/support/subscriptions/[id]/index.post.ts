@@ -19,7 +19,8 @@ const Body = z.object({
   target: z.string().nullable().optional(),
   escalateTo: z.string().nullable().optional(),
   escalateAfter: z.number().int().min(0).max(600).optional(),
-  recordCalls: z.boolean().optional()
+  recordCalls: z.boolean().optional(),
+  recordOutbound: z.boolean().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -49,7 +50,8 @@ export default defineEventHandler(async (event) => {
       : d.escalateTo ? 'endpoint' : 'none',
     routeEscalateTo: (d.routeType === 'ai' && d.escalateTo && d.escalateTo !== '__all') ? d.escalateTo : null,
     routeEscalateAfter: d.routeType === 'ai' ? (d.escalateAfter || 0) : 0,
-    ...(d.recordCalls === undefined ? {} : { recordCalls: d.recordCalls })
+    ...(d.recordCalls === undefined ? {} : { recordCalls: d.recordCalls }),
+    ...(d.recordOutbound === undefined ? {} : { recordOutbound: d.recordOutbound })
   }).where(eq(schema.numberSubscriptions.id, id));
 
   await logEvent({

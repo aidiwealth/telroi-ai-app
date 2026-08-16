@@ -73,6 +73,9 @@ export interface AgentOriginateResult {
 // (an Asterisk trunk endpoint, e.g. "kasooko-endpoint") and bridge them.
 export async function agentOriginate(args: {
   agentEndpoint: string; to: string; trunk: string; callerId?: string; tenantId?: string; user?: string;
+  // Whether the number we present as records outbound calls. Decided here
+  // rather than on the PBX, since the from-number is chosen here.
+  recordOutbound?: boolean;
 }): Promise<AgentOriginateResult> {
   const j = await agentCall('/originate', args);
   return { callid: j.callid, agentChannelId: j.agentChannelId };

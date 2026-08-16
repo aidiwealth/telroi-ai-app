@@ -231,7 +231,7 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
           return send(res, 400, { ok: false, error: 'agentEndpoint and to are required' });
         }
         try {
-          const result = await originateCall({ client: ari, agentEndpoint, to, trunk, callerId, tenantId, user });
+          const result = await originateCall({ client: ari, agentEndpoint, to, trunk, callerId, tenantId, user, recordOutbound: !!body.recordOutbound });
           log(`originated ${agentEndpoint} -> ${to} via ${trunk} (callid ${result.callid})`);
           return send(res, 200, { ok: true, ...result });
         } catch (e) {

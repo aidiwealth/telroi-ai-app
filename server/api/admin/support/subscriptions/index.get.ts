@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
       routeType: r.routeType, routeAgentId: r.routeAgentId, departmentId: r.departmentId,
       routeTarget: r.routeTarget,
       escalateMode: r.routeEscalateMode, escalateTo: r.routeEscalateTo, escalateAfter: r.routeEscalateAfter,
-      recordCalls: r.recordCalls
+      recordCalls: r.recordCalls, recordOutbound: r.recordOutbound
     })),
     agents, departments: depts
   };
