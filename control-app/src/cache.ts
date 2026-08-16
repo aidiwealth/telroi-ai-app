@@ -33,6 +33,7 @@ export interface NumberRoute {
   routeEscalateTo: string | null;
   routeEscalateAfter: number;
   recordCalls: boolean;
+  recordOutbound: boolean;
   provider: string | null;        // carrier (ruach/kasooko/...) -> trunk for escalation
 }
 
@@ -118,6 +119,7 @@ export async function refreshCache(): Promise<void> {
       routeEscalateTo: schema.numberSubscriptions.routeEscalateTo,
       routeEscalateAfter: schema.numberSubscriptions.routeEscalateAfter,
       recordCalls: schema.numberSubscriptions.recordCalls,
+      recordOutbound: schema.numberSubscriptions.recordOutbound,
       provider: schema.numberSubscriptions.provider
     }).from(schema.numberSubscriptions);
 
@@ -136,7 +138,8 @@ export async function refreshCache(): Promise<void> {
         routeEscalateMode: s.routeEscalateMode ?? 'none',
         routeEscalateTo: s.routeEscalateTo ?? null,
         routeEscalateAfter: s.routeEscalateAfter ?? 0,
-        recordCalls: !!s.recordCalls
+        recordCalls: !!s.recordCalls,
+        recordOutbound: !!s.recordOutbound
       });
     }
 

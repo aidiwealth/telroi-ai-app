@@ -46,7 +46,8 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   // Mirrored because the PBX decides whether to record, and a column missing
   // here fails the whole cache refresh with an error naming neither table nor
   // column — see the note at the top of this file.
-  recordCalls: boolean('record_calls').notNull().default(false)
+  recordCalls: boolean('record_calls').notNull().default(false),
+  recordOutbound: boolean('record_outbound').notNull().default(false)
 }, (t) => ({
   telnumIdx: uniqueIndex('number_subs_telnum_idx').on(t.telnum)
 }));

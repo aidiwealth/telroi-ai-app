@@ -1242,6 +1242,11 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   // Per number and off by default: a client should choose which lines are
   // recorded rather than discovering all of them were.
   recordCalls: boolean('record_calls').notNull().default(false),
+  // Separate from the inbound flag, and off by default. Recording somebody who
+  // rang you and recording somebody you rang are different obligations: the
+  // second party did not choose a recorded line, so they are told when they
+  // answer and a client opts into that deliberately rather than inheriting it.
+  recordOutbound: boolean('record_outbound').notNull().default(false),
   // Lazy provisioning: numbers are 'local' until first used after go-live, then
   // provisioned on the country's vendor and billed from that point.
   provisionState: text('provision_state').notNull().default('local'), // local | provisioning | provisioned
