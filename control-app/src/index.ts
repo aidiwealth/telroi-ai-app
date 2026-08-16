@@ -824,6 +824,11 @@ async function main() {
   });
 
   client.start(config.ari.appName);
+  // The Telnyx trunk, so an operator on our own PBX can call internationally.
+  // Best-effort: a control app that cannot reach the web app should still route
+  // Nigerian calls, which is most of them.
+  import('./telnyx-trunk.ts').then(({ ensureTelnyxTrunk }) => ensureTelnyxTrunk())
+    .catch((e) => log(`telnyx trunk: ${e?.message || e}`));
   log(`Listening on Stasis app "${config.ari.appName}". Dial 700 to test.`);
 
   const shutdown = async () => {
