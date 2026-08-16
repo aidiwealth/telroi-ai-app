@@ -119,7 +119,22 @@ export default defineEventHandler(async (event) => {
   if (d.telroiPbxDomain) patch.telroiPbxDomain = d.telroiPbxDomain;
   if (d.telroiPbxKey) patch.telroiPbxKeyEnc = encrypt(d.telroiPbxKey);
   if (d.twilioAccountSid && d.twilioAuthToken) patch.twilioCredsEnc = encrypt(JSON.stringify({ accountSid: d.twilioAccountSid, authToken: d.twilioAuthToken }));
-  if (d.telnyxApiKey) patch.telnyxCredsEnc = encrypt(JSON.stringify({ apiKey: d.telnyxApiKey, connectionId: d.telnyxConnectionId || '' }));
+  // Both live in one encrypted blob, so saving the key alone used to blank the
+  // connection id — and Telnyx rejects an empty one, which reads as an invalid
+  // Call Control App rather than a setting we erased ourselves.
+  if (d.telnyxApiKey || d.telnyxConnectionId) {
+    const { decrypt } = await import('~/server/utils/crypto');
+    let existing: any = {};
+    try {
+      const [row] = await db.select({ enc: schema.platformSettings.telnyxCredsEnc })
+        .from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+      existing = JSON.parse(decrypt(row?.enc || ''));
+    } catch { /* nothing kept */ }
+    patch.telnyxCredsEnc = encrypt(JSON.stringify({
+      apiKey: d.telnyxApiKey || existing.apiKey || '',
+      connectionId: d.telnyxConnectionId || existing.connectionId || ''
+    }));
+  }
   // Browser-voice creds: only store when all required fields for that provider
   // are present, so a partial save never half-configures voice.
   if (d.twilioVoice && d.twilioVoice.apiKeySid && d.twilioVoice.apiKeySecret && d.twilioVoice.twimlAppSid) {
