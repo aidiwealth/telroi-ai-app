@@ -566,6 +566,15 @@
       </div>
     </template>
   </div>
+    <!-- The operator's own phone, as on the CRM. Auto-started because somebody
+         who has just clicked "call client" has already decided to make the
+         call. -->
+    <DialerModal v-if="dialer.open" :initial-phone="dialer.phone" :auto-start="true"
+      token-endpoint="/api/admin/support/voice-token"
+      numbers-endpoint="/api/admin/support/numbers"
+      @close="dialer.open = false" />
+
+
 </template>
 
 <script setup lang="ts">
@@ -741,6 +750,7 @@ const gatewayBusy = ref(false);
 const showCall = ref(false);
 const callPhone = ref('');
 const calling = ref(false);
+const dialer = reactive({ open: false, phone: '' });
 const supportStatus = ref<any>({ ready: false, wallet: null });
 // SIP vendor override
 const sipVendors = ref<any>({ region: '', overridden: false });
@@ -814,14 +824,15 @@ async function openCall() {
   callPhone.value = data.value?.tenant?.businessPhone || '';
   try { supportStatus.value = await $fetch('/api/admin/support'); } catch { /* */ }
 }
-async function placeSupportCall() {
-  calling.value = true;
-  try {
-    await $fetch('/api/admin/support/call', { method: 'POST', body: { phone: callPhone.value, clientTenantId: data.value?.tenant?.id } });
-    showCall.value = false;
-    toast.ok('Call placed — the support line is dialing now.');
-  } catch (e: any) { toast.err(e?.data?.error?.message || e?.data?.message || 'Could not place call'); }
-  finally { calling.value = false; }
+// Through the browser, like every other call an operator makes. Posting to the
+// server placed a call the operator could not hear or speak on — on the PBX it
+// rang their own endpoint back first, which is how this worked when an agent had
+// a desk phone and makes no sense when they are sitting in a browser that can
+// carry the call itself.
+function placeSupportCall() {
+  dialer.phone = callPhone.value;
+  dialer.open = true;
+  showCall.value = false;
 }
 const vanBusy = ref<string | null>(null);
 async function setVanStatus(v: any, status: string) {
