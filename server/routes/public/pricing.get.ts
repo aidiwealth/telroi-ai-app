@@ -49,7 +49,14 @@ export default defineEventHandler(async (event) => {
         ...nanoPair(Math.round((Number(p.voiceMinuteUsdMicro) || 10200) * 1000))
       },
       channelMonthly: pair(p.channelMonthlyUsdMinor),
-      numberMonthly: pair(p.didMonthlyUsdMinor)
+      numberMonthly: pair(p.didMonthlyUsdMinor),
+      // Flat per call rather than per minute: a carrier bills a whole minute for
+      // a fifteen-second OTP, so charging by duration loses money on every one.
+      // Sub-cent like airtime, so the nano fields are the real rate.
+      voiceOtpCall: {
+        ...pair(Math.round((Number(p.voiceOtpUsdMicro) || 10000) / 10000)),
+        ...nanoPair(Math.round((Number(p.voiceOtpUsdMicro) || 10000) * 1000))
+      }
     },
     // Managed AI is charged by what it actually uses, which is why the page says
     // "included" today and a client discovers otherwise on their first invoice.
