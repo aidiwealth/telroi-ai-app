@@ -2,7 +2,7 @@
 // provider for the wallet currency (Paystack for NGN, Stripe for USD).
 // Records a pending payment; the wallet is credited ONLY by the verified webhook.
 import { z } from 'zod';
-import { requireTenant, apiError } from '~/server/utils/api';
+import { requireTenantManager, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { getOrCreateWallet } from '~/server/utils/wallet';
 import { paystack, stripe } from '~/server/utils/payments';
@@ -12,7 +12,7 @@ import { randomToken } from '~/server/utils/crypto';
 const Body = z.object({ amountMinor: z.number().int().positive() });
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantManager(event);
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'amountMinor (positive integer) required');
 

@@ -3,12 +3,12 @@
 // a large ledger never loads entirely into memory. Uses the shared streamCsv
 // primitive that the admin finance + calls exports use.
 import { desc, eq, and, gte } from 'drizzle-orm';
-import { requireTenant } from '~/server/utils/api';
+import { requireTenantManager } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { streamCsv, exportSince } from '~/server/utils/csv-export';
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantManager(event);
   const db = useDb();
   const since = exportSince();
 

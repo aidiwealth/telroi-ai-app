@@ -8,7 +8,7 @@
 //     so the money always flows card -> wallet -> spend, keeping a clean record.
 import { z } from 'zod';
 import { eq, and } from 'drizzle-orm';
-import { requireTenant, apiError } from '~/server/utils/api';
+import { requireTenantManager, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { getOrCreateWallet, debit, canAfford, chargeCardToWallet, sandboxLedgerEntry } from '~/server/utils/wallet';
 import { getPricing, toCurrencyMinor } from '~/server/utils/pricing';
@@ -21,7 +21,7 @@ const Body = z.object({
 });
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantManager(event);
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'Select a number to buy');
   const db = useDb();

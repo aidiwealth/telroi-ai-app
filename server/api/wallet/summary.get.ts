@@ -1,11 +1,11 @@
 // GET /api/wallet/summary?month=YYYY-MM -> money-in / money-out for a month
 // plus a 3-month trailing average. Computed from the immutable ledger.
 import { eq, and, gte, lt } from 'drizzle-orm';
-import { requireTenant } from '~/server/utils/api';
+import { requireTenantManager } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantManager(event);
   const monthStr = (getQuery(event).month as string) || new Date().toISOString().slice(0, 7);
   const [y, m] = monthStr.split('-').map(Number);
   const start = new Date(Date.UTC(y, m - 1, 1));

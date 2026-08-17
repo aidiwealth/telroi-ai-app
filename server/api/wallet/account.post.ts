@@ -2,7 +2,7 @@
 // returns the existing one if already created). BVN or NIN required by CBN.
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { requireTenant, apiError } from '~/server/utils/api';
+import { requireTenantManager, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { loadTenant } from '~/server/utils/tenant';
 import { monnify } from '~/server/utils/monnify';
@@ -15,7 +15,7 @@ const Body = z.object({
 }).refine((d) => d.bvn || d.nin, { message: 'A BVN or NIN is required' });
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantManager(event);
   const db = useDb();
 
   // Idempotent: one reserved account per workspace.

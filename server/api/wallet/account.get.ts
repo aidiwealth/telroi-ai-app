@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
-import { requireTenant } from '~/server/utils/api';
+import { requireTenantManager } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantManager(event);
   const db = useDb();
   const [va] = await db.select().from(schema.virtualAccounts)
     .where(eq(schema.virtualAccounts.tenantId, s.tenantId)).limit(1);

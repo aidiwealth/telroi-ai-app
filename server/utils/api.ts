@@ -21,6 +21,24 @@ export async function requireTenant(event: H3Event): Promise<SessionClaims & { t
   return s as SessionClaims & { tenantId: string };
 }
 
+/** Require the active tenant membership to be the owner.
+ *
+ *  For the things that change what the workspace pays and on what terms — the
+ *  plan, going live, the payment method, invoices. An admin runs the workspace;
+ *  only the owner changes the deal.
+ */
+export async function requireTenantOwner(event: H3Event): Promise<SessionClaims & { tenantId: string; role: string }> {
+  const s = await requireTenant(event);
+  const { useDb, schema } = await import('../db');
+  const { and, eq } = await import('drizzle-orm');
+  const [m] = await useDb().select().from(schema.memberships)
+    .where(and(eq(schema.memberships.tenantId, s.tenantId), eq(schema.memberships.userId, s.userId))).limit(1);
+  if (!m || m.role !== 'owner') {
+    throw apiError('forbidden', 'Only the workspace owner can do this.', 403);
+  }
+  return { ...s, role: m.role } as any;
+}
+
 /** Require the active tenant membership to be owner/admin (management actions). */
 export async function requireTenantManager(event: H3Event): Promise<SessionClaims & { tenantId: string; role: string }> {
   const s = await requireTenant(event);

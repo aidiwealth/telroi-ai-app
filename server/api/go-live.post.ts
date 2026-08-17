@@ -5,7 +5,7 @@
 // nobody should find themselves paying because an admin clicked approve.
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { requireTenant, apiError } from '~/server/utils/api';
+import { requireTenantOwner, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { goLiveState, activateWorkspace } from '~/server/utils/go-live';
 import { logEvent } from '~/server/utils/logs';
@@ -13,7 +13,7 @@ import { logEvent } from '~/server/utils/logs';
 const Body = z.object({ plan: z.enum(['startup', 'growth']) });
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantOwner(event);
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'Choose a plan to go live');
 

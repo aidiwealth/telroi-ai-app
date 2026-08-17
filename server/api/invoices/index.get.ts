@@ -4,11 +4,11 @@
 // so there is no separate payment flow here, only the bank details and the
 // amount. The existing top-up path settles it.
 import { eq, desc } from 'drizzle-orm';
-import { requireTenant } from '~/server/utils/api';
+import { requireTenantOwner } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantOwner(event);
   const db = useDb();
 
   const rows = await db.select().from(schema.invoices)

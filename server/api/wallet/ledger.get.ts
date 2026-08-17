@@ -3,12 +3,12 @@
 // Paged rather than capped at a hundred: a busy month passes that in a week,
 // and a list that silently stops is worse than one that says how much there is.
 import { eq, desc, sql } from 'drizzle-orm';
-import { requireTenant } from '~/server/utils/api';
+import { requireTenantManager } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { pageParams, paged } from '~/server/utils/paginate';
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
+  const s = await requireTenantManager(event);
   const db = useDb();
   const p = pageParams(event);
 
