@@ -66,13 +66,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 
 defineProps<{ collapsed: boolean; mobileOpen?: boolean }>();
 defineEmits<{ toggle: []; closeMobile: [] }>();
 
 const route = useRoute();
+// The role decides what appears. Presentation only — the endpoints check for
+// themselves, and a typed URL is still refused properly.
+const auth = useAuthStore();
 
 const I = {
   // Overview — layered dashboard panels
@@ -92,9 +95,14 @@ const I = {
 };
 
 // Column-style grouped navigation: standalone links + collapsible sections.
-const sections = [
+//
+// `roles` on an item hides it from anybody else. This is presentation, not
+// security — every one of these endpoints checks the role itself, and typing the
+// URL still gets a proper refusal. It is here so a member is not walked into a
+// page that will turn them away.
+const rawSections = [
   { label: 'Overview', to: '/', icon: I.overview, tour: 'nav-overview' },
-  { label: 'Wallet', to: '/wallet', icon: I.wallet, tour: 'nav-wallet' },
+  { label: 'Wallet', to: '/wallet', icon: I.wallet, tour: 'nav-wallet', roles: ['owner', 'admin'] },
   {
     label: 'Voice', icon: I.voice, tour: 'nav-voice', children: [
       { label: 'Calls', to: '/calls' },
@@ -129,6 +137,19 @@ const sections = [
   },
   { label: 'Settings', to: '/settings', icon: I.settings }
 ];
+
+// What this person can actually reach. A section whose children are all hidden
+// disappears rather than rendering as an empty group.
+const sections = computed(() => {
+  const role = auth.user?.role || 'member';
+  const allowed = (item: any) => !item.roles || item.roles.includes(role);
+  return rawSections
+    .filter(allowed)
+    .map((sec: any) => sec.children
+      ? { ...sec, children: sec.children.filter(allowed) }
+      : sec)
+    .filter((sec: any) => !sec.children || sec.children.length > 0);
+});
 
 // Open the section that contains the current route by default.
 function sectionMatches(section: any) {
