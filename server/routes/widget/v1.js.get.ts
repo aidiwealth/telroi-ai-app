@@ -117,7 +117,11 @@ const WIDGET_JS = String.raw`(function () {
         + '<div style="position:absolute;inset:24px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center">'
         + '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13 1 .35 1.94.65 2.84a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.3 1.84.52 2.84.65A2 2 0 0 1 22 16.92z"/></svg></div>';
       var title = el('div', 'font-size:18px;font-weight:600;color:#1a1a1a;letter-spacing:-.01em', cfg.greeting || 'Call our team');
-      var sub = el('div', 'font-size:13px;color:#8a877f;margin:5px 0 18px;line-height:1.5', "Enter your details \u2014 we'll ring you back in seconds.");
+      // The call happens here, in their browser, the moment they press the
+      // button. The old line said we would ring them back, which is why visitors
+      // read this as leaving contact details for a follow-up and hesitated —
+      // and why anybody who did press it sat waiting for their phone.
+      var sub = el('div', 'font-size:13px;color:#8a877f;margin:5px 0 18px;line-height:1.5', "You'll be connected here in your browser \u2014 no phone call needed.");
       hero.appendChild(orb); hero.appendChild(title); hero.appendChild(sub);
       var row = el('div', 'display:flex;gap:9px;margin-bottom:12px');
       var n = el('input'); n.placeholder = 'Name'; n.value = userName; n.style.cssText = pill(); focusable(n, color);
@@ -133,13 +137,15 @@ const WIDGET_JS = String.raw`(function () {
         if (c.iso === (cfg.country || 'NG')) o.selected = true;
         cc.appendChild(o);
       });
-      var ph = el('input'); ph.placeholder = 'Phone number'; ph.value = userPhone; ph.type = 'tel'; ph.style.cssText = pill(); focusable(ph, color);
+      // Labelled for why we want it: somewhere to reach them if the browser
+      // call drops. Asked for without a reason, it reads as lead capture.
+      var ph = el('input'); ph.placeholder = 'Phone \u2014 in case we get cut off'; ph.value = userPhone; ph.type = 'tel'; ph.style.cssText = pill(); focusable(ph, color);
       row2.appendChild(cc); row2.appendChild(ph);
-      var btn = el('button', orbBtnCss(color), 'Request call<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;vertical-align:-3px"><path d="M5 12h14M13 6l6 6-6 6"/></svg>');
+      var btn = el('button', orbBtnCss(color), 'Start call<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:8px;vertical-align:-3px"><path d="M5 12h14M13 6l6 6-6 6"/></svg>');
       btnHover(btn);
       var err = el('div', 'color:#c0392b;font-size:12px;margin-top:10px;text-align:center;display:none');
       btn.onclick = function () {
-        if (!n.value.trim() || ph.value.replace(/\D/g,'').length < 6) { err.style.display = 'block'; err.textContent = 'Please enter your name and a valid mobile number.'; return; }
+        if (!n.value.trim() || ph.value.replace(/\D/g,'').length < 6) { err.style.display = 'block'; err.textContent = 'Please add your name and a number we can reach you on.'; return; }
         btn.disabled = true; btn.innerHTML = 'Connecting\u2026';
         var local = ph.value.replace(/\D/g, '').replace(/^0+/, '');
         var fullPhone = cc.value + local;
