@@ -160,7 +160,7 @@ function sectionMatches(section: any) {
 // the current route. Once the user toggles, their choice wins (even closing a
 // section they're currently inside).
 const openSections = ref<Record<string, boolean | undefined>>(
-  Object.fromEntries(sections.filter((s) => s.children && sectionMatches(s)).map((s) => [s.label, true]))
+  Object.fromEntries(rawSections.filter((s: any) => s.children && sectionMatches(s)).map((s: any) => [s.label, true]))
 );
 function isOpen(section: any) {
   const explicit = openSections.value[section.label];
