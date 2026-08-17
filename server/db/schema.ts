@@ -543,6 +543,30 @@ export const provisioningEvents = pgTable('provisioning_events', {
    the call log (callEvents) or people (memberships) — a contact is an EXTERNAL
    customer/lead, enriched with details a voice CRM needs, auto-linked to inbound
    web calls and call history by phone number. */
+// Sessions were stateless: a signature was verified and the payload trusted, so
+// nothing could revoke a token before it expired — not signing out elsewhere,
+// not removing a member from a workspace, not somebody reporting a stolen
+// laptop. A copied cookie was good for a week. A row per session fixes that and
+// lets an account owner see where they are signed in.
+export const userSessions = pgTable('user_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // Either a user or an operator's email: an operator is identified by email and
+  // may have no users row at all.
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  adminEmail: text('admin_email'),
+  tenantId: uuid('tenant_id'),
+  kind: text('kind').notNull().default('client'),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  // Revoked rather than deleted, so "signed out from Lagos at 14:02" survives as
+  // something somebody can be shown.
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokedReason: text('revoked_reason')
+});
+
 export const crmContacts = pgTable('crm_contacts', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),

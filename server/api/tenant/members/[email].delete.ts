@@ -19,6 +19,12 @@ export default defineEventHandler(async (event) => {
   if (!m) throw apiError('not_found', 'Member not found', 404);
   if (m.role === 'owner') throw apiError('forbidden', "The workspace owner can't be removed", 403);
 
+  // Their sessions go with their membership. Removing somebody from a workspace
+  // while their cookie kept working for another week was the gap: the account
+  // owner believed access had ended, and it had not.
+  const { revokeSessions } = await import('~/server/utils/session');
+  await revokeSessions({ userId: user.id, reason: 'removed from workspace' });
+
   await db.delete(schema.memberships)
     .where(and(eq(schema.memberships.userId, user.id), eq(schema.memberships.tenantId, s.tenantId)));
   await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'member.removed', summary: `Removed ${email}` });

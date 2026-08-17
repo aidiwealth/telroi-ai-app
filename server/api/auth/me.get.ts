@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, s.userId)).limit(1);
   if (!u) {
     const { clearSession } = await import('~/server/utils/session');
-    clearSession(event);
+    await clearSession(event);
     return { user: null };
   }
 

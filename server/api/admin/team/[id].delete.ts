@@ -22,6 +22,15 @@ export default defineEventHandler(async (event) => {
     if (others.length === 0) throw apiError('last_superadmin', 'You can’t remove the last superadmin.', 400);
   }
 
+  // An operator's console reaches every client's data, so their sessions ending
+  // with their access matters more here than anywhere.
+  const [op] = await db.select({ email: schema.platformAdmins.email })
+    .from(schema.platformAdmins).where(eq(schema.platformAdmins.id, id)).limit(1);
+  if (op?.email) {
+    const { revokeSessions } = await import('~/server/utils/session');
+    await revokeSessions({ adminEmail: op.email, reason: 'removed from platform' });
+  }
+
   await db.delete(schema.platformAdmins).where(eq(schema.platformAdmins.id, id));
 
   // Their calling goes with their access. Deleting only the admin row left the
