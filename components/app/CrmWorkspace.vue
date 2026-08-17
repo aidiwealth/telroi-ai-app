@@ -30,6 +30,12 @@
           <option value="customer">Customers</option>
           <option value="churned">Churned</option>
         </select>
+        <!-- Archived contacts need somewhere to be seen, or archiving is a
+             one-way door rather than putting something away. -->
+        <label class="crm-arch-toggle">
+          <input type="checkbox" v-model="showArchived" @change="load" />
+          <span>Archived</span>
+        </label>
         <div class="crm-view-toggle">
           <button class="crm-vbtn" :class="{ on: view === 'table' }" title="Table view" @click="view = 'table'">
             <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M6 6.5V13"/></svg>
@@ -119,6 +125,10 @@
           <select :value="sel.status" class="select select-sm" @change="save('status', $event.target.value)">
             <option value="lead">Lead</option><option value="active">Active</option><option value="customer">Customer</option><option value="churned">Churned</option>
           </select>
+          <!-- Archive is the everyday tidy-up and reverses; delete suppresses
+               them until restored, so it asks first. -->
+          <button class="btn btn-ghost btn-sm" @click="toggleArchive(sel)">{{ sel.archivedAt ? 'Restore' : 'Archive' }}</button>
+          <button class="btn btn-ghost btn-sm crm-danger" @click="removeContact(sel)">Delete</button>
         </div>
 
         <div class="crm-fields">
@@ -350,7 +360,7 @@ async function load() {
   pending.value = true;
   try {
     const sources = bucket.value === 'all' ? undefined : (BUCKET_SOURCES[bucket.value] || []).join(',');
-    const r = await api.get<{ contacts: any[] }>(`${props.apiBase}/contacts`, { q: q.value || undefined, status: status.value, sources });
+    const r = await api.get<{ contacts: any[] }>(`${props.apiBase}/contacts`, { q: q.value || undefined, status: status.value, sources, archived: showArchived.value ? '1' : undefined });
     contacts.value = r.contacts;
   } catch (e: any) { if (e?.data?.error?.code !== 'feature_locked') toast.err(e?.data?.error?.message || 'Could not load'); }
   finally { pending.value = false; }
@@ -364,6 +374,33 @@ async function open(c: any) {
   }
   catch (e: any) { toast.err('Could not open contact'); }
 }
+const showArchived = ref(false);
+
+/** Off the board, or back onto it. Reversible, so it can be done without much
+ *  thought — which is what makes it useful for a board of three hundred. */
+async function toggleArchive(c: any) {
+  const archiving = !c.archivedAt;
+  try {
+    await api.put(`${props.apiBase}/contacts/${c.id}`, { archived: archiving });
+    sel.value = null;
+    await load();
+    toast.ok(archiving ? 'Archived' : 'Restored');
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not archive'); }
+}
+
+/** Asks first, because this one keeps them off the board even when they call
+ *  again — where archiving is only tidying, this is a decision. */
+async function removeContact(c: any) {
+  const who = c.name || c.phone || 'this contact';
+  if (!confirm(`Delete ${who}? Their calls stay in your logs, and they will not reappear in the CRM if they contact you again.`)) return;
+  try {
+    await api.delete(`${props.apiBase}/contacts/${c.id}`);
+    sel.value = null;
+    await load();
+    toast.ok('Deleted');
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not delete'); }
+}
+
 async function save(field: string, value: any) {
   if (!sel.value) return;
   try {
@@ -475,6 +512,9 @@ onMounted(() => { loadPlan(); load(); });
 </script>
 
 <style scoped>
+.crm-arch-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); cursor: pointer; white-space: nowrap; }
+.crm-danger { color: var(--danger); }
+.crm-danger:hover { background: rgba(200,40,40,.06); }
 .crm-audio { height: 28px; max-width: 180px; margin-left: auto; }
 .crm-pagehead { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .crm-subnav { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; }

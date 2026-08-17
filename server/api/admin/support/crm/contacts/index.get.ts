@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
   const { items, total } = await listContacts(ws.tenantId, {
     q: q.q ? String(q.q) : undefined,
     status: q.status ? String(q.status) : undefined,
+    // Archived contacts only when asked for, so the board shows the people
+    // somebody is actually working with.
+    archived: q.archived === '1' || q.archived === 'true',
     sources,
     limit: 200
   });

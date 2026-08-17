@@ -18,6 +18,9 @@ export default defineEventHandler(async (event) => {
     q: q.q as string,
     status: q.status as string,
     sources: q.sources ? String(q.sources).split(',') : undefined,
+    // Archived contacts only when asked for, so the board shows the people
+    // somebody is actually working with.
+    archived: q.archived === '1' || q.archived === 'true',
     limit: p.limit, offset: p.offset
   });
   // contacts kept as the key so nothing calling this has to change, with the
