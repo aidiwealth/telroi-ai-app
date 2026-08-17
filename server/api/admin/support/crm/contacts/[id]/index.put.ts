@@ -11,7 +11,8 @@ const Body = z.object({
   name: z.string().max(120).optional(), company: z.string().max(120).optional(),
   email: z.string().optional(), phone: z.string().max(32).optional(), altPhone: z.string().max(32).optional(),
   country: z.string().optional(), region: z.string().optional(), city: z.string().optional(),
-  status: z.enum(['lead', 'active', 'customer', 'churned']).optional(), tags: z.array(z.string()).optional()
+  status: z.enum(['lead', 'active', 'customer', 'churned']).optional(), tags: z.array(z.string()).optional(),
+  archived: z.boolean().optional()
 }).passthrough();
 
 export default defineEventHandler(async (event) => {
@@ -19,5 +20,12 @@ export default defineEventHandler(async (event) => {
   const ws = await ensureSupportWorkspace();
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'Invalid update');
-  return { contact: await updateContact(ws.tenantId, getRouterParam(event, 'id')!, p.data as any) };
+
+  // The column is a timestamp and the field is a boolean, so it cannot pass
+  // straight through.
+  const { archived, ...rest } = p.data as any;
+  const patch: any = { ...rest };
+  if (archived !== undefined) patch.archivedAt = archived ? new Date() : null;
+
+  return { contact: await updateContact(ws.tenantId, getRouterParam(event, 'id')!, patch) };
 });

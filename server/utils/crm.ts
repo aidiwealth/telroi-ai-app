@@ -1,10 +1,14 @@
 // server/utils/crm.ts — Telroi One CRM operations (paid suite).
-import { and, eq, desc, ilike, or, sql, inArray } from 'drizzle-orm';
+import { and, eq, desc, ilike, or, sql, inArray, isNull, isNotNull } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 
-export async function listContacts(tenantId: string, opts: { q?: string; status?: string; sources?: string[]; limit?: number; offset?: number } = {}) {
+export async function listContacts(tenantId: string, opts: { q?: string; status?: string; sources?: string[]; limit?: number; offset?: number; archived?: boolean } = {}) {
   const db = useDb();
   const conds: any[] = [eq(schema.crmContacts.tenantId, tenantId)];
+  // Deleted contacts never appear. Archived ones only when asked for, so the
+  // board shows the people somebody is actually working with.
+  conds.push(isNull(schema.crmContacts.deletedAt));
+  conds.push(opts.archived ? isNotNull(schema.crmContacts.archivedAt) : isNull(schema.crmContacts.archivedAt));
   if (opts.status && opts.status !== 'all') conds.push(eq(schema.crmContacts.status, opts.status));
   if (opts.sources && opts.sources.length) conds.push(inArray(schema.crmContacts.source, opts.sources));
   if (opts.q) {
@@ -62,9 +66,24 @@ export async function updateContact(tenantId: string, id: string, patch: Partial
   return row;
 }
 
+/** Soft, for two reasons. The notes and call history record real conversations
+ *  and should survive a tidy-up; and a hard delete did not stick — the call sync
+ *  recreated the contact the next time that number rang, so deleting achieved
+ *  nothing beyond losing the notes. */
 export async function deleteContact(tenantId: string, id: string) {
   const db = useDb();
-  await db.delete(schema.crmContacts)
+  await db.update(schema.crmContacts)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(schema.crmContacts.id, id), eq(schema.crmContacts.tenantId, tenantId)));
+  return { ok: true };
+}
+
+/** Off the board, still theirs. Reversible, because a contact put away in error
+ *  should come back without ceremony. */
+export async function archiveContact(tenantId: string, id: string, archived: boolean) {
+  const db = useDb();
+  await db.update(schema.crmContacts)
+    .set({ archivedAt: archived ? new Date() : null })
     .where(and(eq(schema.crmContacts.id, id), eq(schema.crmContacts.tenantId, tenantId)));
   return { ok: true };
 }
@@ -137,7 +156,16 @@ export async function syncCallsToContacts(tenantId: string, opts: { days?: numbe
       .orderBy(desc(schema.callEvents.startedAt))
       .limit(opts.limit ?? 500);
 
-    const phones = Array.from(new Set(rows.map((r) => (r.phone || '').trim()).filter(Boolean)));
+    let phones = Array.from(new Set(rows.map((r) => (r.phone || '').trim()).filter(Boolean)));
+
+    // Numbers somebody deliberately removed. Without this the sync would put
+    // them back the next time they rang, and deleting would mean nothing —
+    // which is why the delete is soft in the first place.
+    const gone = await db.select({ phone: schema.crmContacts.phone })
+      .from(schema.crmContacts)
+      .where(and(eq(schema.crmContacts.tenantId, tenantId), isNotNull(schema.crmContacts.deletedAt)));
+    const goneSet = new Set(gone.map((g) => (g.phone || '').replace(/\D/g, '').slice(-9)).filter(Boolean));
+    if (goneSet.size) phones = phones.filter((p) => !goneSet.has(p.replace(/\D/g, '').slice(-9)));
     if (!phones.length) return 0;
 
     const existing = await db.select({ phone: schema.crmContacts.phone })

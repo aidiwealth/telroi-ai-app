@@ -558,6 +558,13 @@ export const crmContacts = pgTable('crm_contacts', {
   timezone: text('timezone'),
   // CRM fields a voice CRM needs
   status: text('status').notNull().default('lead'), // lead | active | customer | churned
+  // Off the board but still theirs: a client with three hundred contacts needs
+  // to put some away without losing who rang them and when.
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
+  // Soft, because the call history and notes record a real conversation and
+  // should survive a tidy-up — and because a hard delete would not stick: the
+  // call sync would recreate the contact the next time that number rang.
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   tags: jsonb('tags').$type<string[]>().default([]),
   ownerUserId: uuid('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
   source: text('source'),               // web_call | manual | import | inbound
