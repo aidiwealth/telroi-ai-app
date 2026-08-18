@@ -121,33 +121,26 @@
       <!-- STEP 2: Card on file ($0 during trial) -->
       <section v-else-if="step === 2">
         <div class="kicker">Step 3 of 6</div>
-        <h1>Add a <em>card</em></h1>
-        <p class="wz-lede">We need a card on file to start your trial. <strong>You'll be charged $0 until your {{ trialDays }}-day trial ends</strong> — then your plan renews automatically unless you cancel.</p>
+        <h1>Check your <em>card</em></h1>
+        <p class="wz-lede">We charge a small amount to confirm the card works, and <strong>it goes straight into your wallet as credit</strong> — you keep it. When your {{ trialDays }}-day trial ends, we use the same card for your plan.</p>
 
         <div v-if="savedCard" class="card-saved">
-          <span class="card-saved-icon">💳</span>
+          <span class="card-saved-icon">&#128179;</span>
           <div>
-            <div class="card-saved-line">{{ (savedCard.brand || 'Card') }} ending {{ savedCard.last4 || '••••' }}</div>
-            <div class="card-saved-sub muted">Saved · $0 charged during your trial</div>
+            <div class="card-saved-line">{{ (savedCard.brand || 'Card') }} ending {{ savedCard.last4 || '&bull;&bull;&bull;&bull;' }}</div>
+            <div class="card-saved-sub muted">Confirmed &middot; the amount is in your wallet</div>
           </div>
         </div>
 
         <div v-else class="card-form">
-          <!-- PLACEHOLDER tokenizer. Replace this block with the provider's secure
-               element (Stripe Elements / Paystack inline). Raw card numbers must
-               NEVER hit our server — the SDK returns a token we save. -->
-          <div class="card-secure-note">🔒 Card details are handled by our payment provider. Telroi never sees your full card number.</div>
-          <div class="field">
-            <label>Cardholder name</label>
-            <input v-model="cardName" class="input" placeholder="Name on card" />
-          </div>
-          <p class="card-dev-note muted">Payment provider element mounts here once keys are configured. For now, use the demo button to simulate saving a tokenized card.</p>
+          <div class="card-secure-note">&#128274; You will be taken to our payment provider. Telroi never sees your card number.</div>
+          <p class="card-amount">{{ (country || '').toLowerCase() === 'nigeria' ? '&#8358;1,600' : '$1' }} <span class="muted">to confirm the card &mdash; added to your wallet</span></p>
         </div>
 
         <div class="wz-actions">
           <button class="btn btn-ghost" @click="back">Back</button>
-          <button v-if="!savedCard" class="btn btn-signal" :disabled="busy || !cardName" @click="saveCard">
-            {{ busy ? 'Saving…' : 'Save card & continue' }} <span class="arrow">→</span>
+          <button v-if="!savedCard" class="btn btn-signal" :disabled="busy" @click="saveCard">
+            {{ busy ? 'Opening…' : 'Confirm card' }} <span class="arrow">→</span>
           </button>
           <button v-else class="btn btn-signal" @click="next">Continue <span class="arrow">→</span></button>
         </div>
@@ -265,7 +258,6 @@ const plan = ref<'startup' | 'growth'>('growth');
 const trialDays = ref(7);
 
 // step 2 (card)
-const cardName = ref('');
 const savedCard = ref<any>(null);
 
 // step 5 (number purchase)
@@ -382,6 +374,10 @@ function moneyFmt(minor: number) {
 }
 
 // Load purchasable numbers when the number step is reached.
+onMounted(() => {
+  if (useRoute().query.ref) { step.value = 2; checkCardOnReturn(); }
+});
+
 watch(step, async (st) => {
   if (st === 5 && !availableNumbers.value.length && !numbersLoading.value) {
     numbersLoading.value = true;
@@ -418,18 +414,42 @@ async function selectPlan() {
 async function saveCard() {
   busy.value = true;
   try {
-    // PLACEHOLDER tokenization. With a real provider, the SDK returns a token
-    // and card metadata client-side; we POST only those. This demo token lets
-    // the flow proceed end-to-end until provider keys are wired.
-    const demoToken = `tok_demo_${Date.now()}`;
-    await api.post('/api/payment-method', {
-      provider: 'stripe', token: demoToken,
-      brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030
-    });
-    savedCard.value = { brand: 'visa', last4: '4242' };
-    toast.ok('Card saved — $0 charged during your trial');
-  } catch (e: any) { toast.err(e.message); }
+    // A real charge, because there is no way to keep a card without one.
+    // Paystack hands back a reusable authorization on a successful payment and
+    // nowhere else; Stripe is the same in practice. So the card is validated by
+    // charging a small amount — and that amount lands in their wallet as credit
+    // rather than disappearing, which is the only version of this that is fair.
+    //
+    // The webhook does the rest: it credits the wallet and stores the
+    // authorization as their card on file. Nothing here handles a card number.
+    const ngn = (country.value || '').toLowerCase() === 'nigeria';
+    const amountMinor = ngn ? 160000 : 100;  // ₦1,600 or $1
+    const r = await api.post<any>('/api/wallet/topup', { amountMinor, returnTo: '/onboarding' });
+    if (r?.authorizationUrl || r?.url) {
+      window.location.href = r.authorizationUrl || r.url;
+      return;
+    }
+    toast.err('Could not open the payment page. Try again in a moment.');
+  } catch (e: any) {
+    toast.err(e?.data?.error?.message || e.message || 'Could not start the card check');
+  }
   finally { busy.value = false; }
+}
+
+/** Coming back from the provider. The webhook may land a moment after they do,
+ *  so this is retried briefly rather than deciding on the first look. */
+async function checkCardOnReturn() {
+  for (let i = 0; i < 6; i++) {
+    try {
+      const r = await api.get<any>('/api/payment-method');
+      if (r?.card?.last4) {
+        savedCard.value = { brand: r.card.brand || 'card', last4: r.card.last4 };
+        toast.ok('Card confirmed — the amount is in your wallet as credit');
+        return;
+      }
+    } catch { /* not yet */ }
+    await new Promise((res) => setTimeout(res, 1500));
+  }
 }
 
 async function saveAi() {

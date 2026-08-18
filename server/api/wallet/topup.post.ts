@@ -9,7 +9,12 @@ import { paystack, stripe } from '~/server/utils/payments';
 import { paymentCreds } from '~/server/utils/platform';
 import { randomToken } from '~/server/utils/crypto';
 
-const Body = z.object({ amountMinor: z.number().int().positive() });
+const Body = z.object({
+  amountMinor: z.number().int().positive(),
+  // Where to send them back to. Onboarding needs them returned to the wizard
+  // rather than dropped on the wallet page mid-signup.
+  returnTo: z.string().max(120).optional()
+});
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenantManager(event);
@@ -21,6 +26,9 @@ export default defineEventHandler(async (event) => {
   const w = await getOrCreateWallet(s.tenantId);
   const reference = `tlr_${randomToken(12).replace(/[^a-zA-Z0-9]/g, '').slice(0, 18)}`;
   const base = cfg.public.appBaseUrl;
+  // A path of ours, never an arbitrary URL: an open redirect on a payment
+  // callback is how somebody sends a paying client somewhere else entirely.
+  const back = /^\/[a-zA-Z0-9/_-]{0,60}$/.test(p.data.returnTo || '') ? p.data.returnTo! : '/wallet';
   const db = useDb();
 
   // Sandbox: never touch a real payment provider. Credit simulated funds
@@ -43,14 +51,14 @@ export default defineEventHandler(async (event) => {
 
   if (provider === 'paystack') {
     if (!pay.paystack) throw apiError('not_configured', 'Paystack is not configured', 503);
-    const init = await paystack.init(pay.paystack, s.email, p.data.amountMinor, reference, `${base}/wallet?ref=${reference}`);
+    const init = await paystack.init(pay.paystack, s.email, p.data.amountMinor, reference, `${base}${back}?ref=${reference}`);
     return { provider: 'paystack', ...init };
   } else if (provider === 'monnify') {
     // Monnify uses reserved bank accounts rather than a redirect checkout.
     throw apiError('use_bank_transfer', 'This account funds via bank transfer. Use the bank-transfer (reserved account) option.', 400);
   } else {
     if (!pay.stripe) throw apiError('not_configured', 'Stripe is not configured', 503);
-    const init = await stripe.init(pay.stripe, p.data.amountMinor, reference, `${base}/wallet?ref=${reference}`, `${base}/wallet`);
+    const init = await stripe.init(pay.stripe, p.data.amountMinor, reference, `${base}${back}?ref=${reference}`, `${base}${back}`);
     return { provider: 'stripe', ...init };
   }
 });

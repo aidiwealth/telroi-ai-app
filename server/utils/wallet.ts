@@ -337,7 +337,7 @@ export async function chargeCardToWallet(opts: {
 
   let providerResult: { ok: boolean; reason?: string };
   try {
-    providerResult = await chargeViaProvider(pm.provider, pm.token, opts.amountMinor, opts.currency, reference);
+    providerResult = await chargeViaProvider(opts.tenantId, pm.provider, pm.token, opts.amountMinor, opts.currency, reference);
   } catch (e: any) {
     await logEvent({ tenantId: opts.tenantId, kind: 'system', action: 'card.charge_failed', level: 'error', summary: `${opts.reason}: ${e?.message || 'charge error'}`, ref: reference });
     return { ok: false, reason: 'charge_error' };
@@ -358,18 +358,37 @@ export async function chargeCardToWallet(opts: {
   return { ok: true, reference };
 }
 
-// Isolated provider charge. Wire real server-side charge calls here when keys
-// are configured. Until then, returns provider_unconfigured so callers degrade.
-async function chargeViaProvider(provider: string, _token: string, _amountMinor: number, _currency: string, _reference: string): Promise<{ ok: boolean; reason?: string }> {
-  const cfg = useRuntimeConfig() as any;
-  if (provider === 'stripe' && cfg.stripeSecretKey) {
-    // TODO: call Stripe PaymentIntents with the saved payment_method + off_session.
-    return { ok: false, reason: 'provider_unconfigured' };
+/** Charge a card we already hold an authorization for.
+ *
+ *  Credentials come from paymentCreds, which respects the platform's test/live
+ *  mode — reading the config key directly would let a renewal in test mode
+ *  reach a real card.
+ */
+async function chargeViaProvider(tenantId: string, provider: string, token: string, amountMinor: number, currency: string, reference: string): Promise<{ ok: boolean; reason?: string }> {
+  const { paymentCreds } = await import('./platform');
+  const { paystack, stripe } = await import('./payments');
+  const pay: any = await paymentCreds(tenantId).catch(() => null);
+
+  if (provider === 'paystack') {
+    if (!pay?.paystack) return { ok: false, reason: 'provider_unconfigured' };
+    // Paystack wants the cardholder's email on every charge. The owner's is the
+    // one the authorization was taken against.
+    const db = useDb();
+    const { eq, and } = await import('drizzle-orm');
+    const [owner] = await db.select({ email: schema.users.email })
+      .from(schema.memberships)
+      .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+      .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.role, 'owner')))
+      .limit(1);
+    if (!owner?.email) return { ok: false, reason: 'no_owner_email' };
+    return await paystack.chargeAuthorization(pay.paystack, token, owner.email, amountMinor, reference);
   }
-  if (provider === 'paystack' && cfg.paystackSecretKey) {
-    // TODO: call Paystack /transaction/charge_authorization with the auth token.
-    return { ok: false, reason: 'provider_unconfigured' };
+
+  if (provider === 'stripe') {
+    if (!pay?.stripe) return { ok: false, reason: 'provider_unconfigured' };
+    return await stripe.chargeSaved(pay.stripe, token, null, amountMinor, reference);
   }
+
   return { ok: false, reason: 'provider_unconfigured' };
 }
 
