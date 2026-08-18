@@ -66,6 +66,11 @@
       <div class="ad-modal">
         <div class="ad-modal-head"><h3>New client</h3><button class="ad-x" @click="showCreate = false">✕</button></div>
         <div class="ad-field"><label>Client name</label><input v-model="draft.client" class="ad-input" placeholder="Acme Corp" @input="deriveSubdomain" /></div>
+        <!-- Somebody has to be able to sign in. Without this the workspace is
+             created, has a wallet and a trial running, and is unreachable. -->
+        <div class="ad-field"><label>Owner's email</label><input v-model="draft.ownerEmail" type="email" class="ad-input" placeholder="them@theircompany.com" />
+          <p class="ad-hint">They are made owner and sent a code to sign in with. Use an address they actually read.</p>
+        </div>
         <div class="ad-field">
           <label>Subdomain</label>
           <div class="ad-slug"><input v-model="draft.subdomain" class="ad-input mono" placeholder="acme" @input="subdomainEdited = true" /><span class="ad-suffix mono">.{{ suffix }}</span></div>
@@ -101,7 +106,7 @@
           <input type="checkbox" v-model="draft.provisionNow" />
           <span>Provision carrier now <span class="ad-opt">— otherwise the workspace stays local and is provisioned at go-live (recommended)</span></span>
         </label>
-        <button class="btn btn-signal btn-block" :disabled="creating || !draft.client || !draft.subdomain || !draft.country" @click="create">
+        <button class="btn btn-signal btn-block" :disabled="creating || !draft.client || !draft.subdomain || !draft.country || !draft.ownerEmail" @click="create">
           {{ creating ? (draft.provisionNow ? 'Provisioning…' : 'Creating…') : 'Create client' }}
         </button>
         <p class="ad-note">Creates the client workspace, sets its currency from country, and starts the plan trial. Carrier provisioning happens at go-live unless you opt in above.</p>
@@ -120,11 +125,12 @@ interface Client { domain: string; name: string; slug: string; tenantId: string;
 const pending = ref(true);
 const error = ref('');
 const clients = ref<Client[]>([]);
-const suffix = ref('digitaltide.io');
+const suffix = ref('');
 const filter = ref('all');
 const showCreate = ref(false);
 const creating = ref(false);
-const draft = reactive({ client: '', subdomain: '', country: '', sector: '', businessPhone: '', plan: 'startup', accountsLimit: 10, maxLines: 5, provisionNow: false });
+const draft = reactive({
+  ownerEmail: '', client: '', subdomain: '', country: '', sector: '', businessPhone: '', plan: 'startup', accountsLimit: 10, maxLines: 5, provisionNow: false });
 const countryOptions = ['Nigeria', 'Ghana', 'Kenya', 'South Africa', 'United States', 'Canada', 'United Kingdom', 'Germany', 'France', 'United Arab Emirates', 'India', 'Other'];
 const subdomainEdited = ref(false);
 const search = ref('');
@@ -160,8 +166,8 @@ async function load() {
     totalPages.value = c.totalPages ?? 1;
     try {
       const s = await $fetch<any>('/api/admin/settings');
-      suffix.value = s.clientDomainSuffix || 'digitaltide.io';
-    } catch { suffix.value = suffix.value || 'digitaltide.io'; }
+      suffix.value = s.clientDomainSuffix || '';
+    } catch { /* no suffix; the slug stands on its own */ }
   } catch (e: any) {
     error.value = e?.data?.error?.message || e?.data?.message || 'Could not load clients.';
   } finally { pending.value = false; }

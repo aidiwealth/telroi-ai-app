@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const [s] = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
   return {
     operatorDomain: s?.operatorDomain || '',
-    clientDomainSuffix: s?.clientDomainSuffix || 'digitaltide.io',
+    clientDomainSuffix: s?.clientDomainSuffix || '',
     operatorKeySet: !!s?.operatorApiKeyEnc,
     operatorUsername: s?.operatorUsername || '',
     operatorPasswordSet: !!s?.operatorPasswordEnc,

@@ -21,6 +21,9 @@ import { randomToken } from '~/server/utils/crypto';
 
 const Body = z.object({
   client: z.string().min(1),
+  // Somebody has to be able to sign in. Without this the workspace exists, has
+  // a wallet and a trial running, and is unreachable by anybody.
+  ownerEmail: z.string().email(),
   subdomain: z.string().regex(/^[a-z0-9-]{2,40}$/),
   country: z.string().min(2).max(60),
   sector: z.string().max(60).optional(),
@@ -42,8 +45,10 @@ export default defineEventHandler(async (event) => {
   if (existing.length) throw apiError('slug_taken', 'That subdomain is already taken');
 
   const [settings] = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
-  const suffix = settings?.clientDomainSuffix || 'digitaltide.io';
-  const fullDomain = `${p.data.subdomain}.${suffix}`;
+  // No default from another product. The suffix is only a label — subdomains do
+  // not resolve — so where none is configured the slug stands on its own.
+  const suffix = settings?.clientDomainSuffix || '';
+  const fullDomain = suffix ? `${p.data.subdomain}.${suffix}` : p.data.subdomain;
 
   const trialDays = 7;
   const trialEndsAt = new Date(Date.now() + trialDays * 86400000);
@@ -64,6 +69,29 @@ export default defineEventHandler(async (event) => {
     onboardingStep: 1,
     unsubToken: randomToken(18)
   }).returning();
+
+  // Somebody who can sign in. Without this the workspace exists, has a wallet
+  // and a trial running, and nobody can reach it — an operator would create a
+  // client and then have nothing to hand them.
+  try {
+    const email = p.data.ownerEmail.toLowerCase().trim();
+    let [user] = await db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
+    if (!user) {
+      [user] = await db.insert(schema.users).values({ email }).returning();
+    }
+    await db.insert(schema.memberships).values({
+      userId: user.id, tenantId: tenant.id, role: 'owner'
+    });
+
+    // And a way in. The same invitation a client sends a colleague, so they get
+    // a code and a workspace name rather than a bare login page.
+    const { startLogin } = await import('~/server/utils/auth-core');
+    await startLogin(email, { workspace: tenant.name });
+  } catch (e: any) {
+    // The workspace is made either way; an operator can invite them from the
+    // client's page. Failing the whole creation over an email would be worse.
+    console.error('[admin create] owner setup failed', e);
+  }
 
   let walletCurrency: 'NGN' | 'USD' = currencyForCountry(p.data.country);
   try {

@@ -40,7 +40,7 @@ await db.insert(schema.platformSettings).values({
   id: 'singleton',
   operatorDomain: 'mock.local',
   operatorApiKeyEnc: enc('mock-operator-key'),
-  clientDomainSuffix: 'digitaltide.io'
+  clientDomainSuffix: null
 });
 
 console.log('✓ seeded tenant acme + owner@acme.test');
