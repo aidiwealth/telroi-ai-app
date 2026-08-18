@@ -11,7 +11,7 @@
     <div class="wizard-card card">
       <!-- STEP 0: Company -->
       <section v-if="step === 0">
-        <div class="kicker">Step 1 of 6</div>
+        <div class="kicker">Step 1 of 4</div>
         <h1>Name your <em>workspace</em></h1>
         <p class="wz-lede">This is your company's home on Telroi.</p>
 
@@ -90,7 +90,7 @@
 
       <!-- STEP 1: Plan -->
       <section v-else-if="step === 1">
-        <div class="kicker">Step 2 of 6</div>
+        <div class="kicker">Step 2 of 4</div>
         <h1>Choose your <em>plan</em></h1>
         <p class="wz-lede">Both plans start with a {{ trialDays }}-day free trial. You won't be charged until it ends, and you can change plans anytime in Settings.</p>
 
@@ -120,35 +120,7 @@
 
       <!-- STEP 2: Card on file ($0 during trial) -->
       <section v-else-if="step === 2">
-        <div class="kicker">Step 3 of 6</div>
-        <h1>Check your <em>card</em></h1>
-        <p class="wz-lede">We charge a small amount to confirm the card works, and <strong>it goes straight into your wallet as credit</strong> — you keep it. When your {{ trialDays }}-day trial ends, we use the same card for your plan.</p>
-
-        <div v-if="savedCard" class="card-saved">
-          <span class="card-saved-icon">&#128179;</span>
-          <div>
-            <div class="card-saved-line">{{ (savedCard.brand || 'Card') }} ending {{ savedCard.last4 || '&bull;&bull;&bull;&bull;' }}</div>
-            <div class="card-saved-sub muted">Confirmed &middot; the amount is in your wallet</div>
-          </div>
-        </div>
-
-        <div v-else class="card-form">
-          <div class="card-secure-note">&#128274; You will be taken to our payment provider. Telroi never sees your card number.</div>
-          <p class="card-amount">{{ (country || '').toLowerCase() === 'nigeria' ? '&#8358;1,600' : '$1' }} <span class="muted">to confirm the card &mdash; added to your wallet</span></p>
-        </div>
-
-        <div class="wz-actions">
-          <button class="btn btn-ghost" @click="back">Back</button>
-          <button v-if="!savedCard" class="btn btn-signal" :disabled="busy" @click="saveCard">
-            {{ busy ? 'Opening…' : 'Confirm card' }} <span class="arrow">→</span>
-          </button>
-          <button v-else class="btn btn-signal" @click="next">Continue <span class="arrow">→</span></button>
-        </div>
-      </section>
-
-      <!-- STEP 3: AI -->
-      <section v-else-if="step === 3">
-        <div class="kicker">Step 4 of 6</div>
+        <div class="kicker">Step 3 of 4</div>
         <h1>Connect <em>AI</em> <span class="opt">(optional)</span></h1>
         <p class="wz-lede">Bring your own keys for the AI providers you use. <strong>Telroi never charges you for model usage</strong> — you're billed directly by each provider.</p>
 
@@ -171,8 +143,8 @@
       </section>
 
       <!-- STEP 4: Team -->
-      <section v-else-if="step === 4">
-        <div class="kicker">Step 5 of 6</div>
+      <section v-else-if="step === 3">
+        <div class="kicker">Step 4 of 4</div>
         <h1>Invite your <em>team</em> <span class="opt">(optional)</span></h1>
         <p class="wz-lede">Add the people who'll answer calls. We'll email them an invite.</p>
 
@@ -185,55 +157,13 @@
         <div class="wz-actions">
           <button class="btn btn-ghost" @click="back">Back</button>
           <div class="wz-actions-right">
-            <button class="btn btn-ghost" @click="next">I'll do this later</button>
-            <button class="btn btn-signal" @click="next">Continue <span class="arrow">→</span></button>
+            <button class="btn btn-ghost" :disabled="busy" @click="finish">I'll do this later</button>
+            <button class="btn btn-signal" :disabled="busy" @click="saveInvites">{{ busy ? 'Finishing…' : 'Finish' }} <span class="arrow">→</span></button>
           </div>
         </div>
       </section>
 
       <!-- STEP 5: Purchase a number (skips automatically if no inventory) -->
-      <section v-else-if="step === 5">
-        <div class="kicker">Step 6 of 6</div>
-        <h1>Get your first <em>number</em> <span class="opt">(optional)</span></h1>
-
-        <div v-if="numbersLoading" class="muted wz-loading">Checking available numbers…</div>
-
-        <template v-else-if="availableNumbers.length">
-          <p class="wz-lede">Choose a number to activate now. The first month ({{ moneyFmt(numberCost) }}) covers the line and one channel.</p>
-          <div class="num-list">
-            <label v-for="n in availableNumbers" :key="n.id" class="num-opt" :class="{ sel: pickedNumber === n.id }">
-              <input type="radio" :value="n.id" v-model="pickedNumber" />
-              <span class="num-tel mono">{{ n.telnum }}</span>
-              <span class="num-region">{{ n.region }}</span>
-            </label>
-          </div>
-
-          <label class="num-charge">
-            <input type="checkbox" v-model="chargeCardForNumber" />
-            <span>Charge my saved card {{ moneyFmt(numberCost) }} now — we'll add it to your wallet and pay for the number from there, so you have a clean record.</span>
-          </label>
-
-          <div class="wz-actions">
-            <button class="btn btn-ghost" @click="back">Back</button>
-            <div class="wz-actions-right">
-              <button class="btn btn-ghost" :disabled="busy" @click="finish">Skip for now</button>
-              <button class="btn btn-signal" :disabled="busy || !pickedNumber" @click="buyNumberThenFinish">
-                {{ busy ? 'Processing…' : 'Activate number' }} <span class="arrow">→</span>
-              </button>
-            </div>
-          </div>
-        </template>
-
-        <template v-else>
-          <p class="wz-lede">No numbers are available to purchase right now. You can add one anytime from the Numbers page once your operator provisions inventory.</p>
-          <div class="wz-actions">
-            <button class="btn btn-ghost" @click="back">Back</button>
-            <button class="btn btn-signal" :disabled="busy" @click="finish">
-              {{ busy ? 'Finishing…' : 'Go to dashboard' }} <span class="arrow">→</span>
-            </button>
-          </div>
-        </template>
-      </section>
     </div>
   </div>
 </template>
@@ -250,7 +180,13 @@ const toast = useToast();
 const auth = useAuthStore();
 const rootDomain = useRuntimeConfig().public.rootDomain;
 
-const steps = ['Company', 'Plan', 'Card', 'AI', 'Team', 'Number'];
+// The card moved to go-live. Asking for one here meant asking during sandbox,
+// where no payment provider is reached at all — so the step could only ever
+// pretend. A card belongs at the moment real money starts.
+// Numbers need approved compliance, which a workspace an hour old cannot have —
+// so the step could only ever fail. The demo number covers them until then, and
+// they buy properly once compliance is through.
+const steps = ['Company', 'Plan', 'AI', 'Team'];
 const step = ref(0);
 
 // step 1 (plan)
@@ -258,15 +194,8 @@ const plan = ref<'startup' | 'growth'>('growth');
 const trialDays = ref(7);
 
 // step 2 (card)
-const savedCard = ref<any>(null);
 
 // step 5 (number purchase)
-const numbersLoading = ref(false);
-const availableNumbers = ref<any[]>([]);
-const pickedNumber = ref('');
-const chargeCardForNumber = ref(true);
-const numberCost = ref(0);
-const numberCurrency = ref<'USD' | 'NGN'>('USD');
 
 // step 0
 const company = ref('');
@@ -368,27 +297,7 @@ function checkSlug() {
 function back() { step.value = Math.max(0, step.value - 1); }
 function next() { step.value = Math.min(5, step.value + 1); }
 
-function moneyFmt(minor: number) {
-  const sym = numberCurrency.value === 'NGN' ? '₦' : '$';
-  return `${sym}${(minor / 100).toFixed(2)}`;
-}
 
-// Load purchasable numbers when the number step is reached.
-onMounted(() => {
-  if (useRoute().query.ref) { step.value = 2; checkCardOnReturn(); }
-});
-
-watch(step, async (st) => {
-  if (st === 5 && !availableNumbers.value.length && !numbersLoading.value) {
-    numbersLoading.value = true;
-    try {
-      const r = await api.get<any>('/api/numbers/available');
-      availableNumbers.value = r.numbers || r.items || [];
-      if (typeof r.firstMonthMinor === 'number') { numberCost.value = r.firstMonthMinor; numberCurrency.value = r.currency || 'USD'; }
-    } catch { availableNumbers.value = []; }
-    finally { numbersLoading.value = false; }
-  }
-});
 
 async function createWorkspace() {
   busy.value = true;
@@ -411,46 +320,6 @@ async function selectPlan() {
   finally { busy.value = false; }
 }
 
-async function saveCard() {
-  busy.value = true;
-  try {
-    // A real charge, because there is no way to keep a card without one.
-    // Paystack hands back a reusable authorization on a successful payment and
-    // nowhere else; Stripe is the same in practice. So the card is validated by
-    // charging a small amount — and that amount lands in their wallet as credit
-    // rather than disappearing, which is the only version of this that is fair.
-    //
-    // The webhook does the rest: it credits the wallet and stores the
-    // authorization as their card on file. Nothing here handles a card number.
-    const ngn = (country.value || '').toLowerCase() === 'nigeria';
-    const amountMinor = ngn ? 160000 : 100;  // ₦1,600 or $1
-    const r = await api.post<any>('/api/wallet/topup', { amountMinor, returnTo: '/onboarding' });
-    if (r?.authorizationUrl || r?.url) {
-      window.location.href = r.authorizationUrl || r.url;
-      return;
-    }
-    toast.err(`Payment page did not open (${JSON.stringify(r || {}).slice(0, 120)})`);
-  } catch (e: any) {
-    toast.err(e?.data?.error?.message || e.message || 'Could not start the card check');
-  }
-  finally { busy.value = false; }
-}
-
-/** Coming back from the provider. The webhook may land a moment after they do,
- *  so this is retried briefly rather than deciding on the first look. */
-async function checkCardOnReturn() {
-  for (let i = 0; i < 6; i++) {
-    try {
-      const r = await api.get<any>('/api/payment-method');
-      if (r?.card?.last4) {
-        savedCard.value = { brand: r.card.brand || 'card', last4: r.card.last4 };
-        toast.ok('Card confirmed — the amount is in your wallet as credit');
-        return;
-      }
-    } catch { /* not yet */ }
-    await new Promise((res) => setTimeout(res, 1500));
-  }
-}
 
 async function saveAi() {
   busy.value = true;
@@ -466,28 +335,34 @@ async function saveAi() {
   finally { busy.value = false; }
 }
 
-async function buyNumberThenFinish() {
-  if (!pickedNumber.value) return;
+
+/** Send the invitations, then finish. They were collected and never sent — the
+ *  step gathered addresses that went nowhere. A failed invitation does not block
+ *  finishing: they can invite again from People, and being stuck in a wizard
+ *  over a mistyped address would be worse. */
+async function saveInvites() {
   busy.value = true;
-  try {
-    await api.post('/api/numbers/purchase', { inventoryId: pickedNumber.value, channels: 1, chargeCard: chargeCardForNumber.value });
-    toast.ok('Number activated 🎉');
-    await finish();
-  } catch (e: any) {
-    toast.err(e.message);
-    busy.value = false; // let them retry / skip
+  const failed: string[] = [];
+  for (const inv of invites.value) {
+    const email = (inv.email || '').trim();
+    if (!email) continue;
+    try { await api.post('/api/tenant/members', { email, role: 'member' }); }
+    catch { failed.push(email); }
   }
+  busy.value = false;
+  if (failed.length) toast.err(`Could not invite ${failed.join(', ')} — you can try again from People`);
+  await finish();
 }
 
 async function finish() {
   busy.value = true;
   try {
-    await api.patch('/api/tenant', { onboardingStep: 5 });
+    await api.patch('/api/tenant', { onboardingStep: 4 });
     await auth.fetchMe();
     // Ensure the setup to-do opens by default on the new dashboard (until the
     // user chooses to collapse it).
     try { localStorage.removeItem('telroi_setup_tasks_collapsed'); } catch { /* */ }
-    toast.ok("You're live 🎉");
+    toast.ok('Workspace ready — get verified next, then you can buy a number');
     await navigateTo('/');
   } catch (e: any) { toast.err(e.message); }
   finally { busy.value = false; }
