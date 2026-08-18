@@ -214,8 +214,10 @@
                 class="btn btn-signal btn-sm" style="margin-left:auto" @click="startGoLive">Go live</button>
             </div>
           </template>
-          <EmptyState v-else icon="quality" title="No documents submitted"
-            description="Submit business verification when you switch to live mode from the top bar." />
+          <EmptyState v-else icon="quality" title="Not verified yet"
+            description="Verification is needed before you can buy a number or take real calls. It takes a few minutes, and a person reviews it afterwards.">
+            <button class="btn btn-signal btn-sm" @click="openCompliance">Start verification</button>
+          </EmptyState>
         </div>
       </div>
     </div>
