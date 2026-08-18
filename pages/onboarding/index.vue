@@ -429,7 +429,7 @@ async function saveCard() {
       window.location.href = r.authorizationUrl || r.url;
       return;
     }
-    toast.err('Could not open the payment page. Try again in a moment.');
+    toast.err(`Payment page did not open (${JSON.stringify(r || {}).slice(0, 120)})`);
   } catch (e: any) {
     toast.err(e?.data?.error?.message || e.message || 'Could not start the card check');
   }
