@@ -7,7 +7,7 @@
 // runner (server/db/run-billing.ts) so the logic lives in exactly one place.
 import { and, eq, lte } from 'drizzle-orm';
 import { schema } from '../db';
-import { canSpend } from '~/server/utils/wallet';
+import { canSpend, chargeCardToWallet } from '~/server/utils/wallet';
 
 export interface BillingResult {
   due: number;
@@ -75,10 +75,39 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
         result.skipped++;
         continue;
       }
-      await db.update(schema.numberSubscriptions).set({ status: 'suspended' }).where(eq(schema.numberSubscriptions.id, sub.id));
-      result.suspended++;
-      result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
-      continue;
+      // Before taking their number away, try the card they left with us. A
+      // client who put a card on file did so precisely so their service would
+      // not stop over a wallet nobody was watching — suspending without asking
+      // it first makes the card pointless.
+      //
+      // This only tops the wallet up. The charge below then runs exactly as it
+      // would have, so the debit, the ledger entry and the next billing date
+      // are written in one place rather than two.
+      const shortfall = amount - wallet.balanceMinor;
+      const topped = shortfall > 0
+        ? await chargeCardToWallet({
+            tenantId: sub.tenantId, amountMinor: shortfall,
+            currency: wallet.currency as any, reason: 'number_renewal'
+          }).catch(() => ({ ok: false as const }))
+        : { ok: false as const };
+
+      if (topped.ok) {
+        const [fresh] = await db.select().from(schema.wallets).where(eq(schema.wallets.id, wallet.id)).limit(1);
+        if (fresh && canSpend(t, fresh.balanceMinor, amount)) {
+          wallet.balanceMinor = fresh.balanceMinor;
+        } else {
+          await db.update(schema.numberSubscriptions).set({ status: 'suspended' }).where(eq(schema.numberSubscriptions.id, sub.id));
+          result.suspended++;
+          result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
+          continue;
+        }
+      } else {
+
+        await db.update(schema.numberSubscriptions).set({ status: 'suspended' }).where(eq(schema.numberSubscriptions.id, sub.id));
+        result.suspended++;
+        result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
+        continue;
+      }
     }
 
     const after = wallet.balanceMinor - amount;
