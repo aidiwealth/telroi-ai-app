@@ -32,6 +32,23 @@ export default defineEventHandler(async (event) => {
   const db = useDb();
   const [tenant] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
 
+  // A card, for workspaces that have no other way to pay us.
+  //
+  // Nigerian clients get a reserved bank account and mostly fund by transfer, so
+  // requiring a card there would block the way most of them actually pay.
+  // Everybody else has no such route: without a card there is no mechanism at
+  // all for their plan to renew, and we would find that out a month later.
+  const isNigeria = (tenant?.country || '').toLowerCase() === 'nigeria';
+  if (!isNigeria) {
+    const [card] = await db.select({ id: schema.paymentMethods.id })
+      .from(schema.paymentMethods).where(eq(schema.paymentMethods.tenantId, s.tenantId)).limit(1);
+    if (!card) {
+      throw apiError('card_required',
+        'Add a payment method before going live. Top up your wallet from the Wallet page — the card you pay with is kept for your plan renewal, so there is no separate form.',
+        402);
+    }
+  }
+
   // A running trial is kept. Someone three days into seven shouldn't lose four
   // by deciding early which plan they want — the plan takes effect when the trial
   // ends. Only a trial that's already expired is cleared.

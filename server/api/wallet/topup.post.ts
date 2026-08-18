@@ -13,7 +13,12 @@ const Body = z.object({
   amountMinor: z.number().int().positive(),
   // Where to send them back to. Onboarding needs them returned to the wizard
   // rather than dropped on the wallet page mid-signup.
-  returnTo: z.string().max(120).optional()
+  returnTo: z.string().max(120).optional(),
+  // A real payment, deliberately, from a workspace still in sandbox. There is
+  // one reason to want that: leaving a card. An international workspace cannot
+  // go live without one, and a simulated top-up never reaches a provider, so
+  // without this the requirement is a locked door with the key inside.
+  forCard: z.boolean().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -34,7 +39,7 @@ export default defineEventHandler(async (event) => {
   // Sandbox: never touch a real payment provider. Credit simulated funds
   // immediately so the workspace can test wallet-funded flows safely.
   const { isSandbox } = await import('~/server/utils/sandbox');
-  if (await isSandbox(s.tenantId)) {
+  if (await isSandbox(s.tenantId) && !p.data.forCard) {
     const { credit } = await import('~/server/utils/wallet');
     const r = await credit(s.tenantId, p.data.amountMinor, 'sandbox_topup', `sbx_${reference}`, { simulated: true });
     return { provider: 'sandbox', simulated: true, livemode: false, balanceMinor: r.balanceMinor, reference };

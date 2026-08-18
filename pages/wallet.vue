@@ -78,6 +78,24 @@
           </template>
         </div>
 
+        <!-- The card we keep for renewals. Separate from topping up, though it
+             is the same mechanism: there is no way to keep a card without
+             charging it, so the check is a small real payment and the amount
+             stays as credit rather than disappearing. -->
+        <div class="wal-cardfile">
+          <template v-if="savedCard">
+            <div class="wal-cardfile-h">Card on file</div>
+            <p class="wal-cardfile-p">{{ savedCard.brand || 'Card' }} ending {{ savedCard.last4 }} — used for your plan when your wallet is short.</p>
+          </template>
+          <template v-else>
+            <div class="wal-cardfile-h">No card on file</div>
+            <p class="wal-cardfile-p">
+              We charge {{ wallet.currency === 'NGN' ? '₦1,600' : '$1' }} to check the card works, and it goes into your wallet as credit — you keep it. After that we can cover your plan automatically if your balance runs short.
+            </p>
+            <button class="btn btn-ghost btn-sm" :disabled="addingCard" @click="addCard">{{ addingCard ? 'Opening…' : 'Add a card' }}</button>
+          </template>
+        </div>
+
         <!-- Card (Paystack NGN / Stripe USD) -->
         <div v-if="wallet.currency !== 'NGN' || fundTab === 'card'" class="wal-fund-body">
           <div class="wal-quick">
@@ -422,6 +440,36 @@ function copy(text: string) {
 function changeMonth(delta: number) {
   const d = new Date(monthDate.value); d.setMonth(d.getMonth() + delta); monthDate.value = d; loadSummary();
 }
+/** Leave a card, by paying a small amount with it.
+ *
+ *  There is no way to keep a card without charging it — Paystack hands back a
+ *  reusable authorization on a successful payment and nowhere else, and Stripe
+ *  is the same in practice. So the card is checked by using it, and the amount
+ *  lands in the wallet as credit rather than disappearing, which is the only
+ *  version of this that is fair.
+ *
+ *  forCard takes the real payment path even in sandbox: a simulated top-up
+ *  never reaches a provider, so without it a workspace that has not gone live
+ *  could never obtain the card that going live requires.
+ */
+const addingCard = ref(false);
+const savedCard = ref<any>(null);
+async function loadCard() {
+  try { savedCard.value = (await api.get<any>('/api/payment-method'))?.card || null; }
+  catch { savedCard.value = null; }
+}
+async function addCard() {
+  addingCard.value = true;
+  try {
+    const minor = wallet.value?.currency === 'NGN' ? 160000 : 100;  // ₦1,600 or $1
+    const r = await api.post<{ authorizationUrl: string }>('/api/wallet/topup',
+      { amountMinor: minor, forCard: true, returnTo: '/wallet' });
+    if (r.authorizationUrl) window.location.href = r.authorizationUrl;
+    else toast.err('Could not open the payment page');
+  } catch (e: any) { toast.err(e?.data?.error?.message || e.message); }
+  finally { addingCard.value = false; }
+}
+
 async function topup() {
   topping.value = true;
   try {
@@ -435,6 +483,7 @@ async function topup() {
 onMounted(async () => {
   await load();
   loadInvoices();
+  loadCard();
   if (route.query.ref) {
     toast.info('Confirming your payment…');
     // The webhook usually lands within a second or two, but not always — keep
@@ -455,6 +504,9 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.wal-cardfile { padding: 14px 16px; margin: 0 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.wal-cardfile-h { font-size: 13px; font-weight: 600; color: var(--ink); }
+.wal-cardfile-p { font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin: 4px 0 10px; }
 .wal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin: 26px 0 20px; }
 .wal-tab { padding: 10px 16px; font-size: 14px; color: var(--ink-soft); border: 0; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
 .wal-tab.on { color: var(--signal); border-bottom-color: var(--signal); font-weight: 500; }
