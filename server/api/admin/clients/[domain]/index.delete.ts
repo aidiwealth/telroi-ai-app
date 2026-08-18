@@ -53,6 +53,61 @@ export default defineEventHandler(async (event) => {
     summary: `${admin.email} deleted workspace ${t.name} (${t.slug})`
   });
 
+  // ── Things the cascade cannot reach ──────────────────────────────────────
+  // Every table referencing a tenant cascades, so the rows go. What does not is
+  // anything living outside this database: numbers we paid for, endpoints
+  // registered on the PBX, and audio sitting in object storage being billed for
+  // monthly. Each step is best-effort — an unreachable PBX should not stop an
+  // operator removing a client — but each failure is logged so somebody can
+  // finish it by hand.
+
+  // Numbers first: they are stock we bought, and losing them with the workspace
+  // means paying for a number nobody can ever sell again.
+  try {
+    const subs = await db.select({ telnum: schema.numberSubscriptions.telnum })
+      .from(schema.numberSubscriptions).where(eq(schema.numberSubscriptions.tenantId, t.id));
+    for (const sub of subs) {
+      await db.update(schema.numberInventory)
+        .set({ status: 'available', soldToTenantId: null })
+        .where(eq(schema.numberInventory.telnum, sub.telnum));
+    }
+    if (subs.length) console.log(`[client delete] released ${subs.length} number(s) to inventory`);
+  } catch (e: any) {
+    console.error('[client delete] releasing numbers failed — check inventory by hand:', e?.message);
+  }
+
+  // Endpoints on the PBX. The database row cascades; the registration does not,
+  // and an endpoint left behind is one somebody could still place calls on.
+  try {
+    const eps = await db.select({ sipUsername: schema.sipEndpoints.sipUsername })
+      .from(schema.sipEndpoints).where(eq(schema.sipEndpoints.tenantId, t.id));
+    if (eps.length) {
+      const { agentDeprovision } = await import('~/server/utils/provision-agent');
+      for (const ep of eps) {
+        if (ep.sipUsername) await agentDeprovision(ep.sipUsername).catch(() => undefined);
+      }
+      console.log(`[client delete] deprovisioned ${eps.length} SIP endpoint(s)`);
+    }
+  } catch (e: any) {
+    console.error('[client delete] deprovisioning failed — endpoints may remain on the PBX:', e?.message);
+  }
+
+  // Recordings. The rows cascade and the audio does not, so without this we pay
+  // storage on a client who left, indefinitely.
+  try {
+    const recs = await db.select({ objectKey: schema.callRecordings.objectKey })
+      .from(schema.callRecordings).where(eq(schema.callRecordings.tenantId, t.id));
+    const { deleteObject } = await import('~/server/utils/storage');
+    let gone = 0;
+    for (const r of recs) {
+      if (!r.objectKey) continue;
+      try { await deleteObject(r.objectKey); gone++; } catch { /* counted below */ }
+    }
+    if (recs.length) console.log(`[client delete] removed ${gone}/${recs.length} recording(s) from storage`);
+  } catch (e: any) {
+    console.error('[client delete] removing recordings failed — storage may still hold them:', e?.message);
+  }
+
   // Their sessions go with the workspace. A session hangs off the user, not the
   // tenant, so it survives the cascade — without this somebody stays signed in
   // to a workspace that no longer exists, and every page they open fails in a
