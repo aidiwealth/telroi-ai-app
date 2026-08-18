@@ -53,6 +53,21 @@ export default defineEventHandler(async (event) => {
     summary: `${admin.email} deleted workspace ${t.name} (${t.slug})`
   });
 
+  // Their sessions go with the workspace. A session hangs off the user, not the
+  // tenant, so it survives the cascade — without this somebody stays signed in
+  // to a workspace that no longer exists, and every page they open fails in a
+  // way that looks like a platform fault rather than a deletion.
+  try {
+    const { revokeSessions } = await import('~/server/utils/session');
+    const members = await db.select({ userId: schema.memberships.userId })
+      .from(schema.memberships).where(eq(schema.memberships.tenantId, t.id));
+    for (const m of members) {
+      await revokeSessions({ userId: m.userId, reason: 'workspace deleted' });
+    }
+  } catch (e: any) {
+    console.error('[client delete] could not revoke sessions:', e?.message);
+  }
+
   await db.delete(schema.tenants).where(eq(schema.tenants.id, t.id));
   return { ok: true, deleted: { name: t.name, slug: t.slug } };
 });
