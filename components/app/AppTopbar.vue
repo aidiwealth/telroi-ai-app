@@ -252,7 +252,12 @@ onMounted(() => {
   window.addEventListener('telroi-open-go-live', () => { void onEnvClick(); });
   // The same for compliance, so a page that wants it opens this modal rather
   // than growing a second copy of the form.
-  window.addEventListener('telroi-open-compliance', () => { showCompliance.value = true; });
+  // Through the same function the go-live button uses. Opening the modal
+  // directly skipped everything it prepares — chiefly regRequired, which is what
+  // shows a Nigerian workspace the NIN check and the NCC undertaking. A client
+  // entering this way was being given the international form and would have
+  // submitted without either, which is not a form we can act on.
+  window.addEventListener('telroi-open-compliance', () => { void onEnvClick(); });
 });
 onMounted(() => {
   if (import.meta.client) {
