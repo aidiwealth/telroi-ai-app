@@ -357,7 +357,10 @@ async function saveInvites() {
 async function finish() {
   busy.value = true;
   try {
-    await api.patch('/api/tenant', { onboardingStep: 4 });
+    // 5 marks onboarding done — it is a completion marker, not a count of the
+    // steps. Writing the step count left needsOnboarding true and sent them
+    // straight back into the wizard.
+    await api.patch('/api/tenant', { onboardingStep: 5 });
     await auth.fetchMe();
     // Ensure the setup to-do opens by default on the new dashboard (until the
     // user chooses to collapse it).
