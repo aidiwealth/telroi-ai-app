@@ -164,7 +164,35 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
       creditLimitMinor: schema.tenants.creditLimitMinor,
       billingSuspendedAt: schema.tenants.billingSuspendedAt
     }).from(schema.tenants).where(eq(schema.tenants.id, t.id)).limit(1);
-    if (!canSpend(pt, wallet.balanceMinor, planAmount)) { result.plans.unpaid++; continue; } // leave anchor; retry next run
+    if (!canSpend(pt, wallet.balanceMinor, planAmount)) {
+      // Ask the card before giving up. This is the recurring revenue, and a
+      // client who left a card left it for exactly this.
+      //
+      // Only while the fee is recently due. A plan fee that cannot be paid is
+      // retried every run, forever — so without a window a declining card would
+      // be presented daily, which providers notice and merchants are judged on.
+      // Five days is long enough for a topped-up wallet or a replaced card, and
+      // short enough to stop on its own.
+      const dueDays = (now.getTime() - new Date(t.planNextBillingAt as any).getTime()) / 86400000;
+      let recovered = false;
+      if (dueDays <= 5) {
+        const shortfall = planAmount - wallet.balanceMinor;
+        const topped = shortfall > 0
+          ? await chargeCardToWallet({
+              tenantId: t.id, amountMinor: shortfall,
+              currency: wallet.currency as any, reason: 'plan_fee'
+            }).catch(() => ({ ok: false as const }))
+          : { ok: false as const };
+        if (topped.ok) {
+          const [fresh] = await db.select().from(schema.wallets).where(eq(schema.wallets.id, wallet.id)).limit(1);
+          if (fresh && canSpend(pt, fresh.balanceMinor, planAmount)) {
+            wallet.balanceMinor = fresh.balanceMinor;
+            recovered = true;
+          }
+        }
+      }
+      if (!recovered) { result.plans.unpaid++; continue; }  // leave anchor; retry next run
+    }
     const after = wallet.balanceMinor - planAmount;
     await db.transaction(async (tx: any) => {
       await tx.update(schema.wallets).set({ balanceMinor: after, updatedAt: now }).where(eq(schema.wallets.id, wallet.id));
