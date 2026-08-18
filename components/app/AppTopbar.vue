@@ -353,23 +353,23 @@ function closeCompliance() {
 
 async function saveDraft() {
   try {
-    await api.post('/api/compliance/progress', {
+    await $fetch('/api/compliance/progress', { method: 'POST', body: {
       officialName: cmp.value.officialName.trim() || undefined,
       useCase: cmp.value.useCase.trim() || undefined,
       callAudience: cmp.value.callAudience.trim() || undefined
-    });
+    } });
   } catch { /* they can still press Continue */ }
 }
 
 async function goStep(next: number) {
   step.value = next;
   try {
-    await api.post('/api/compliance/progress', {
+    await $fetch('/api/compliance/progress', { method: 'POST', body: {
       officialName: cmp.value.officialName.trim() || undefined,
       useCase: cmp.value.useCase.trim() || undefined,
       callAudience: cmp.value.callAudience.trim() || undefined,
       step: next
-    });
+    } });
   } catch { /* a failed save should not block them moving on */ }
 }
 
@@ -381,7 +381,7 @@ async function onNccFile(e: Event) {
   try {
     const fd = new FormData();
     fd.append('undertaking', f);
-    const r = await api.post<any>('/api/compliance/ncc', fd);
+    const r = await $fetch<any>('/api/compliance/ncc', { method: 'POST', body: fd });
     nccName.value = r.filename || f.name;
   } catch (err: any) {
     nccErr.value = err?.message || 'Could not upload that file';
