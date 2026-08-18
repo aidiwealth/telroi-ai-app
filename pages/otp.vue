@@ -2,7 +2,7 @@
   <div>
     <div class="page-head">
       <div>
-        <h1 class="page-title">Verification calls</h1>
+        <h1 class="page-title">OTP verification calls</h1>
         <p class="page-sub">Codes sent by voice, whether they arrived, and whether they were used.</p>
       </div>
     </div>
@@ -60,7 +60,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-useHead({ title: 'Verification calls — Telroi' });
+useHead({ title: 'OTP verification calls — Telroi' });
 const api = useApi();
 
 const days = ref(30);
