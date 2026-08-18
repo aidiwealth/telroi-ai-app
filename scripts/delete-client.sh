@@ -50,9 +50,17 @@ q "update number_inventory set status='available', sold_to_tenant_id=null
 echo "Deprovisioning SIP endpoints..."
 SECRET=$(grep '^PROVISION_AGENT_SECRET' "$ENV_FILE" | cut -d= -f2-)
 for U in $(q "select sip_username from sip_endpoints where tenant_id='$TID' and sip_username is not null"); do
-  curl -s -m 10 -X POST http://127.0.0.1:8090/deprovision \
-    -H "Content-Type: application/json" -H "x-telroi-internal: $SECRET" \
-    -d "{\"username\":\"$U\"}" >/dev/null && echo "  $U"
+  # Bearer, which is what the agent checks — an earlier version sent the header
+  # the web app uses, so every request was refused and the script said "done"
+  # anyway. Read the answer rather than trusting the exit code: a stale endpoint
+  # is one somebody could still register to.
+  R=$(curl -s -m 10 -X POST http://127.0.0.1:8090/deprovision \
+        -H "Content-Type: application/json" -H "Authorization: Bearer $SECRET" \
+        -d "{\"username\":\"$U\"}" || echo '')
+  case "$R" in
+    *'"ok":true'*) echo "  $U removed" ;;
+    *)             echo "  $U NOT removed — $R" ;;
+  esac
 done
 
 # Recordings this cannot remove. Listed rather than silently abandoned: they are
