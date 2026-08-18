@@ -337,19 +337,27 @@
       <div class="set-card-body">
         <div class="set-grid">
           <label class="ad-field"><span>Nigerian demo number</span>
-            <select v-model="sp.demoNumberNg" class="ad-input">
+            <select v-model="demo.demoNumberNg" class="ad-input">
               <option value="">None — Nigerian trials cannot place test calls</option>
-              <option v-for="n in ngNumbers" :key="n" :value="n">{{ n }}</option>
+              <option v-for="n in demoNgNumbers" :key="n" :value="n">{{ n }}</option>
             </select>
           </label>
           <label class="ad-field"><span>International demo number</span>
-            <select v-model="sp.demoNumberIntl" class="ad-input">
+            <select v-model="demo.demoNumberIntl" class="ad-input">
               <option value="">None — international trials cannot place test calls</option>
               <option v-for="n in [...(intlNumbers.twilio || []), ...(intlNumbers.telnyx || [])]" :key="n" :value="n">{{ n }}</option>
             </select>
           </label>
         </div>
         <p class="ad-hint">A trial that can place calls to anywhere is a way to make free calls, so test calls announce themselves to whoever answers.</p>
+
+        <div class="set-actions">
+          <button class="btn btn-signal" :disabled="savingDemo" @click="saveDemo">{{ savingDemo ? 'Saving…' : 'Save demo numbers' }}</button>
+          <span v-if="demoSaved" class="ad-saved">✓ Saved</span>
+          <span v-else-if="demo.demoNumberNg || demo.demoNumberIntl" class="ad-hint" style="margin:0">
+            In use: {{ [demo.demoNumberNg, demo.demoNumberIntl].filter(Boolean).join(' · ') }}
+          </span>
+        </div>
       </div>
     </section>
 
@@ -917,6 +925,26 @@ function syncOtpHost() {
 }
 
 const ngRows = ref<any[]>([]);
+
+// Every Nigerian number we hold. The OTP picker narrows by trunk because an OTP
+// must present a number matching the trunk it goes out on; a demo number has no
+// such tie, and borrowing that list showed one carrier's numbers and hid the
+// rest.
+const demoNgNumbers = computed(() => ngRows.value.map((n: any) => n.telnum));
+
+const demo = reactive({ demoNumberNg: '', demoNumberIntl: '' });
+const savingDemo = ref(false);
+async function saveDemo() {
+  savingDemo.value = true;
+  try {
+    await $fetch('/api/admin/settings', { method: 'POST', body: { ...demo } });
+    cfg.value = await $fetch<any>('/api/admin/settings');
+    demoSaved.value = true;
+    setTimeout(() => { demoSaved.value = false; }, 2500);
+  } catch (e: any) { alert(e?.data?.error?.message || 'Could not save'); }
+  finally { savingDemo.value = false; }
+}
+const demoSaved = ref(false);
 // Presenting a number from another carrier is refused, so the list follows the
 // trunk: choose Kasooko and only Kasooko numbers are offered.
 const ngNumbers = computed(() => {
@@ -1130,6 +1158,8 @@ onMounted(async () => {
     keySet.value = s.operatorKeySet;
     pwSet.value = !!s.operatorPasswordSet;
     cfg.value = s;
+    demo.demoNumberNg = s?.demoNumberNg || '';
+    demo.demoNumberIntl = s?.demoNumberIntl || '';
     // Populated, or the box looks empty when an address is set — and the next
     // save in this card would clear it without saying so.
     opsEmail.value = s?.opsEmail || '';
