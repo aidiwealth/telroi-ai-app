@@ -250,6 +250,9 @@ const sbx = ref<any | null>(null);
 onMounted(() => {
   if (!import.meta.client) return;
   window.addEventListener('telroi-open-go-live', () => { void onEnvClick(); });
+  // The same for compliance, so a page that wants it opens this modal rather
+  // than growing a second copy of the form.
+  window.addEventListener('telroi-open-compliance', () => { showCompliance.value = true; });
 });
 onMounted(() => {
   if (import.meta.client) {

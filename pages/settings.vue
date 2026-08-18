@@ -207,6 +207,11 @@
             <div class="cmp-status-line">
               Verification status:
               <span class="cmp-status-pill" :class="comp.status">{{ comp.status }}</span>
+              <!-- Opens the topbar's own go-live modal rather than a second copy
+                   of it. Only once verified and still in sandbox: offering it
+                   earlier would invite them to press something that refuses. -->
+              <button v-if="comp.status === 'approved' && auth.tenant?.sandbox"
+                class="btn btn-signal btn-sm" style="margin-left:auto" @click="startGoLive">Go live</button>
             </div>
           </template>
           <EmptyState v-else icon="quality" title="No documents submitted"
@@ -299,6 +304,12 @@ const saving = ref(false);
 const switching = ref(false);
 const planState = ref<any>(null);
 const comp = ref<any>(null);
+
+// Both open the topbar's own modals rather than growing a second copy of either
+// form here — the go-live flow in particular has enough in it that two versions
+// would drift apart within a week.
+function startGoLive() { window.dispatchEvent(new Event('telroi-open-go-live')); }
+function openCompliance() { window.dispatchEvent(new Event('telroi-open-compliance')); }
 const policyInfo = ref<{ version?: string } | null>(null);
 const showPolicy = ref(false);
 const policyDoc = ref<any>(null);
