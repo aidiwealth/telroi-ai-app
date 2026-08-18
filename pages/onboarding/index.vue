@@ -364,7 +364,11 @@ async function finish() {
     await auth.fetchMe();
     // Ensure the setup to-do opens by default on the new dashboard (until the
     // user chooses to collapse it).
-    try { localStorage.removeItem('telroi_setup_tasks_collapsed'); } catch { /* */ }
+    // '0' means open. Removing the key looked like it should mean the same and
+    // means the opposite: the panel treats anything that is not '0' as
+    // collapsed, so clearing it left the panel shut on the one visit where it
+    // most wants to be seen.
+    try { localStorage.setItem('telroi_setup_tasks_collapsed', '0'); } catch { /* */ }
     toast.ok('Workspace ready — get verified next, then you can buy a number');
     await navigateTo('/');
   } catch (e: any) { toast.err(e.message); }
