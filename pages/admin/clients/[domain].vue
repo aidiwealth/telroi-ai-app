@@ -272,6 +272,12 @@
           <label class="ad-ovr"><span>Airtime/min</span><input v-model="priceOvr.voice" type="number" step="0.0001" class="ad-ctl mono" placeholder="global" /></label>
           <label class="ad-ovr"><span>DID/mo</span><input v-model="priceOvr.did" type="number" step="0.01" class="ad-ctl mono" placeholder="global" /></label>
           <label class="ad-ovr"><span>Channel/mo</span><input v-model="priceOvr.channel" type="number" step="0.01" class="ad-ctl mono" placeholder="global" /></label>
+          <!-- Blank means the platform price, which is what "global" says. A
+               negotiated deal is usually one of these four, not all of them. -->
+          <label class="ad-ovr"><span>Startup/mo</span><input v-model="priceOvr.planStartup" type="number" step="0.01" class="ad-ctl mono" placeholder="global" /></label>
+          <label class="ad-ovr"><span>Growth/mo</span><input v-model="priceOvr.planGrowth" type="number" step="0.01" class="ad-ctl mono" placeholder="global" /></label>
+          <label class="ad-ovr"><span>Startup/yr</span><input v-model="priceOvr.planStartupAnnual" type="number" step="0.01" class="ad-ctl mono" placeholder="global" /></label>
+          <label class="ad-ovr"><span>Growth/yr</span><input v-model="priceOvr.planGrowthAnnual" type="number" step="0.01" class="ad-ctl mono" placeholder="global" /></label>
           <button class="btn btn-signal btn-sm" :disabled="priceBusy" @click="saveOverride">{{ priceBusy ? '…' : 'Save' }}</button>
         </div>
       </section>
@@ -700,7 +706,14 @@ async function saveCountry() {
   } finally { countryBusy.value = false; }
 }
 const ovr = ref<Record<string, boolean>>({});
-const priceOvr = ref({ voice: '' as any, did: '' as any, channel: '' as any });
+const priceOvr = ref({
+  voice: '' as any, did: '' as any, channel: '' as any,
+  // Declared here so they are '' rather than undefined. The save reads
+  // `x === ''` to mean "no override", and undefined would fall through to
+  // Number(undefined) — NaN, and a rejected save.
+  planStartup: '' as any, planGrowth: '' as any,
+  planStartupAnnual: '' as any, planGrowthAnnual: '' as any
+});
 const priceBusy = ref(false);
 const planForm = ref({ plan: 'startup', trialDays: 7 });
 const ppForm = ref({ postpaid: false, creditLimit: 0, billingDay: 1, termsDays: 7 });
@@ -999,7 +1012,14 @@ async function loadWallet() {
         voice: o.override.voiceMinuteUsdMicro != null ? (o.override.voiceMinuteUsdMicro / 1000000)
              : o.override.voiceMinuteUsdMinor != null ? (o.override.voiceMinuteUsdMinor / 100) : '',
         did: o.override.didMonthlyUsdMinor != null ? (o.override.didMonthlyUsdMinor / 100) : '',
-        channel: o.override.channelMonthlyUsdMinor != null ? (o.override.channelMonthlyUsdMinor / 100) : ''
+        channel: o.override.channelMonthlyUsdMinor != null ? (o.override.channelMonthlyUsdMinor / 100) : '',
+        // Loaded, not left blank: the save reads '' as "no override", so a form
+        // that failed to show an existing rate would clear it the moment
+        // anybody pressed save on something else.
+        planStartup: o.override.planStartupUsdMinor != null ? (o.override.planStartupUsdMinor / 100) : '',
+        planGrowth: o.override.planGrowthUsdMinor != null ? (o.override.planGrowthUsdMinor / 100) : '',
+        planStartupAnnual: o.override.planStartupAnnualUsdMinor != null ? (o.override.planStartupAnnualUsdMinor / 100) : '',
+        planGrowthAnnual: o.override.planGrowthAnnualUsdMinor != null ? (o.override.planGrowthAnnualUsdMinor / 100) : ''
       };
     }
   } catch { /* */ }
@@ -1024,7 +1044,13 @@ async function saveOverride() {
     await $fetch(`/api/admin/pricing/${tid}`, { method: 'POST', body: {
       voiceMinuteUsdMicro: priceOvr.value.voice === '' ? null : Math.round(Number(priceOvr.value.voice) * 1000000),
       didMonthlyUsdMinor: priceOvr.value.did === '' ? null : Math.round(Number(priceOvr.value.did) * 100),
-      channelMonthlyUsdMinor: priceOvr.value.channel === '' ? null : Math.round(Number(priceOvr.value.channel) * 100)
+      channelMonthlyUsdMinor: priceOvr.value.channel === '' ? null : Math.round(Number(priceOvr.value.channel) * 100),
+      // Blank means the platform price, not free — null is the absence of an
+      // override rather than a rate of zero.
+      planStartupUsdMinor: priceOvr.value.planStartup === '' ? null : Math.round(Number(priceOvr.value.planStartup) * 100),
+      planGrowthUsdMinor: priceOvr.value.planGrowth === '' ? null : Math.round(Number(priceOvr.value.planGrowth) * 100),
+      planStartupAnnualUsdMinor: priceOvr.value.planStartupAnnual === '' ? null : Math.round(Number(priceOvr.value.planStartupAnnual) * 100),
+      planGrowthAnnualUsdMinor: priceOvr.value.planGrowthAnnual === '' ? null : Math.round(Number(priceOvr.value.planGrowthAnnual) * 100)
     } });
     alert('Override saved');
   } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }

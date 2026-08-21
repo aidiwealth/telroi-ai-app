@@ -9,7 +9,14 @@ const Body = z.object({
   voiceMinuteUsdMinor: z.number().int().positive().nullable().optional(),  // legacy, not billed
   voiceMinuteUsdMicro: z.number().int().positive().nullable().optional(),  // micro-USD/min — this is what bills
   channelMonthlyUsdMinor: z.number().int().positive().nullable().optional(),
-  didMonthlyUsdMinor: z.number().int().positive().nullable().optional()
+  didMonthlyUsdMinor: z.number().int().positive().nullable().optional(),
+  // Plan prices for this client alone. A negotiated deal should not mean
+  // editing the platform's price for everybody, and an annual figure set here
+  // is what they pay if they are on the annual interval.
+  planStartupUsdMinor: z.number().int().positive().nullable().optional(),
+  planGrowthUsdMinor: z.number().int().positive().nullable().optional(),
+  planStartupAnnualUsdMinor: z.number().int().positive().nullable().optional(),
+  planGrowthAnnualUsdMinor: z.number().int().positive().nullable().optional()
 });
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
