@@ -38,7 +38,25 @@ export default defineEventHandler(async (event) => {
     ngnPerUsd: rate,
     plans: {
       startup: pair(p.planStartupUsdMinor),
-      growth: pair(p.planGrowthUsdMinor)
+      growth: pair(p.planGrowthUsdMinor),
+      // Annual is stored as a price rather than a discount, because "$150 a
+      // year" is a thing somebody can quote and 16.67% is not. The saving is
+      // derived here so the marketing page does not have to work it out and
+      // does not drift when a price changes.
+      annual: {
+        startup: pair(p.planStartupAnnualUsdMinor),
+        growth: pair(p.planGrowthAnnualUsdMinor),
+        // Whole percent, rounded down: better to under-claim a saving than to
+        // advertise one the arithmetic does not support.
+        savePctStartup: p.planStartupUsdMinor > 0
+          ? Math.floor((1 - (p.planStartupAnnualUsdMinor / (p.planStartupUsdMinor * 12))) * 100) : 0,
+        savePctGrowth: p.planGrowthUsdMinor > 0
+          ? Math.floor((1 - (p.planGrowthAnnualUsdMinor / (p.planGrowthUsdMinor * 12))) * 100) : 0,
+        monthsFreeStartup: p.planStartupUsdMinor > 0
+          ? Math.round((p.planStartupUsdMinor * 12 - p.planStartupAnnualUsdMinor) / p.planStartupUsdMinor * 10) / 10 : 0,
+        monthsFreeGrowth: p.planGrowthUsdMinor > 0
+          ? Math.round((p.planGrowthUsdMinor * 12 - p.planGrowthAnnualUsdMinor) / p.planGrowthUsdMinor * 10) / 10 : 0
+      }
     },
     usage: {
       // Airtime is sub-cent: the whole-cent pair rounds $0.0102 down to $0.01 and

@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const onTrial = !!(tenant?.trialEndsAt && new Date(tenant.trialEndsAt) > new Date());
-  const planUsd = planFeeUsdMinor(tenant?.plan || 'startup', pricing);
+  const planUsd = planFeeUsdMinor(tenant?.plan || 'startup', pricing, tenant?.billingInterval === 'annual' ? 'annual' : 'monthly');
   const planMinor = onTrial ? 0 : conv(planUsd);
   const planNext = tenant?.planNextBillingAt ? new Date(tenant.planNextBillingAt) : null;
 

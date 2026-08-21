@@ -143,8 +143,14 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
     // Skip tenants currently on a trial (trial covers the fee).
     if (t.trialEndsAt && new Date(t.trialEndsAt) > now) continue;
     result.plans.due++;
-    const feeUsd = planFeeUsdMinor(t.plan, pricing || {});
-    const nextDate = new Date(t.planNextBillingAt as any); nextDate.setDate(nextDate.getDate() + 30);
+    // Annual clients pay once and are not billed again for a year, so both the
+    // price and the step forward depend on the interval. Getting one right and
+    // the other wrong would charge a year's fee every thirty days.
+    const interval = (t.billingInterval === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual';
+    const feeUsd = planFeeUsdMinor(t.plan, pricing || {}, interval);
+    const nextDate = new Date(t.planNextBillingAt as any);
+    if (interval === 'annual') nextDate.setFullYear(nextDate.getFullYear() + 1);
+    else nextDate.setDate(nextDate.getDate() + 30);
     if (!feeUsd) {
       // Custom/zero — just advance the anchor.
       await db.update(schema.tenants).set({ planLastBilledAt: now, planNextBillingAt: nextDate }).where(eq(schema.tenants.id, t.id));
@@ -199,7 +205,7 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
       await tx.insert(schema.ledger).values({
         walletId: wallet.id, tenantId: t.id, kind: 'debit',
         amountMinor: planAmount, balanceAfterMinor: after, reason: 'plan_fee',
-        reference: cycleRef, meta: { plan: t.plan }
+        reference: cycleRef, meta: { plan: t.plan, interval }
       });
       await tx.update(schema.tenants).set({ planLastBilledAt: now, planNextBillingAt: nextDate }).where(eq(schema.tenants.id, t.id));
     });

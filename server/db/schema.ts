@@ -233,6 +233,9 @@ export const tenants = pgTable('tenants', {
   // Monthly plan-fee billing anchor (separate from per-number billing). Set when
   // the workspace goes live; the billing cron charges the plan fee when due.
   planNextBillingAt: timestamp('plan_next_billing_at', { withTimezone: true }),
+  // monthly | annual. Monthly unless somebody chose otherwise, so nothing
+  // existing changes.
+  billingInterval: text('billing_interval').notNull().default('monthly'),
   planLastBilledAt: timestamp('plan_last_billed_at', { withTimezone: true }),
   trialDays: integer('trial_days').notNull().default(7), // admin-configurable length
   onboardingStep: integer('onboarding_step').notNull().default(0), // 0..5, 5 = done
@@ -1091,6 +1094,11 @@ export const pricing = pgTable('pricing', {
   recordingDaysGrowth: integer('recording_days_growth').notNull().default(30),
   planStartupUsdMinor: integer('plan_startup_usd_minor').notNull().default(1000),       // $10
   planGrowthUsdMinor: integer('plan_growth_usd_minor').notNull().default(1500),         // $15
+  // Annual as a price, not a discount percentage. "$150 a year" is unambiguous;
+  // a percentage rounds badly and stops anybody quoting a round number. The
+  // saving shown on the marketing page is derived from the two figures.
+  planStartupAnnualUsdMinor: integer('plan_startup_annual_usd_minor').notNull().default(10000), // $100
+  planGrowthAnnualUsdMinor: integer('plan_growth_annual_usd_minor').notNull().default(15000),   // $150
   ngnPerUsd: integer('ngn_per_usd').notNull().default(1600),
   // Managed-tier AI rates, stored as nano-USD (billionths of a dollar).
   aiSttPerSecNano: integer('ai_stt_per_sec_nano').notNull().default(100000),
@@ -1301,6 +1309,12 @@ export const pricingOverrides = pgTable('pricing_overrides', {
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor'),
   didMonthlyUsdMinor: integer('did_monthly_usd_minor'),
   transcriptionMinuteUsdMicro: integer('transcription_minute_usd_micro'),
+  // Plan prices per client, so a negotiated rate does not mean editing the
+  // platform's for everybody.
+  planStartupUsdMinor: integer('plan_startup_usd_minor'),
+  planGrowthUsdMinor: integer('plan_growth_usd_minor'),
+  planStartupAnnualUsdMinor: integer('plan_startup_annual_usd_minor'),
+  planGrowthAnnualUsdMinor: integer('plan_growth_annual_usd_minor'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 

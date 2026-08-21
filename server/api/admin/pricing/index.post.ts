@@ -9,6 +9,10 @@ const Body = z.object({
   channelMonthlyUsdMinor: z.number().int().positive().optional(),
   didMonthlyUsdMinor: z.number().int().positive().optional(),
   planStartupUsdMinor: z.number().int().positive().optional(),
+  // Annual as a price, not a discount: "$150 a year" is quotable and a
+  // percentage is not, and the saving is derived for display.
+  planStartupAnnualUsdMinor: z.number().int().positive().optional(),
+  planGrowthAnnualUsdMinor: z.number().int().positive().optional(),
   planGrowthUsdMinor: z.number().int().positive().optional(),
   ngnPerUsd: z.number().int().positive().optional(),
   // Micro like airtime: a cent cannot express two thousandths of one.

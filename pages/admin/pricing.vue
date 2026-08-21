@@ -22,6 +22,18 @@
         <div class="ad-field"><label>Growth plan ($/user/mo)</label>
           <input v-model.number="growth" type="number" step="0.01" class="ad-input mono" />
         </div>
+        <!-- A price rather than a discount: "$150 a year" is something somebody
+             can quote, and 16.67% is not. The saving beneath is worked out from
+             the two figures, which also catches a mistyped one — $15 entered
+             where $150 was meant shows a 92% saving at a glance. -->
+        <div class="ad-field"><label>Startup plan ($/yr)</label>
+          <input v-model.number="startupAnnual" type="number" step="0.01" class="ad-input mono" />
+          <p class="ad-hint">{{ saveStartupPct }}% off twelve months — about {{ startup > 0 ? Math.round((startup * 12 - startupAnnual) / startup * 10) / 10 : 0 }} months free.</p>
+        </div>
+        <div class="ad-field"><label>Growth plan ($/yr)</label>
+          <input v-model.number="growthAnnual" type="number" step="0.01" class="ad-input mono" />
+          <p class="ad-hint">{{ saveGrowthPct }}% off twelve months — about {{ growth > 0 ? Math.round((growth * 12 - growthAnnual) / growth * 10) / 10 : 0 }} months free.</p>
+        </div>
         <div class="ad-field"><label>Transcription — per minute</label>
           <input v-model.number="transcription" type="number" min="0" step="0.001" class="ad-input mono" />
           <p class="ad-hint">Charged only when a client asks for a transcript, not on every recording — most are never listened to, let alone read. The vendor costs us about $0.006 a minute, so this is where the margin sits. Storage itself is pennies and is not charged.</p>
@@ -130,6 +142,15 @@ const did = ref(1.70);
 const channel = ref(2.00);
 const startup = ref(10);
 const growth = ref(15);
+// Annual is a price, not a discount off the monthly one. The saving shown to a
+// client is worked out from the two figures, so nobody has to keep a percentage
+// in step with a price.
+const startupAnnual = ref(100);
+const growthAnnual = ref(150);
+const saveStartupPct = computed(() => startup.value > 0
+  ? Math.floor((1 - startupAnnual.value / (startup.value * 12)) * 100) : 0);
+const saveGrowthPct = computed(() => growth.value > 0
+  ? Math.floor((1 - growthAnnual.value / (growth.value * 12)) * 100) : 0);
 const ngn = ref(1600);
 
 // Managed AI pricing (display units: $/min for STT, $/1M for LLM+TTS, % markup).
@@ -167,6 +188,8 @@ async function load() {
       channel.value = pricing.channelMonthlyUsdMinor / 100;
       startup.value = pricing.planStartupUsdMinor / 100;
       growth.value = pricing.planGrowthUsdMinor / 100;
+      startupAnnual.value = (pricing.planStartupAnnualUsdMinor ?? pricing.planStartupUsdMinor * 12) / 100;
+      growthAnnual.value = (pricing.planGrowthAnnualUsdMinor ?? pricing.planGrowthUsdMinor * 12) / 100;
       ngn.value = pricing.ngnPerUsd;
       // Micro to dollars for reading, back again on save — the same handling as
       // airtime, since a cent cannot express two thousandths of one.
@@ -195,6 +218,8 @@ async function save() {
       channelMonthlyUsdMinor: Math.round(channel.value * 100),
       planStartupUsdMinor: Math.round(startup.value * 100),
       planGrowthUsdMinor: Math.round(growth.value * 100),
+      planStartupAnnualUsdMinor: Math.round(startupAnnual.value * 100),
+      planGrowthAnnualUsdMinor: Math.round(growthAnnual.value * 100),
       ngnPerUsd: Math.round(ngn.value),
       transcriptionMinuteUsdMicro: Math.round(transcription.value * 1e6),
       recordingDaysStartup: Math.round(recDaysStartup.value),

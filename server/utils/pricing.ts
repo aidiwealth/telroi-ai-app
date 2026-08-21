@@ -65,7 +65,21 @@ export function otpCostMinor(currency: 'NGN' | 'USD', ngnPerUsd: number, microUs
     : Math.max(1, Math.round(usdMinor * ngnPerUsd));
 }
 
-export function planFeeUsdMinor(plan: string, p: any): number {
+/** What a plan costs for one billing period.
+ *
+ *  interval decides which price and, at the call site, how far the next billing
+ *  date moves. A workspace on annual pays once and is not seen again for a year.
+ *
+ *  An override falls back to the platform price rather than to zero: a client
+ *  given a negotiated monthly rate should not become free the moment they switch
+ *  to annual because nobody set that figure too.
+ */
+export function planFeeUsdMinor(plan: string, p: any, interval: 'monthly' | 'annual' = 'monthly'): number {
+  if (interval === 'annual') {
+    if (plan === 'growth') return p.planGrowthAnnualUsdMinor ?? p.planGrowthUsdMinor * 12;
+    if (plan === 'startup') return p.planStartupAnnualUsdMinor ?? p.planStartupUsdMinor * 12;
+    return 0;
+  }
   if (plan === 'growth') return p.planGrowthUsdMinor;
   if (plan === 'startup') return p.planStartupUsdMinor;
   return 0; // custom = quoted separately
