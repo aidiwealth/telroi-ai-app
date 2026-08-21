@@ -286,6 +286,20 @@
            negative balance is the debt — so the limit below is the only thing
            standing between a bad month and an unbounded one. -->
       <section class="ad-panel ad-control">
+        <h3 class="ad-panel-h">Billing interval</h3>
+        <div class="ad-adjust-row">
+          <label class="ad-ovr"><span>Plan billed</span>
+            <select v-model="intervalForm" class="ad-ctl">
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annually</option>
+            </select>
+          </label>
+          <button class="btn btn-signal btn-sm" :disabled="intervalBusy" @click="saveInterval">{{ intervalBusy ? 'Saving…' : 'Save' }}</button>
+        </div>
+        <p class="ad-hint">Takes effect at their next billing date — they finish the period they have paid for, and the new interval applies from then. Annual prices are set under Pricing, globally or for this client alone.</p>
+      </section>
+
+      <section class="ad-panel ad-control">
         <h3 class="ad-panel-h">Postpaid billing</h3>
         <div class="ad-adjust-row">
           <label class="ad-ovr"><span>Bill in arrears</span>
@@ -717,6 +731,24 @@ const priceOvr = ref({
 const priceBusy = ref(false);
 const planForm = ref({ plan: 'startup', trialDays: 7 });
 const ppForm = ref({ postpaid: false, creditLimit: 0, billingDay: 1, termsDays: 7 });
+
+// Monthly or annual. Changing it does not charge anything now and does not
+// refund anything: the next billing date stands, and the new interval applies
+// when it comes round. That is also what makes switching back safe — a client
+// who paid for a year keeps the year they paid for.
+const intervalForm = ref<'monthly' | 'annual'>('monthly');
+const intervalBusy = ref(false);
+async function saveInterval() {
+  const tid = data.value?.tenant?.id;
+  intervalBusy.value = true;
+  try {
+    await $fetch(`/api/admin/clients/${route.params.domain}/billing-interval`, {
+      method: 'POST', body: { interval: intervalForm.value }
+    });
+    alert('Saved — applies at their next billing date');
+  } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }
+  finally { intervalBusy.value = false; }
+}
 const ppBusy = ref(false);
 
 /** Amounts are written inline all over this page; postpaid needs to show a
@@ -756,6 +788,9 @@ function syncPostpaidForm() {
     billingDay: t.billingDay || 1,
     termsDays: t.paymentTermsDays || 7
   };
+  // Or the select shows Monthly over a client who is on annual, and an operator
+  // saving anything else would quietly put them back on monthly.
+  intervalForm.value = t.billingInterval === 'annual' ? 'annual' : 'monthly';
 }
 const planBusy = ref(false);
 const gatewayForm = ref('default');
