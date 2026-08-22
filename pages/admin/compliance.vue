@@ -7,12 +7,51 @@
       <button class="log-tab" :class="{ active: tab === 'docs' }" @click="tab = 'docs'">Documents</button>
       <button class="log-tab" :class="{ active: tab === 'nin' }" @click="tab = 'nin'">Identity (NIN)</button>
       <button class="log-tab" :class="{ active: tab === 'forms' }" @click="tab = 'forms'">Forms we issue</button>
+      <button class="log-tab" :class="{ active: tab === 'indemnity' }" @click="tab = 'indemnity'; loadAcceptances()">Indemnities</button>
     </div>
 
     <!-- Blank forms we hand out, as distinct from the documents clients return.
          Uploaded here rather than shipped with the code: a regulator's form
          changes and a deploy is the wrong thing to need when it does. -->
-    <template v-if="tab === 'forms'">
+    <template v-if="tab === 'indemnity'">
+      <!-- Who accepted what, and on whose authority. A carrier asking about a
+           number wants both, and the wording they saw — which is why the version
+           travels with the row and the text is one click away. -->
+      <div class="ind-filters">
+        <input v-model="accQ" class="ad-input" placeholder="Number, email or client…" @keyup.enter="loadAcceptances" />
+        <select v-model="accCat" class="ad-input" @change="loadAcceptances">
+          <option value="">All categories</option>
+          <option value="authentication">Authentication</option>
+          <option value="financial">Financial services</option>
+          <option value="health">Health &amp; sensitive data</option>
+          <option value="emergency">Emergency &amp; welfare</option>
+          <option value="government">Government &amp; public sector</option>
+          <option value="outbound">Scaled outbound</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" @click="loadAcceptances">Search</button>
+      </div>
+
+      <table v-if="acceptances.length" class="ad-table">
+        <thead><tr>
+          <th>Client</th><th>Number</th><th>Declared for</th><th>Accepted by</th><th>Version</th><th>When</th><th></th>
+        </tr></thead>
+        <tbody>
+          <tr v-for="a in acceptances" :key="a.id">
+            <td>{{ a.tenantName }}</td>
+            <td class="mono">{{ a.telnum || '—' }}</td>
+            <td>{{ (a.categories || []).join(', ') }}</td>
+            <td>{{ a.userEmail }}<span v-if="a.userRole" class="muted"> ({{ a.userRole }})</span></td>
+            <td class="mono">{{ a.docVersion }}</td>
+            <td>{{ new Date(a.acceptedAt).toLocaleString() }}</td>
+            <td><button class="btn btn-ghost btn-sm" @click="viewAcceptance(a)">View</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <EmptyState v-else icon="quality" title="No indemnities accepted yet"
+        description="When a client buys a number for a sensitive use, their acceptance appears here." />
+    </template>
+
+    <template v-else-if="tab === 'forms'">
       <div class="set-card card-pad fm-upload">
         <h3 class="ad-panel-h">Upload a form</h3>
         <!-- The same drop zone clients see in the go-live modal, rather than a
@@ -139,6 +178,31 @@ useHead({ title: 'Compliance — Telroi Operator' });
 const pending = ref(true);
 const subs = ref<any[]>([]);
 const tab = ref('docs');
+
+// The register. Loaded when the tab is opened rather than on mount — most
+// visits here are to review a submission, and this can grow long.
+const acceptances = ref<any[]>([]);
+const accQ = ref('');
+const accCat = ref('');
+const viewing = ref<any>(null);
+
+async function loadAcceptances() {
+  try {
+    const r = await $fetch<any>('/api/admin/legal/acceptances', {
+      query: { q: accQ.value || undefined, category: accCat.value || undefined }
+    });
+    acceptances.value = r.acceptances || [];
+  } catch { acceptances.value = []; }
+}
+
+/** The wording they actually saw, fetched by version rather than by slug — the
+ *  current text is not evidence of what somebody accepted two versions ago. */
+async function viewAcceptance(a: any) {
+  try {
+    const r = await $fetch<any>(`/api/admin/legal/document/${a.documentId}`);
+    viewing.value = { ...a, body: r.document.body, title: r.document.title };
+  } catch { alert('Could not load that version'); }
+}
 
 const forms = ref<any[]>([]);
 const formFile = ref<File | null>(null);

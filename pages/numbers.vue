@@ -192,100 +192,104 @@
 
     <!-- Buy number modal -->
     <div v-if="showBuy" class="modal-overlay" @click.self="showBuy = false">
-      <div class="modal card">
-        <div class="card-head"><span class="card-title">Buy a number</span><button class="modal-x" @click="showBuy = false">✕</button></div>
+      <div class="modal card buy-modal">
+        <div class="card-head">
+          <span class="card-title">Buy a number</span>
+          <button class="modal-x" @click="showBuy = false">&times;</button>
+        </div>
+
         <div class="card-pad">
           <p v-if="!available.length" class="muted buy-empty">No numbers are available right now. Check back soon.</p>
+
+          <!-- Verification first, and before anything else is shown: a client
+               who cannot buy should not be walked through choosing. -->
+          <div v-else-if="!approved" class="buy-gate">
+            <p class="buy-gate-h">{{ complianceStatus === 'pending' ? 'Your verification is under review' : 'Verification comes first' }}</p>
+            <p class="buy-gate-p">
+              {{ complianceStatus === 'pending'
+                ? 'Numbers open up as soon as it is approved — usually within a working day.'
+                : 'Numbers carry a real identity on the network, so we verify a business before selling one.' }}
+              <template v-if="demoNumber"> Meanwhile you can place test calls from <strong class="mono">{{ demoNumber }}</strong>.</template>
+            </p>
+            <button v-if="complianceStatus !== 'pending'" class="btn btn-signal btn-block" @click="goVerify">Start verification</button>
+          </div>
+
           <template v-else>
-            <label class="buy-pick-label">Choose a number</label>
-            <div class="buy-list">
-              <button v-for="a in available" :key="a.id" class="buy-pick" :class="{ on: picked?.id === a.id }" @click="picked = a">
-                <span class="buy-pick-num mono">{{ a.telnum }}</span>
-                <span class="buy-pick-meta">
-                  <span class="buy-flag">{{ a.regionLabel }}</span>
-                </span>
-              </button>
+            <!-- One panel at a time. The indemnity used to arrive as a second
+                 modal after somebody thought they had finished, which is a poor
+                 moment to meet a legal document. -->
+            <div class="buy-steps">
+              <div v-for="(label, i) in stepLabels" :key="label"
+                   class="buy-step" :class="{ on: step === i, done: step > i }">
+                <span class="buy-step-n">{{ step > i ? '&check;' : i + 1 }}</span>
+                <span class="buy-step-l">{{ label }}</span>
+              </div>
             </div>
 
-            <template v-if="picked">
+            <!-- 1 · the number -->
+            <template v-if="step === 0">
+              <div class="buy-list">
+                <button v-for="a in available" :key="a.id" class="buy-pick" :class="{ on: picked?.id === a.id }" @click="picked = a">
+                  <span class="buy-pick-num mono">{{ a.telnum }}</span>
+                  <span class="buy-pick-meta"><span class="buy-flag">{{ a.regionLabel }}</span></span>
+                </button>
+              </div>
+            </template>
+
+            <!-- 2 · what it is for, and how much capacity -->
+            <template v-else-if="step === 1">
               <div class="field buy-channels">
                 <label>Voice channels</label>
                 <input v-model.number="buy.channels" type="number" min="1" max="50" class="input mono" />
+                <p class="ad-hint">One channel is one call at a time. A second caller hears busy until there is another.</p>
               </div>
-              <!-- Real pricing in the workspace's own currency. These were four
-                   hardcoded dollar figures, so a naira client was quoted in
-                   dollars at rates that were somebody else's — and the amount
-                   actually charged came from the server regardless. -->
-              <div class="buy-pricing">
-                <div class="buy-row"><span>Number (DID) · monthly</span><span class="mono">{{ money(didMonthly) }}</span></div>
-                <div class="buy-row"><span>{{ buy.channels }} channel{{ buy.channels > 1 ? 's' : '' }} · monthly</span><span class="mono">{{ money(buy.channels * channelMonthly) }}</span></div>
-                <div class="buy-row buy-total"><span>Due now (first month)</span><span class="mono">{{ money(didMonthly + buy.channels * channelMonthly) }}</span></div>
-                <div class="buy-row buy-airtime muted"><span>Airtime</span><span>{{ airtimeLabel }} / min, billed per call</span></div>
-              </div>
-              <!-- A trial sees the prices but not the button: the server refuses
-                   the purchase until verification is approved, and a button that
-                   fails teaches somebody the product is broken rather than that
-                   there is a step first. -->
-              <template v-if="approved">
-                <!-- What the number is for, asked before payment rather than
-                     after. Six of these carry an indemnity the client has to
-                     accept; a general business line does not, so somebody buying
-                     an ordinary number is not made to sign an OTP undertaking —
-                     an acceptance everybody clicks past means nothing. -->
-                <div class="buy-cats">
-                  <div class="buy-cats-h">What will this number be used for?</div>
-                  <label v-for="c in USE_CATEGORIES" :key="c.key" class="buy-cat">
-                    <input type="checkbox" :value="c.key" v-model="buy.categories" @change="onCategory(c.key)" />
-                    <span><strong>{{ c.label }}</strong> — {{ c.hint }}</span>
-                  </label>
-                </div>
 
-                <button class="btn btn-signal btn-block" :disabled="buying || !buy.categories.length" @click="purchase">
-                  {{ buying ? 'Processing…' : (needsIndemnity ? 'Continue' : 'Buy & charge wallet') }}
-                </button>
-                <p class="muted buy-note">
-                  {{ needsIndemnity
-                    ? 'You will be asked to accept the Number Use Indemnity before anything is charged.'
-                    : 'Charged now, then monthly. A low balance blocks the purchase.' }}
-                </p>
-              </template>
-              <div v-else class="buy-gate">
-                <p class="buy-gate-h">{{ complianceStatus === 'pending' ? 'Your verification is under review' : 'Verification comes first' }}</p>
-                <p class="buy-gate-p">
-                  {{ complianceStatus === 'pending'
-                    ? 'Numbers open up as soon as it is approved — usually within a working day.'
-                    : 'Numbers carry a real identity on the network, so we verify a business before selling one.' }}
-                  <template v-if="demoNumber"> Meanwhile you can place test calls from <strong class="mono">{{ demoNumber }}</strong>.</template>
-                </p>
-                <button v-if="complianceStatus !== 'pending'" class="btn btn-signal btn-block" @click="goVerify">Start verification</button>
+              <div class="buy-cats">
+                <div class="buy-cats-h">What will this number be used for?</div>
+                <label v-for="c in USE_CATEGORIES" :key="c.key" class="buy-cat">
+                  <input type="checkbox" :value="c.key" v-model="buy.categories" @change="onCategory(c.key)" />
+                  <span><strong>{{ c.label }}</strong> — {{ c.hint }}</span>
+                </label>
+                <p v-if="needsIndemnity" class="ad-hint">This use carries the Number Use Indemnity, which you will read at the next step.</p>
               </div>
             </template>
+
+            <!-- 3 · the indemnity, only when it applies -->
+            <template v-else-if="step === 2 && needsIndemnity">
+              <div v-if="indemnity">
+                <p class="ind-sub muted">{{ indemnity.title }} · version {{ indemnity.version }}</p>
+                <div class="ind-body" @scroll="onIndemnityScroll" v-html="indemnityHtml"></div>
+                <p v-if="!readToEnd" class="ind-note muted">Scroll to the end to continue.</p>
+                <p v-else class="ind-note muted">Your acceptance is recorded with your name, this number, this version and the time.</p>
+              </div>
+              <p v-else class="muted">Loading&hellip;</p>
+            </template>
+
+            <!-- 4 · what they are agreeing to buy -->
+            <template v-else>
+              <div class="buy-pricing">
+                <div class="buy-row"><span>Number</span><span class="mono">{{ picked?.telnum }}</span></div>
+                <div class="buy-row"><span>Number (DID) &middot; monthly</span><span class="mono">{{ money(didMonthly) }}</span></div>
+                <div class="buy-row"><span>{{ buy.channels }} channel{{ buy.channels > 1 ? 's' : '' }} &middot; monthly</span><span class="mono">{{ money(buy.channels * channelMonthly) }}</span></div>
+                <div class="buy-row buy-total"><span>Due now (first month)</span><span class="mono">{{ money(didMonthly + buy.channels * channelMonthly) }}</span></div>
+                <div class="buy-row buy-airtime muted"><span>Airtime</span><span>{{ airtimeLabel }} / min, billed per call</span></div>
+                <div class="buy-row buy-airtime muted"><span>Declared use</span><span>{{ categoryLabels }}</span></div>
+                <div v-if="acceptedVersion" class="buy-row buy-airtime muted"><span>Indemnity</span><span>Accepted &middot; v{{ acceptedVersion }}</span></div>
+              </div>
+              <p class="muted buy-note">Charged now, then monthly. A low balance blocks the purchase.</p>
+            </template>
+
+            <div class="buy-actions">
+              <button v-if="step > 0" class="btn btn-ghost" :disabled="buying || indemnityBusy" @click="stepBack">Back</button>
+              <button class="btn btn-signal" :disabled="!canAdvance || buying || indemnityBusy" @click="stepNext">
+                {{ advanceLabel }}
+              </button>
+            </div>
           </template>
         </div>
       </div>
     </div>
   </div>
-
-    <!-- The indemnity, in full. Somebody is giving one; the least we can do is
-         put the words in front of them rather than behind a link. -->
-    <div v-if="showIndemnity" class="modal-overlay" @click.self="showIndemnity = false">
-      <div class="modal ind-modal">
-        <button class="modal-x" @click="showIndemnity = false">&times;</button>
-        <h3 class="ind-h">{{ indemnity?.title }}</h3>
-        <p class="ind-sub muted">Version {{ indemnity?.version }} · for {{ picked?.telnum }}</p>
-
-        <div class="ind-body" @scroll="onIndemnityScroll">{{ indemnity?.body }}</div>
-
-        <p v-if="!readToEnd" class="ind-note muted">Scroll to the end to continue.</p>
-        <div class="ind-actions">
-          <button class="btn btn-ghost" @click="showIndemnity = false">Cancel</button>
-          <button class="btn btn-signal" :disabled="!readToEnd || indemnityBusy" @click="acceptIndemnity">
-            {{ indemnityBusy ? 'Recording…' : 'Accept and buy' }}
-          </button>
-        </div>
-        <p class="ind-note muted">Your acceptance is recorded with your name, this number, this version and the time.</p>
-      </div>
-    </div>
 </template>
 
 <script setup lang="ts">
@@ -423,8 +427,99 @@ async function openBuy() {
 // ── The indemnity ────────────────────────────────────────────────────────────
 // Shown in full rather than summarised behind a link. Somebody is giving an
 // indemnity; the least we can do is put the words in front of them.
+// ── The buy flow, as steps ───────────────────────────────────────────────────
+// The indemnity used to open as a second modal once somebody thought they had
+// finished. Meeting a legal document at that moment is both a poor experience
+// and a poor consent: it reads as an obstacle rather than something to weigh.
+const step = ref(0);
+const acceptedId = ref<string | null>(null);
+const acceptedVersion = ref<string | null>(null);
+
+// The indemnity step exists only when it applies, so the numbering a client
+// sees matches the steps they will actually take.
+const stepLabels = computed(() => needsIndemnity.value
+  ? ['Number', 'Use', 'Indemnity', 'Confirm']
+  : ['Number', 'Use', 'Confirm']);
+
+const categoryLabels = computed(() => buy.value.categories
+  .map((k) => USE_CATEGORIES.find((c) => c.key === k)?.label || k).join(', '));
+
+const canAdvance = computed(() => {
+  if (step.value === 0) return !!picked.value;
+  if (step.value === 1) return buy.value.categories.length > 0;
+  if (step.value === 2 && needsIndemnity.value) return readToEnd.value;
+  return true;
+});
+
+const advanceLabel = computed(() => {
+  if (buying.value) return 'Processing…';
+  if (indemnityBusy.value) return 'Recording…';
+  const last = stepLabels.value.length - 1;
+  if (step.value === last) return 'Buy & charge wallet';
+  if (step.value === 2 && needsIndemnity.value) return 'Accept and continue';
+  return 'Continue';
+});
+
+function stepBack() {
+  // Going back past the indemnity discards the acceptance rather than keeping
+  // it: they may change what the number is for, and an acceptance covering
+  // categories they have since edited would not be worth having.
+  if (step.value === 3) { acceptedId.value = null; acceptedVersion.value = null; }
+  step.value = Math.max(0, step.value - 1);
+}
+
+async function stepNext() {
+  const last = stepLabels.value.length - 1;
+  if (step.value === last) return doPurchase(acceptedId.value || undefined);
+  if (step.value === 1 && needsIndemnity.value) { await openIndemnity(); step.value = 2; return; }
+  if (step.value === 2 && needsIndemnity.value) {
+    const ok = await recordAcceptance();
+    if (!ok) return;
+    step.value = 3;
+    return;
+  }
+  step.value = step.value + 1;
+}
+
 const indemnity = ref<any>(null);
-const showIndemnity = ref(false);
+
+/** The document renders as markdown rather than as raw text — a thing somebody
+ *  is signing should not show its own asterisks.
+ *
+ *  Written out rather than pulled from a library because this goes through
+ *  v-html: every angle bracket is escaped first, and only the handful of tags
+ *  produced below can ever reach the page. The text is ours, from our own
+ *  repository, but a renderer that would pass HTML through is a habit worth not
+ *  forming.
+ */
+const indemnityHtml = computed(() => {
+  const md = indemnity.value?.body || '';
+  const esc = (t: string) => t
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = (t: string) => esc(t)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  const out: string[] = [];
+  let list = false;
+  const closeList = () => { if (list) { out.push('</ul>'); list = false; } };
+
+  for (const raw of md.split('\n')) {
+    const line = raw.trimEnd();
+    if (/^---+$/.test(line.trim())) { closeList(); continue; }   // rules are the h2 borders
+    if (/^## /.test(line))  { closeList(); out.push(`<h2>${inline(line.slice(3))}</h2>`); continue; }
+    if (/^# /.test(line))   { closeList(); out.push(`<h1>${inline(line.slice(2))}</h1>`); continue; }
+    if (/^- /.test(line))   { if (!list) { out.push('<ul>'); list = true; } out.push(`<li>${inline(line.slice(2))}</li>`); continue; }
+    if (!line.trim())       { closeList(); continue; }
+    // A paragraph continues until a blank line, so wrapped source lines join.
+    const prev = out[out.length - 1];
+    if (!list && prev && prev.startsWith('<p>') && !prev.endsWith('</p>')) out[out.length - 1] = prev + ' ' + inline(line);
+    else if (!list && prev && prev.startsWith('<p>') && prev.endsWith('</p>')) out[out.length - 1] = prev.slice(0, -4) + ' ' + inline(line) + '</p>';
+    else out.push(`<p>${inline(line)}</p>`);
+  }
+  closeList();
+  return out.join('\n');
+});
 const indemnityBusy = ref(false);
 const readToEnd = ref(false);
 
@@ -442,13 +537,15 @@ async function openIndemnity() {
     const r = await api.get<any>('/api/legal/number_indemnity');
     indemnity.value = r.document;
     readToEnd.value = false;
-    showIndemnity.value = true;
   } catch (e: any) {
     toast.err(e?.data?.error?.message || 'Could not load the indemnity. Please try again.');
   } finally { indemnityBusy.value = false; }
 }
 
-async function acceptIndemnity() {
+/** Records the acceptance and stops there. The confirmation step comes next, so
+ *  a client sees what they are buying after agreeing rather than finding both
+ *  collapsed into one press. */
+async function recordAcceptance(): Promise<boolean> {
   indemnityBusy.value = true;
   try {
     const r = await api.post<any>('/api/legal/accept', {
@@ -456,19 +553,13 @@ async function acceptIndemnity() {
       inventoryId: picked.value?.id,
       categories: buy.value.categories
     });
-    showIndemnity.value = false;
-    await doPurchase(r.acceptanceId);
+    acceptedId.value = r.acceptanceId;
+    acceptedVersion.value = r.version;
+    return true;
   } catch (e: any) {
     toast.err(e?.data?.error?.message || 'Could not record your acceptance');
+    return false;
   } finally { indemnityBusy.value = false; }
-}
-
-/** The button. A sensitive use reads the indemnity first; an ordinary line
- *  buys straight away. */
-async function purchase() {
-  if (!picked.value) return;
-  if (needsIndemnity.value) return openIndemnity();
-  await doPurchase();
 }
 
 async function doPurchase(acceptanceId?: string) {
@@ -561,13 +652,33 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.ind-modal { max-width: 720px; width: 92vw; }
-.ind-h { font-size: 17px; font-weight: 600; margin: 0; }
-.ind-sub { font-size: 12.5px; margin: 4px 0 14px; }
-.ind-body { max-height: 46vh; overflow-y: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.6;
-  border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px; background: var(--paper-2); }
-.ind-note { font-size: 12px; margin: 10px 0 0; }
-.ind-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+.ind-modal { max-width: 780px; width: 94vw; padding: 28px 32px 24px; display: flex; flex-direction: column; max-height: 88vh; }
+.ind-h { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 2px; }
+.ind-sub { font-size: 12.5px; margin: 0 0 18px; }
+.ind-body { flex: 1; min-height: 0; overflow-y: auto; font-size: 13.5px; line-height: 1.68; color: var(--ink);
+  border: 1px solid var(--rule); border-radius: var(--radius); padding: 24px 28px; background: var(--paper-2); }
+.ind-body :deep(h1) { font-size: 17px; font-weight: 600; margin: 0 0 14px; }
+.ind-body :deep(h2) { font-size: 14px; font-weight: 600; margin: 26px 0 8px; padding-top: 18px;
+  border-top: 1px solid var(--rule); }
+.ind-body :deep(h2:first-of-type) { border-top: none; padding-top: 0; margin-top: 20px; }
+.ind-body :deep(p) { margin: 0 0 12px; }
+.ind-body :deep(ul) { margin: 0 0 14px; padding-left: 20px; }
+.ind-body :deep(li) { margin-bottom: 7px; }
+.ind-body :deep(strong) { font-weight: 600; color: var(--ink); }
+.ind-body :deep(em) { color: var(--ink-soft); }
+.ind-note { font-size: 12px; margin: 12px 0 0; }
+.ind-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;
+  padding-top: 16px; border-top: 1px solid var(--rule); }
+.buy-steps { display: flex; gap: 6px; margin: 0 0 20px; padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
+.buy-step { display: flex; align-items: center; gap: 7px; flex: 1; font-size: 12px; color: var(--ink-mute); }
+.buy-step-n { flex: none; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-size: 11px; font-weight: 600; background: var(--paper-3); color: var(--ink-mute); }
+.buy-step.on { color: var(--ink); font-weight: 600; }
+.buy-step.on .buy-step-n { background: var(--signal); color: #fff; }
+.buy-step.done .buy-step-n { background: rgba(0,210,138,.16); color: #0a8a5c; }
+.buy-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;
+  padding-top: 16px; border-top: 1px solid var(--rule); }
+.buy-actions .btn { min-width: 130px; }
 .buy-cats { margin: 14px 0; }
 .buy-cats-h { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
 .buy-cat { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.5;
