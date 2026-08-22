@@ -31,7 +31,8 @@
         <button class="btn btn-ghost btn-sm" @click="loadAcceptances">Search</button>
       </div>
 
-      <table v-if="acceptances.length" class="ad-table">
+      <div v-if="acceptances.length" class="set-card ad-table-wrap">
+        <table class="ad-data-table">
         <thead><tr>
           <th>Client</th><th>Number</th><th>Declared for</th><th>Accepted by</th><th>Version</th><th>When</th><th></th>
         </tr></thead>
@@ -46,7 +47,8 @@
             <td><button class="btn btn-ghost btn-sm" @click="viewAcceptance(a)">View</button></td>
           </tr>
         </tbody>
-      </table>
+        </table>
+      </div>
       <EmptyState v-else icon="quality" title="No indemnities accepted yet"
         description="When a client buys a number for a sensitive use, their acceptance appears here." />
     </template>
@@ -168,6 +170,28 @@
       </div>
     </div>
   </div>
+
+    <!-- The wording an acceptance points at, not the current wording. Two
+         versions on, those differ, and the register exists to answer which one
+         somebody actually saw. -->
+    <div v-if="viewing" class="modal-overlay" @click.self="viewing = null">
+      <div class="modal acc-modal">
+        <button class="modal-x" @click="viewing = null">&times;</button>
+        <h3 class="acc-h">{{ viewing.title }}</h3>
+        <p class="acc-sub muted">Version {{ viewing.docVersion }}</p>
+
+        <div class="acc-facts">
+          <div><span>Client</span><strong>{{ viewing.tenantName }}</strong></div>
+          <div><span>Number</span><strong class="mono">{{ viewing.telnum || '—' }}</strong></div>
+          <div><span>Declared for</span><strong>{{ (viewing.categories || []).join(', ') }}</strong></div>
+          <div><span>Accepted by</span><strong>{{ viewing.userEmail }}<template v-if="viewing.userRole"> ({{ viewing.userRole }})</template></strong></div>
+          <div><span>When</span><strong>{{ new Date(viewing.acceptedAt).toLocaleString() }}</strong></div>
+          <div><span>From</span><strong class="mono">{{ viewing.ip || '—' }}</strong></div>
+        </div>
+
+        <div class="acc-body">{{ viewing.body }}</div>
+      </div>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -273,6 +297,18 @@ onMounted(() => { load(); loadForms(); });
 </script>
 
 <style scoped>
+.acc-modal { max-width: 780px; width: 94vw; padding: 28px 32px 24px; max-height: 88vh; overflow-y: auto; }
+.acc-h { font-size: 19px; font-weight: 600; margin: 0 0 2px; }
+.acc-sub { font-size: 12.5px; margin: 0 0 18px; }
+.acc-facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 24px; margin-bottom: 20px;
+  padding: 16px 18px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--paper-2); }
+.acc-facts > div { display: flex; flex-direction: column; gap: 2px; }
+.acc-facts span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-mute); }
+.acc-facts strong { font-size: 13px; font-weight: 600; color: var(--ink); }
+.acc-body { white-space: pre-wrap; font-size: 12.5px; line-height: 1.6; color: var(--ink-soft);
+  border: 1px solid var(--rule); border-radius: var(--radius); padding: 20px; max-height: 40vh; overflow-y: auto; }
+.ind-filters { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
+.ind-filters .ad-input { max-width: 260px; }
 .ad-sub-use { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 13px; line-height: 1.55; }
 .ad-sub-use .ad-doc-label { display: block; }
 .fm-upload { margin-bottom: 18px; }

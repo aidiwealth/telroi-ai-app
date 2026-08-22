@@ -432,7 +432,6 @@ async function openBuy() {
 // finished. Meeting a legal document at that moment is both a poor experience
 // and a poor consent: it reads as an obstacle rather than something to weigh.
 const step = ref(0);
-const acceptedId = ref<string | null>(null);
 const acceptedVersion = ref<string | null>(null);
 
 // The indemnity step exists only when it applies, so the numbering a client
@@ -464,17 +463,18 @@ function stepBack() {
   // Going back past the indemnity discards the acceptance rather than keeping
   // it: they may change what the number is for, and an acceptance covering
   // categories they have since edited would not be worth having.
-  if (step.value === 3) { acceptedId.value = null; acceptedVersion.value = null; }
+  if (step.value === 3) acceptedVersion.value = null;
   step.value = Math.max(0, step.value - 1);
 }
 
 async function stepNext() {
   const last = stepLabels.value.length - 1;
-  if (step.value === last) return doPurchase(acceptedId.value || undefined);
+  if (step.value === last) return doPurchase();
   if (step.value === 1 && needsIndemnity.value) { await openIndemnity(); step.value = 2; return; }
   if (step.value === 2 && needsIndemnity.value) {
-    const ok = await recordAcceptance();
-    if (!ok) return;
+    // Their agreement is held here and recorded by the purchase. Nothing is
+    // written for a number they do not end up buying.
+    acceptedVersion.value = indemnity.value?.version || null;
     step.value = 3;
     return;
   }
@@ -558,33 +558,14 @@ async function openIndemnity() {
   } finally { indemnityBusy.value = false; }
 }
 
-/** Records the acceptance and stops there. The confirmation step comes next, so
- *  a client sees what they are buying after agreeing rather than finding both
- *  collapsed into one press. */
-async function recordAcceptance(): Promise<boolean> {
-  indemnityBusy.value = true;
-  try {
-    const r = await api.post<any>('/api/legal/accept', {
-      documentId: indemnity.value.id,
-      inventoryId: picked.value?.id,
-      categories: buy.value.categories
-    });
-    acceptedId.value = r.acceptanceId;
-    acceptedVersion.value = r.version;
-    return true;
-  } catch (e: any) {
-    toast.err(e?.data?.error?.message || 'Could not record your acceptance');
-    return false;
-  } finally { indemnityBusy.value = false; }
-}
-
-async function doPurchase(acceptanceId?: string) {
+async function doPurchase() {
   if (!picked.value) return;
   buying.value = true;
   try {
     await api.post('/api/numbers/purchase', {
       inventoryId: picked.value.id, channels: buy.value.channels,
-      categories: buy.value.categories, acceptanceId
+      categories: buy.value.categories,
+      indemnityDocumentId: needsIndemnity.value ? indemnity.value?.id : undefined
     });
     toast.ok('Number purchased — wallet charged');
     showBuy.value = false;

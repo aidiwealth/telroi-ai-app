@@ -25,9 +25,12 @@ const Body = z.object({
   channels: z.number().int().min(1).max(50).default(1),
   chargeCard: z.boolean().optional(),
   // What the client says the number is for, and — where that is sensitive — the
-  // acceptance recorded before they got here.
+  // document version they read. The acceptance itself is written below, once the
+  // number is actually theirs: recording it when they pressed accept left a
+  // register full of indemnities given for numbers nobody bought, which
+  // devalues the ones that matter.
   categories: z.array(z.string().max(32)).min(1).optional(),
-  acceptanceId: z.string().uuid().optional()
+  indemnityDocumentId: z.string().uuid().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -41,32 +44,17 @@ export default defineEventHandler(async (event) => {
   const categories = p.data.categories?.length ? p.data.categories : ['general'];
   const sensitive = categories.filter((c) => SENSITIVE.includes(c));
   if (sensitive.length) {
-    if (!p.data.acceptanceId) {
+    if (!p.data.indemnityDocumentId) {
       throw apiError('indemnity_required',
         'This use needs the Number Use Indemnity accepted first.', 428);
     }
-    const [acc] = await db.select().from(schema.legalAcceptances)
-      .where(and(
-        eq(schema.legalAcceptances.id, p.data.acceptanceId),
-        // Their own acceptance, not one somebody handed them the id of.
-        eq(schema.legalAcceptances.tenantId, s.tenantId)
-      )).limit(1);
-    if (!acc) throw apiError('indemnity_required', 'That acceptance could not be found.', 428);
-
-    // Against the version in force. An acceptance of superseded wording is a
+    // Against the version in force. Accepting superseded wording would leave a
     // record that looks valid and is not.
     const [doc] = await db.select({ isCurrent: schema.legalDocuments.isCurrent })
-      .from(schema.legalDocuments).where(eq(schema.legalDocuments.id, acc.documentId)).limit(1);
-    if (!doc?.isCurrent) {
+      .from(schema.legalDocuments).where(eq(schema.legalDocuments.id, p.data.indemnityDocumentId)).limit(1);
+    if (!doc) throw apiError('indemnity_required', 'Unknown indemnity version.', 428);
+    if (!doc.isCurrent) {
       throw apiError('indemnity_stale', 'The indemnity has been updated. Please read and accept the current version.', 409);
-    }
-
-    // And covering what they are actually declaring — accepting for
-    // authentication does not cover collections.
-    const covered = new Set(acc.declaredCategories || []);
-    const missing = sensitive.filter((c) => !covered.has(c));
-    if (missing.length) {
-      throw apiError('indemnity_required', 'The indemnity you accepted does not cover every use you have selected.', 428);
     }
   }
 
@@ -178,18 +166,23 @@ export default defineEventHandler(async (event) => {
       useCategories: categories
     }).returning();
 
-    // The acceptance was recorded before the number existed, so it carries the
-    // inventory id and no number. Writing it back now is what lets an operator
-    // search the register by number — without it, every acceptance names
-    // nothing and the register cannot answer the question it exists for.
-    if (p.data.acceptanceId) {
-      await db.update(schema.legalAcceptances)
-        .set({ telnum: claimed.telnum })
-        .where(and(
-          eq(schema.legalAcceptances.id, p.data.acceptanceId),
-          eq(schema.legalAcceptances.tenantId, s.tenantId)
-        ))
-        .catch((e: any) => console.error('[purchase] could not stamp acceptance with number:', e?.message));
+    // The acceptance, now that the number is actually theirs. Written here and
+    // not when they pressed accept: an abandoned or failed purchase would
+    // otherwise leave an indemnity given for a number nobody bought, and a
+    // register full of those devalues the ones that mean something.
+    if (p.data.indemnityDocumentId && sensitive.length) {
+      await db.insert(schema.legalAcceptances).values({
+        tenantId: s.tenantId,
+        documentId: p.data.indemnityDocumentId,
+        telnum: claimed.telnum,
+        inventoryId: p.data.inventoryId,
+        userId: s.userId,
+        userEmail: s.email,
+        userRole: (s as any).role || null,
+        declaredCategories: categories,
+        ip: getRequestIP(event, { xForwardedFor: true }) || null,
+        userAgent: (getHeader(event, 'user-agent') || '').slice(0, 300) || null
+      }).catch((e: any) => console.error('[purchase] could not record acceptance:', e?.message));
     }
 
     await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'number.purchased', summary: `Bought ${claimed.telnum} (${claimed.region}, ${p.data.channels}ch)`, ref });
