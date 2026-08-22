@@ -34,14 +34,14 @@
 
           <div class="plan-options">
             <div class="plan-opt" :class="{ on: planState && planState.plan === 'startup' }">
-              <div class="plan-opt-head"><span class="plan-opt-name">Startup</span><span class="plan-opt-price">$10<small>/user/mo</small></span></div>
+              <div class="plan-opt-head"><span class="plan-opt-name">Startup</span><span class="plan-opt-price">{{ planPrice('startup') }}<small>{{ planPer }}</small></span></div>
               <p class="plan-opt-desc">AI numbers, recording, routing, API, fraud scoring.</p>
               <span v-if="planState && planState.plan === 'startup'" class="plan-opt-current">Current plan</span>
               <span v-else-if="planState && planState.basePlan === 'startup'" class="plan-opt-after">After trial · </span>
               <button v-if="!planState || planState.plan !== 'startup'" class="btn btn-ghost btn-sm btn-block" :disabled="switching" @click="switchPlan('startup')">Switch to Startup</button>
             </div>
             <div class="plan-opt featured" :class="{ on: planState && planState.plan === 'growth' }">
-              <div class="plan-opt-head"><span class="plan-opt-name">Growth</span><span class="plan-opt-price">$15<small>/user/mo</small></span></div>
+              <div class="plan-opt-head"><span class="plan-opt-name">Growth</span><span class="plan-opt-price">{{ planPrice('growth') }}<small>{{ planPer }}</small></span></div>
               <p class="plan-opt-desc">Everything in Startup plus CRM, dialer, messenger, AI summaries, admin controls.</p>
               <span v-if="planState && planState.plan === 'growth' && !planState.trial" class="plan-opt-current">Current plan</span>
               <button v-else-if="!planState || planState.plan !== 'growth'" class="btn btn-signal btn-sm btn-block" :disabled="switching" @click="switchPlan('growth')">Upgrade to Growth</button>
@@ -306,6 +306,22 @@ const saving = ref(false);
 const switching = ref(false);
 const planState = ref<any>(null);
 const comp = ref<any>(null);
+
+/** The real price, in the workspace's own currency, from the same figures
+ *  billing uses. These were $10 and $15 in the markup — wrong for a Naira
+ *  client, and stale the moment either price changed.
+ *
+ *  "/user/mo" went with them: billing charges the workspace, not the seat, and
+ *  a page promising otherwise is contradicted by the first invoice.
+ */
+function planPrice(plan: 'startup' | 'growth') {
+  const o = billSummary.value?.planOptions;
+  const minor = plan === 'startup' ? o?.startupMinor : o?.growthMinor;
+  if (minor == null) return '—';
+  const sym = billSummary.value?.currency === 'NGN' ? '₦' : '$';
+  return sym + (minor / 100).toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+const planPer = computed(() => billSummary.value?.planOptions?.interval === 'annual' ? '/yr' : '/mo');
 
 // Both open the topbar's own modals rather than growing a second copy of either
 // form here — the go-live flow in particular has enough in it that two versions

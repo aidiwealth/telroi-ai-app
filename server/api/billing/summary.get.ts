@@ -36,6 +36,17 @@ export default defineEventHandler(async (event) => {
   const planMinor = onTrial ? 0 : conv(planUsd);
   const planNext = tenant?.planNextBillingAt ? new Date(tenant.planNextBillingAt) : null;
 
+  // Both options, in the workspace's own currency. The settings page had $10
+  // and $15 written into the markup, so a Naira client was quoted in dollars at
+  // a rate that was somebody else's — and the figures would have gone stale the
+  // moment either price changed.
+  const interval = tenant?.billingInterval === 'annual' ? 'annual' : 'monthly';
+  const planOptions = {
+    interval,
+    startupMinor: conv(planFeeUsdMinor('startup', pricing, interval)),
+    growthMinor: conv(planFeeUsdMinor('growth', pricing, interval))
+  };
+
   const candidates = [nextNumberBill, planNext].filter(Boolean) as Date[];
   const nextBillingAt = candidates.length ? new Date(Math.min(...candidates.map((d) => d.getTime()))) : null;
 
@@ -44,6 +55,7 @@ export default defineEventHandler(async (event) => {
     monthlyTotalMinor: numbersMinor + planMinor,
     breakdown: { numbersMinor, planMinor, planOnTrial: onTrial, numberCount: subs.length, channelCount: channelsTotal },
     nextBillingAt: nextBillingAt ? nextBillingAt.toISOString() : null,
-    planNextBillingAt: planNext ? planNext.toISOString() : null
+    planNextBillingAt: planNext ? planNext.toISOString() : null,
+    planOptions
   };
 });
