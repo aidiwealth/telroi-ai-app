@@ -18,8 +18,8 @@
            number wants both, and the wording they saw — which is why the version
            travels with the row and the text is one click away. -->
       <div class="ind-filters">
-        <input v-model="accQ" class="ad-ctl" placeholder="Number, email or client…" @keyup.enter="loadAcceptances" />
-        <select v-model="accCat" class="ad-ctl" @change="loadAcceptances">
+        <input v-model="accQ" class="ad-ctl" placeholder="Number, email or client…" @keyup.enter="accGo(1)" />
+        <select v-model="accCat" class="ad-ctl" @change="accGo(1)">
           <option value="">All categories</option>
           <option value="authentication">Authentication</option>
           <option value="financial">Financial services</option>
@@ -28,7 +28,7 @@
           <option value="government">Government &amp; public sector</option>
           <option value="outbound">Scaled outbound</option>
         </select>
-        <button class="btn btn-ghost btn-sm" @click="loadAcceptances">Search</button>
+        <button class="btn btn-ghost btn-sm" @click="accGo(1)">Search</button>
       </div>
 
       <div v-if="acceptances.length" class="set-card ad-table-wrap">
@@ -48,6 +48,14 @@
           </tr>
         </tbody>
         </table>
+      </div>
+      <div v-if="acceptances.length" class="acc-paging">
+        <span class="muted">{{ accMeta.total }} acceptance{{ accMeta.total === 1 ? '' : 's' }}</span>
+        <div v-if="accMeta.pages > 1" class="acc-paging-btns">
+          <button class="btn btn-ghost btn-sm" :disabled="accMeta.page <= 1" @click="accGo(accMeta.page - 1)">Previous</button>
+          <span class="muted">Page {{ accMeta.page }} of {{ accMeta.pages }}</span>
+          <button class="btn btn-ghost btn-sm" :disabled="accMeta.page >= accMeta.pages" @click="accGo(accMeta.page + 1)">Next</button>
+        </div>
       </div>
       <EmptyState v-else icon="quality" title="No indemnities accepted yet"
         description="When a client buys a number for a sensitive use, their acceptance appears here." />
@@ -207,16 +215,20 @@ const tab = ref('docs');
 // visits here are to review a submission, and this can grow long.
 const acceptances = ref<any[]>([]);
 const accQ = ref('');
+const accPage = ref(1);
+const accMeta = ref({ total: 0, page: 1, pages: 1 });
+function accGo(to: number) { accPage.value = Math.min(Math.max(1, to), accMeta.value.pages); loadAcceptances(); }
 const accCat = ref('');
 const viewing = ref<any>(null);
 
 async function loadAcceptances() {
   try {
     const r = await $fetch<any>('/api/admin/legal/acceptances', {
-      query: { q: accQ.value || undefined, category: accCat.value || undefined }
+      query: { q: accQ.value || undefined, category: accCat.value || undefined, page: accPage.value }
     });
-    acceptances.value = r.acceptances || [];
-  } catch { acceptances.value = []; }
+    acceptances.value = r.items || [];
+    accMeta.value = { total: r.total || 0, page: r.page || 1, pages: r.pages || 1 };
+  } catch { acceptances.value = []; accMeta.value = { total: 0, page: 1, pages: 1 }; }
 }
 
 /** The wording they actually saw, fetched by version rather than by slug — the
@@ -310,6 +322,9 @@ onMounted(() => { load(); loadForms(); });
 /* ad-ctl is defined in the clients page's scoped block, so it never reached
    here — these filters and the note input above were both unstyled. Defined
    locally rather than reaching for a class this page does not have. */
+.acc-paging { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 14px; font-size: 12.5px; }
+.acc-paging-btns { display: flex; align-items: center; gap: 10px; }
 .ind-filters { display: flex; gap: 10px; margin-bottom: 18px; align-items: center; flex-wrap: wrap; }
 .ind-filters .ad-ctl { height: 36px; padding: 0 12px; font-size: 13px; color: var(--ink);
   background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius);

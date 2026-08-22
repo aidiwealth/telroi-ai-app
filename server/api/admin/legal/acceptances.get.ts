@@ -6,12 +6,14 @@
 // itself is one click further.
 import { and, eq, desc, ilike, or, sql, inArray } from 'drizzle-orm';
 import { requireSuperAdmin } from '~/server/utils/platform';
+import { pageParams, paged } from '~/server/utils/paginate';
 import { useDb, schema } from '~/server/db';
 
 export default defineEventHandler(async (event) => {
   await requireSuperAdmin(event);
   const q = getQuery(event);
   const db = useDb();
+  const p = pageParams(event);
 
   const conds: any[] = [];
   if (q.q) {
@@ -28,6 +30,16 @@ export default defineEventHandler(async (event) => {
     conds.push(sql`${schema.legalAcceptances.declaredCategories} @> ARRAY[${String(q.category)}]::text[]`);
   }
   if (q.tenantId) conds.push(eq(schema.legalAcceptances.tenantId, String(q.tenantId)));
+
+  // Counted with the same conditions, so "12 of 340" is 12 of the filtered set
+  // rather than of everything. A register that silently stopped at 500 would
+  // have an operator conclude an acceptance was never recorded — which for this
+  // list is exactly the wrong failure.
+  const [{ total }] = await db.select({ total: sql<number>`count(*)` })
+    .from(schema.legalAcceptances)
+    .innerJoin(schema.tenants, eq(schema.tenants.id, schema.legalAcceptances.tenantId))
+    .innerJoin(schema.legalDocuments, eq(schema.legalDocuments.id, schema.legalAcceptances.documentId))
+    .where(conds.length ? and(...conds) : undefined);
 
   const rows = await db.select({
     id: schema.legalAcceptances.id,
@@ -48,7 +60,7 @@ export default defineEventHandler(async (event) => {
     .innerJoin(schema.legalDocuments, eq(schema.legalDocuments.id, schema.legalAcceptances.documentId))
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(desc(schema.legalAcceptances.acceptedAt))
-    .limit(500);
+    .limit(p.limit).offset(p.offset);
 
-  return { acceptances: rows };
+  return paged(rows, Number(total), p);
 });
