@@ -1132,6 +1132,10 @@ export const pricing = pgTable('pricing', {
   // Annual as a price, not a discount percentage. "$150 a year" is unambiguous;
   // a percentage rounds badly and stops anybody quoting a round number. The
   // saving shown on the marketing page is derived from the two figures.
+  // Per currency rather than one figure converted: ₦15,000 is about $9.40 at our
+  // rate, and "₦16,000 minimum" reads as arbitrary where a round number does not.
+  minTopupUsdMinor: integer('min_topup_usd_minor').notNull().default(1000),      // $10
+  minTopupNgnMinor: integer('min_topup_ngn_minor').notNull().default(1500000),   // ₦15,000
   planStartupAnnualUsdMinor: integer('plan_startup_annual_usd_minor').notNull().default(10000), // $100
   planGrowthAnnualUsdMinor: integer('plan_growth_annual_usd_minor').notNull().default(15000),   // $150
   ngnPerUsd: integer('ngn_per_usd').notNull().default(1600),

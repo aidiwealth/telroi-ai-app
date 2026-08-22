@@ -103,8 +103,13 @@
               {{ wallet.currency === 'NGN' ? '₦' : '$' }}{{ a.toLocaleString() }}
             </button>
           </div>
-          <div class="field"><label>Amount ({{ wallet.currency }})</label><input v-model.number="amountMajor" type="number" min="1" class="input mono" /></div>
-          <button class="btn btn-signal btn-block" :disabled="topping || !amountMajor" @click="topup">{{ topping ? 'Redirecting…' : `Continue with ${provider}` }}</button>
+          <div class="field"><label>Amount ({{ wallet.currency }})</label><input v-model.number="amountMajor" type="number" :min="minTopupMajor" class="input mono" /></div>
+          <!-- Said here rather than refused after pressing: a number that is
+               visibly too small is a smaller irritation than a rejection. -->
+          <p v-if="minTopupMajor" class="wal-min muted" :class="{ under: belowMinimum }">
+            Smallest top-up is {{ wallet.currency === 'NGN' ? '₦' : '$' }}{{ minTopupMajor.toLocaleString() }}.
+          </p>
+          <button class="btn btn-signal btn-block" :disabled="topping || !amountMajor || belowMinimum" @click="topup">{{ topping ? 'Redirecting…' : `Continue with ${provider}` }}</button>
           <p class="wal-pay-note muted">{{ wallet.currency === 'NGN' ? 'Secured by Paystack' : 'Secured by Stripe' }}.</p>
         </div>
       </div>
@@ -310,6 +315,8 @@ async function goLedgerPage(p: number) {
 const summary = ref<any>({ moneyInMinor: 0, moneyOutMinor: 0, avgInMinor: 0, avgOutMinor: 0 });
 const selected = ref<any>(null);
 const amountMajor = ref(50);
+const minTopupMajor = ref(0);
+const belowMinimum = computed(() => minTopupMajor.value > 0 && (amountMajor.value || 0) < minTopupMajor.value);
 const topping = ref(false);
 const monthDate = ref(new Date());
 // Monnify bank-transfer account
@@ -413,6 +420,7 @@ async function load() {
       api.get<any>(`/api/wallet/ledger?page=${ledgerPage.value}`)
     ]);
     wallet.value = w;
+    minTopupMajor.value = (w.minTopupMinor || 0) / 100;
     ledger.value = l.items || [];
     ledgerMeta.value = { page: l.page, pages: l.pages, total: l.total, perPage: l.perPage };
     await loadSummary();

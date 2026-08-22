@@ -29,6 +29,23 @@ export default defineEventHandler(async (event) => {
   const cfg = useRuntimeConfig();
   const pay = await paymentCreds(s.tenantId);
   const w = await getOrCreateWallet(s.tenantId);
+
+  // A minimum, except for the card check. That one charges a deliberately small
+  // amount to capture a reusable authorization, and applying a minimum to it
+  // would stop an international client ever leaving a card — which is the same
+  // locked door as a simulated top-up in sandbox, arriving from a new direction.
+  if (!p.data.forCard) {
+    const { getPricing } = await import('~/server/utils/pricing');
+    const pr: any = await getPricing(s.tenantId).catch(() => null);
+    const min = w.currency === 'NGN'
+      ? (pr?.minTopupNgnMinor ?? 1500000)
+      : (pr?.minTopupUsdMinor ?? 1000);
+    if (p.data.amountMinor < min) {
+      const sym = w.currency === 'NGN' ? '₦' : '$';
+      throw apiError('below_minimum',
+        `The smallest top-up is ${sym}${(min / 100).toLocaleString()}.`, 400);
+    }
+  }
   const reference = `tlr_${randomToken(12).replace(/[^a-zA-Z0-9]/g, '').slice(0, 18)}`;
   const base = cfg.public.appBaseUrl;
   // A path of ours, never an arbitrary URL: an open redirect on a payment

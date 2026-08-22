@@ -25,11 +25,20 @@ export default defineEventHandler(async (event) => {
     nextInvoiceAt = next.toISOString();
   }
 
+  const { getPricing } = await import('~/server/utils/pricing');
+  const pr: any = await getPricing(s.tenantId).catch(() => null);
+  const minTopup = w.currency === 'NGN'
+    ? (pr?.minTopupNgnMinor ?? 1500000)
+    : (pr?.minTopupUsdMinor ?? 1000);
+
   return {
     currency: w.currency, balanceMinor: w.balanceMinor, plan: w.plan,
     postpaid: !!t?.postpaid,
     creditLimitMinor: t?.creditLimitMinor ?? null,
     billingDay: t?.billingDay ?? null,
-    nextInvoiceAt
+    nextInvoiceAt,
+    // So the page can say the minimum rather than refusing after the fact, and
+    // so it follows whatever an operator sets rather than being written twice.
+    minTopupMinor: minTopup
   };
 });
