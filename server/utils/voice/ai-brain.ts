@@ -92,7 +92,7 @@ async function resolveConn(tenantId: string, connId: string | null, kinds: strin
 // an unexpected language/script (e.g. Korean/Chinese on an English agent). Treat
 // these as EMPTY so the agent nudges ("didn't catch that") instead of replying to
 // garbage. This is conservative: it only rejects the well-known junk patterns.
-function isLikelyHallucination(text: string, expectedLang: string): boolean {
+export function isLikelyHallucination(text: string, expectedLang: string): boolean {
   const t = (text || '').trim();
   if (!t) return true;
   const lower = t.toLowerCase().replace(/[.,!?]/g, '').trim();
