@@ -62,7 +62,10 @@
         <!-- Bank transfer (Monnify virtual account) -->
         <div v-if="wallet.currency === 'NGN' && fundTab === 'transfer'" class="wal-fund-body">
           <template v-if="account">
-            <p class="wal-fund-lede">Transfer any amount to this account — your wallet is credited automatically.</p>
+            <p class="wal-fund-lede">
+              Transfer to this account and your wallet is credited automatically.
+              <template v-if="minTopupMajor">We ask for &#8358;{{ minTopupMajor.toLocaleString() }} or more.</template>
+            </p>
             <div class="wal-acct">
               <div class="wal-acct-row"><span class="wal-acct-k">Bank</span><span class="wal-acct-v">{{ account.bankName }}</span></div>
               <div class="wal-acct-row"><span class="wal-acct-k">Account number</span><span class="wal-acct-v mono wal-acct-num">{{ account.accountNumber }} <button class="wal-copy" @click="copy(account.accountNumber)">{{ copied ? '✓' : 'Copy' }}</button></span></div>
