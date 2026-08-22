@@ -34,6 +34,21 @@
           <div class="drawer-sub">Recording</div>
           <audio controls preload="none" :src="`/api/voice/recordings/${recordingId}/audio`" class="drawer-audio" />
           <a :href="`/api/voice/recordings/${recordingId}/audio`" :download="`call-${call.uid}.wav`" class="rec-download">Download</a>
+
+          <!-- The transcript outlives the audio, so this is worth doing before
+               retention runs out rather than after. -->
+          <div class="tr-block">
+            <div v-if="transcript" class="tr-text">{{ transcript }}</div>
+            <template v-else>
+              <button class="btn btn-ghost btn-sm" :disabled="transcribing" @click="transcribe">
+                {{ transcribing ? 'Transcribing…' : 'Transcribe this call' }}
+              </button>
+              <p class="tr-note muted">
+                Charged by length, from your wallet. The text is kept even after the recording expires.
+              </p>
+              <p v-if="trErr" class="tr-err">{{ trErr }}</p>
+            </template>
+          </div>
         </div>
 
         <div class="drawer-actions">
@@ -52,6 +67,33 @@ const props = defineProps<{ call: TelroiCall | null; recordingId?: string | null
 const emit = defineEmits<{ close: []; updated: [call: TelroiCall]; callback: [phone: string] }>();
 
 const api = useApi();
+
+// The transcript, if there is one. Fetched when the drawer opens rather than
+// left to a button, so a call already transcribed shows its text instead of
+// asking somebody to press a paid action to find out.
+const transcript = ref<string | null>(null);
+const transcribing = ref(false);
+const trErr = ref('');
+
+watch(() => props.recordingId, async (id) => {
+  transcript.value = null; trErr.value = '';
+  if (!id) return;
+  try {
+    const r = await api.get<any>(`/api/voice/recordings/${id}`);
+    transcript.value = r?.recording?.transcript || null;
+  } catch { /* no transcript yet, which is the ordinary case */ }
+}, { immediate: true });
+
+async function transcribe() {
+  if (!props.recordingId) return;
+  transcribing.value = true; trErr.value = '';
+  try {
+    const r = await api.post<any>(`/api/voice/recordings/${props.recordingId}/transcribe`, {});
+    transcript.value = r.transcript;
+  } catch (e: any) {
+    trErr.value = e?.data?.error?.message || 'That recording could not be transcribed.';
+  } finally { transcribing.value = false; }
+}
 const toast = useToast();
 const saving = ref(false);
 const noteDraft = ref('');
@@ -98,6 +140,12 @@ function statusChip(status: string) {
 </script>
 
 <style scoped>
+.tr-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.tr-text { font-size: 13px; line-height: 1.65; color: var(--ink-soft); white-space: pre-wrap;
+  max-height: 240px; overflow-y: auto; padding: 14px 16px; background: var(--paper-2);
+  border: 1px solid var(--rule); border-radius: var(--radius); }
+.tr-note { font-size: 11.5px; margin: 7px 0 0; }
+.tr-err { font-size: 12px; color: var(--danger); margin: 7px 0 0; }
 .drawer-rec { margin: 18px 0; padding: 14px 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
 .drawer-rec-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-mute); margin-bottom: 8px; }
 .drawer-rec-audio { width: 100%; height: 36px; }
