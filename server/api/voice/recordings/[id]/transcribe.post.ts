@@ -13,8 +13,7 @@ import { requireTenant, apiError } from '~/server/utils/api';
 import { hasFeature } from '~/server/utils/entitlements';
 import { useDb, schema } from '~/server/db';
 import { getObject } from '~/server/utils/storage';
-import { isLikelyHallucination } from '~/server/utils/voice/ai-brain';
-import { decrypt } from '~/server/utils/crypto';
+import { sttTranscribe } from '~/server/utils/voice/ai-brain';
 import { getPricing, toCurrencyMinor } from '~/server/utils/pricing';
 import { debit, getOrCreateWallet, canSpend } from '~/server/utils/wallet';
 
@@ -75,59 +74,46 @@ export default defineEventHandler(async (event) => {
     throw apiError('audio_missing', 'The audio for that recording could not be read.', 404);
   }
 
-  // The language the number's agent speaks, not English by default. An agent
-  // set to Yoruba transcribes Yoruba during the call; transcribing its recording
-  // as English would return nonsense and charge for it.
+  // The agent behind this number, in one lookup: its language, its speech
+  // connection and whether it is managed all come from the same row.
+  //
+  // Matched on the last ten digits, because a recording stores 2085910037 where
+  // the subscription holds +2342085910037 — an exact match would find nothing
+  // and quietly transcribe a Yoruba call as English.
   let language = 'en';
+  let sttConnId: string | null = null;
+  let allowManaged = false;
   try {
-    // Matched on the last ten digits, because a recording stores 2085910037
-    // where the subscription holds +2342085910037. An exact match would find
-    // nothing, fall back to English, and transcribe a Yoruba call as nonsense
-    // without anything going wrong loudly enough to notice.
     const digits = (rec.telnum || '').replace(/\D/g, '').slice(-10);
-    const [sub] = digits ? await db.select({ agentId: schema.numberSubscriptions.agentId })
-      .from(schema.numberSubscriptions)
-      .where(and(
-        eq(schema.numberSubscriptions.tenantId, s.tenantId),
-        sql`right(regexp_replace(${schema.numberSubscriptions.telnum}, '\\D', '', 'g'), 10) = ${digits}`
-      )).limit(1) : [];
-    if (sub?.agentId) {
-      const [agent] = await db.select({ language: schema.aiAgents.language })
-        .from(schema.aiAgents).where(eq(schema.aiAgents.id, sub.agentId)).limit(1);
-      if (agent?.language) language = agent.language;
+    if (digits) {
+      const [sub] = await db.select({ agentId: schema.numberSubscriptions.agentId })
+        .from(schema.numberSubscriptions)
+        .where(and(
+          eq(schema.numberSubscriptions.tenantId, s.tenantId),
+          sql`right(regexp_replace(${schema.numberSubscriptions.telnum}, '\\D', '', 'g'), 10) = ${digits}`
+        )).limit(1);
+      if (sub?.agentId) {
+        const [agent] = await db.select({
+          language: schema.aiAgents.language,
+          sttConnId: schema.aiAgents.sttConnId,
+          tier: schema.aiAgents.tier
+        }).from(schema.aiAgents).where(eq(schema.aiAgents.id, sub.agentId)).limit(1);
+        if (agent?.language) language = agent.language;
+        sttConnId = agent?.sttConnId || null;
+        allowManaged = agent?.tier === 'managed';
+      }
     }
-  } catch { /* English is a reasonable default, not a reason to fail */ }
+  } catch { /* English and no connection is a reasonable default, not a failure */ }
 
-  // The tenant's own Deepgram connection — the same one their AI calls
-  // transcribe through. The platform's stt_vendor setting points at a Telroi
-  // speech engine that has never been configured, and nothing else reads it;
-  // going through the connection means transcription works exactly where AI
-  // already does, and a workspace without one gets a clear answer rather than a
-  // vendor error.
-  const [conn] = await db.select().from(schema.aiConnections)
-    .where(and(eq(schema.aiConnections.tenantId, s.tenantId), eq(schema.aiConnections.provider, 'deepgram')))
-    .limit(1);
-  if (!conn?.apiKeyEnc) {
-    await db.update(schema.callRecordings).set({ transcriptStatus: null })
-      .where(eq(schema.callRecordings.id, rec.id));
-    throw apiError('no_stt', 'Transcription needs a speech connection. Add one under AI Connections.', 400);
-  }
+  // sttTranscribe is what live calls use: it resolves the connection, handles a
+  // managed agent, and rejects the phantom text Deepgram invents on silence.
+  // This endpoint had its own copy of that, which would have drifted.
+  const text = await sttTranscribe(s.tenantId, sttConnId, audio.body, audio.contentType || 'audio/wav', allowManaged, language)
+    .catch(() => '');
+  const r = text
+    ? { ok: true as const, transcript: text, reason: '' }
+    : { ok: false as const, transcript: '', reason: 'There was no clear speech in that recording.' };
 
-  const lang = (language || 'en').split('-')[0] || 'en';
-  const dg = await fetch(
-    `https://api.deepgram.com/v1/listen?punctuate=true&smart_format=true&model=nova-2&language=${encodeURIComponent(lang)}`,
-    { method: 'POST', headers: { Authorization: `Token ${decrypt(conn.apiKeyEnc)}`, 'Content-Type': audio.contentType || 'audio/wav' }, body: audio.body as any }
-  ).catch(() => null);
-
-  const dgJson: any = dg && dg.ok ? await dg.json().catch(() => null) : null;
-  const text: string = dgJson?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '';
-
-  // Deepgram invents text on near-silence — "you", "thank you", "bye". Charging
-  // for a phantom word pulled out of four seconds of nothing would be worse than
-  // returning nothing at all.
-  const r = (!text || isLikelyHallucination(text, lang))
-    ? { ok: false as const, transcript: '', reason: 'There was no clear speech in that recording.' }
-    : { ok: true as const, transcript: text, reason: '' };
   if (!r.ok || !r.transcript) {
     await db.update(schema.callRecordings).set({ transcriptStatus: 'failed' })
       .where(eq(schema.callRecordings.id, rec.id));
