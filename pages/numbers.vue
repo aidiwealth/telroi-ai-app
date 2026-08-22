@@ -14,6 +14,26 @@
       </div>
     </div>
 
+    <!-- A client who cannot buy yet was only told about the demo number inside
+         the buy modal — that is, after being refused, in the one place they had
+         just been turned away from. Said here instead, where somebody wondering
+         why their Numbers page is empty is actually standing. -->
+    <div v-if="!approved && demoNumber" class="num-demo">
+      <div class="num-demo-main">
+        <div class="num-demo-h">
+          {{ complianceStatus === 'pending' ? 'Verification under review' : 'Verification comes first' }}
+        </div>
+        <p class="num-demo-p">
+          {{ complianceStatus === 'pending'
+            ? 'Numbers open up as soon as it is approved — usually within a working day. Meanwhile you can place test calls from this number:'
+            : 'Numbers carry a real identity on the network, so we verify a business before selling one. Meanwhile you can place test calls from this number:' }}
+        </p>
+        <div class="num-demo-num mono">{{ demoNumber }}</div>
+        <p class="num-demo-note muted">Shared with other trials and outbound only, so nobody can call it back.</p>
+      </div>
+      <button v-if="complianceStatus !== 'pending'" class="btn btn-signal btn-sm" @click="goVerify">Start verification</button>
+    </div>
+
     <div class="card num-table">
       <div v-if="pending" class="loading-pad">
         <div v-for="i in 4" :key="i" class="skeleton skel-row" />
@@ -666,6 +686,13 @@ onMounted(async () => {
 .ind-note { font-size: 12px; margin: 12px 0 0; }
 .ind-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px;
   padding-top: 16px; border-top: 1px solid var(--rule); }
+.num-demo { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  padding: 18px 20px; margin-bottom: 18px; border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--paper-2); }
+.num-demo-h { font-size: 14px; font-weight: 600; color: var(--ink); }
+.num-demo-p { font-size: 13px; line-height: 1.55; color: var(--ink-soft); margin: 5px 0 10px; max-width: 62ch; }
+.num-demo-num { font-size: 17px; font-weight: 600; color: var(--ink); letter-spacing: .01em; }
+.num-demo-note { font-size: 12px; margin: 6px 0 0; }
 .buy-steps { display: flex; gap: 6px; margin: 0 0 20px; padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
 .buy-step { display: flex; align-items: center; gap: 7px; flex: 1; font-size: 12px; color: var(--ink-mute); }
 .buy-step-n { flex: none; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center;
