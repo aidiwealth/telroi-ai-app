@@ -570,6 +570,41 @@ export const userSessions = pgTable('user_sessions', {
   revokedReason: text('revoked_reason')
 });
 
+// The wording itself, versioned. A new version is a new row and old rows are
+// never edited: if the terms change and a dispute concerns a number provisioned
+// today, the text they actually saw has to be producible years later. Held here
+// rather than in object storage because the text *is* the evidence — producing
+// it should be one query, not a fetch that might 404.
+export const legalDocuments = pgTable('legal_documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull(),
+  version: text('version').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  effectiveAt: timestamp('effective_at', { withTimezone: true }).notNull().defaultNow(),
+  isCurrent: boolean('is_current').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+// Who accepted what, and on whose authority. Points at the document row rather
+// than a version string, so the exact text is reachable from the acceptance.
+export const legalAcceptances = pgTable('legal_acceptances', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  documentId: uuid('document_id').notNull().references(() => legalDocuments.id),
+  telnum: text('telnum'),
+  inventoryId: uuid('inventory_id'),
+  userId: uuid('user_id').references(() => users.id),
+  // Kept as text as well, because the evidence must survive the user being
+  // removed from the workspace.
+  userEmail: text('user_email').notNull(),
+  userRole: text('user_role'),
+  declaredCategories: text('declared_categories').array(),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const crmContacts = pgTable('crm_contacts', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
