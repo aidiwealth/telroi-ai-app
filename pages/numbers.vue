@@ -293,7 +293,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import type { TelroiNumber } from '~/server/utils/telroi/client';
 
 useHead({ title: 'Numbers — Telroi' });
@@ -526,9 +526,24 @@ const readToEnd = ref(false);
 /** Enabled only once they have reached the bottom. It is a low bar and easily
  *  gamed, but a tick box beside unscrolled text is worse: it records agreement
  *  to something demonstrably unread. */
+function atEnd(el: HTMLElement) {
+  // A generous margin: sub-pixel heights and browser zoom mean the exact
+  // arithmetic rarely lands on zero, and a button that will not enable however
+  // far somebody scrolls is worse than one that enables a line early.
+  return el.scrollTop + el.clientHeight >= el.scrollHeight - 48;
+}
+
 function onIndemnityScroll(e: Event) {
-  const el = e.target as HTMLElement;
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) readToEnd.value = true;
+  if (atEnd(e.target as HTMLElement)) readToEnd.value = true;
+}
+
+/** A document shorter than its box has nothing to scroll, so waiting for a
+ *  scroll event would leave the button disabled forever. Checked once the text
+ *  has been laid out. */
+async function checkIndemnityFits() {
+  await nextTick();
+  const el = document.querySelector('.ind-body') as HTMLElement | null;
+  if (el && el.scrollHeight <= el.clientHeight + 8) readToEnd.value = true;
 }
 
 async function openIndemnity() {
@@ -537,6 +552,7 @@ async function openIndemnity() {
     const r = await api.get<any>('/api/legal/number_indemnity');
     indemnity.value = r.document;
     readToEnd.value = false;
+    void checkIndemnityFits();
   } catch (e: any) {
     toast.err(e?.data?.error?.message || 'Could not load the indemnity. Please try again.');
   } finally { indemnityBusy.value = false; }
@@ -655,7 +671,7 @@ onMounted(async () => {
 .ind-modal { max-width: 780px; width: 94vw; padding: 28px 32px 24px; display: flex; flex-direction: column; max-height: 88vh; }
 .ind-h { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0 0 2px; }
 .ind-sub { font-size: 12.5px; margin: 0 0 18px; }
-.ind-body { flex: 1; min-height: 0; overflow-y: auto; font-size: 13.5px; line-height: 1.68; color: var(--ink);
+.ind-body { height: 46vh; overflow-y: auto; font-size: 13.5px; line-height: 1.68; color: var(--ink);
   border: 1px solid var(--rule); border-radius: var(--radius); padding: 24px 28px; background: var(--paper-2); }
 .ind-body :deep(h1) { font-size: 17px; font-weight: 600; margin: 0 0 14px; }
 .ind-body :deep(h2) { font-size: 14px; font-weight: 600; margin: 26px 0 8px; padding-top: 18px;
@@ -679,10 +695,14 @@ onMounted(async () => {
 .buy-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;
   padding-top: 16px; border-top: 1px solid var(--rule); }
 .buy-actions .btn { min-width: 130px; }
-.buy-cats { margin: 14px 0; }
+.buy-cats { margin: 14px 0; display: flex; flex-direction: column; gap: 2px; }
 .buy-cats-h { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-.buy-cat { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.5;
-  color: var(--ink-soft); padding: 4px 0; cursor: pointer; }
+.buy-cat { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; line-height: 1.55;
+  color: var(--ink-soft); padding: 9px 12px; cursor: pointer; border: 1px solid transparent;
+  border-radius: var(--radius); transition: background .12s, border-color .12s; }
+.buy-cat:hover { background: var(--paper-2); }
+.buy-cat:has(input:checked) { background: var(--paper-2); border-color: var(--rule); }
+.buy-cat strong { color: var(--ink); font-weight: 600; }
 .buy-cat input { margin-top: 3px; flex: none; }
 .num-rec { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; margin: 4px 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13.5px; cursor: pointer; }
 .num-rec-note { display: block; font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin-top: 4px; }
