@@ -8,7 +8,7 @@
 // The audio goes to the vendor as bytes rather than a signed URL: a recording is
 // somebody's private conversation, and a signed link is one that anybody holding
 // it can fetch without authenticating.
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { hasFeature } from '~/server/utils/entitlements';
 import { useDb, schema } from '~/server/db';
@@ -37,8 +37,15 @@ export default defineEventHandler(async (event) => {
     throw apiError('expired', 'That recording is past its retention and the audio is gone.', 410);
   }
 
-  const seconds = rec.durationSeconds || 0;
-  if (seconds < 1) throw apiError('too_short', 'That recording is too short to transcribe.', 400);
+  // Duration is what this is charged by, and a few recordings have none —
+  // calls that connected and dropped, where there was nothing to record. Where
+  // it is missing but the file is substantial, estimate from the size rather
+  // than refuse: 8kHz 16-bit mono is about 16KB a second.
+  const seconds = rec.durationSeconds
+    || (rec.sizeBytes ? Math.round(rec.sizeBytes / 16000) : 0);
+  if (seconds < 1) {
+    throw apiError('too_short', 'There is not enough audio in that recording to transcribe.', 400);
+  }
 
   const wallet = await getOrCreateWallet(s.tenantId);
   const pricing: any = await getPricing(s.tenantId);
@@ -67,7 +74,30 @@ export default defineEventHandler(async (event) => {
     throw apiError('audio_missing', 'The audio for that recording could not be read.', 404);
   }
 
-  const r = await transcribeAudioBuffer(audio.body, audio.contentType || 'audio/wav');
+  // The language the number's agent speaks, not English by default. An agent
+  // set to Yoruba transcribes Yoruba during the call; transcribing its recording
+  // as English would return nonsense and charge for it.
+  let language = 'en';
+  try {
+    // Matched on the last ten digits, because a recording stores 2085910037
+    // where the subscription holds +2342085910037. An exact match would find
+    // nothing, fall back to English, and transcribe a Yoruba call as nonsense
+    // without anything going wrong loudly enough to notice.
+    const digits = (rec.telnum || '').replace(/\D/g, '').slice(-10);
+    const [sub] = digits ? await db.select({ agentId: schema.numberSubscriptions.agentId })
+      .from(schema.numberSubscriptions)
+      .where(and(
+        eq(schema.numberSubscriptions.tenantId, s.tenantId),
+        sql`right(regexp_replace(${schema.numberSubscriptions.telnum}, '\\D', '', 'g'), 10) = ${digits}`
+      )).limit(1) : [];
+    if (sub?.agentId) {
+      const [agent] = await db.select({ language: schema.aiAgents.language })
+        .from(schema.aiAgents).where(eq(schema.aiAgents.id, sub.agentId)).limit(1);
+      if (agent?.language) language = agent.language;
+    }
+  } catch { /* English is a reasonable default, not a reason to fail */ }
+
+  const r = await transcribeAudioBuffer(audio.body, audio.contentType || 'audio/wav', language);
   if (!r.ok || !r.transcript) {
     await db.update(schema.callRecordings).set({ transcriptStatus: 'failed' })
       .where(eq(schema.callRecordings.id, rec.id));
