@@ -46,10 +46,12 @@ export async function upsertCallEvent(input: CallEventInput) {
       // belongs here — and only on the move into a terminal state, so a client
       // hears once about a finished call rather than on every carrier update.
       maybeEmitCompleted(input, String(existing.status || ''), patch.status);
+      maybeChargeCall(input, String(existing.status || ''), patch.status);
       return existing.id;
     }
     // A call that arrives already finished — a short OTP leg, say — still counts.
     maybeEmitCompleted(input, '', input.status);
+    maybeChargeCall(input, '', input.status);
 
     const [row] = await db.insert(schema.callEvents).values({
       tenantId: input.tenantId, callid: input.callid, carrier: input.carrier || null,
@@ -132,6 +134,43 @@ const TERMINAL = new Set(['ended', 'completed', 'failed', 'missed', 'busy', 'no-
  *  Carrier events arrive repeatedly and out of order for a single call; without
  *  the before/after comparison a client would hear about the same hangup several
  *  times, which at these volumes is both their problem and our bandwidth. */
+/** Charge for the airtime, when a call finishes.
+ *
+ *  Only the browser dialler and the Live Call widget ever charged, because both
+ *  have an obvious client-side moment where a call ends. A call terminating at
+ *  the carrier has no such moment, so nobody wired one — and every inbound call
+ *  on Telnyx and Twilio was carried, paid for upstream, and billed to nobody.
+ *
+ *  Here rather than in each webhook: every carrier's completion passes through
+ *  this function, so one place covers Telnyx, Twilio and Asterisk, and a carrier
+ *  added later cannot be forgotten.
+ *
+ *  Safe against retries in two ways — the transition test fires once, and
+ *  chargeCall keys its debit on the call id, so a repeated webhook returns the
+ *  existing entry rather than making a second.
+ */
+function maybeChargeCall(input: CallEventInput, before: string, after?: string | null) {
+  if (!after || !TERMINAL.has(after)) return;
+  if (TERMINAL.has(before)) return;
+
+  // A call nobody answered costs us nothing and is billed as nothing.
+  const seconds = input.duration ?? 0;
+  if (seconds <= 0) return;
+
+  void import('./call-billing')
+    .then(({ chargeCall }) => chargeCall({
+      tenantId: input.tenantId,
+      callId: input.callid,
+      seconds,
+      provider: input.carrier || undefined,
+      source: 'inbound'
+    }))
+    // Logged rather than thrown: a webhook that fails here would be retried by
+    // the carrier, and losing the call record to protect a charge would be the
+    // wrong way round.
+    .catch((e: any) => console.error('[call-log] could not charge call:', input.callid, e?.message));
+}
+
 function maybeEmitCompleted(input: CallEventInput, before: string, after?: string | null) {
   if (!after || !TERMINAL.has(after)) return;
   if (TERMINAL.has(before)) return;
