@@ -29,7 +29,11 @@ export default defineEventHandler(async (event) => {
       // deserves better than silence, and the row is bytes where the audio was
       // megabytes.
       await db.update(schema.callRecordings)
-        .set({ status: 'expired', objectKey: null, transcript: null })
+        // The transcript stays. Text is a few kilobytes where the audio is
+        // megabytes, and for a client on seven-day retention it is the durable
+        // half of what they paid to have transcribed — deleting it with the
+        // audio would throw away the part worth keeping.
+        .set({ status: 'expired', objectKey: null })
         .where(eq(schema.callRecordings.id, r.id));
       removed++;
     } catch { failed++; }

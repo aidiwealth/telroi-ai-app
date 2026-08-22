@@ -187,6 +187,36 @@ export async function synthesizeSpeech(input: TtsInput): Promise<TtsResult> {
 }
 
 // ── Speech-to-Text ──────────────────────────────────────────────────────
+/** Transcribe audio we already hold, by sending the bytes.
+ *
+ *  Deliberately not a presigned URL. A recording is somebody's private
+ *  conversation, and signing it creates a window — however short — in which
+ *  anyone holding the link can fetch it without authenticating, and URLs end up
+ *  in logs, proxies and history. A few megabytes through us costs bandwidth and
+ *  removes that entirely.
+ */
+export async function transcribeAudioBuffer(audio: Buffer, contentType = 'audio/wav', language = 'en'): Promise<SttResult> {
+  const v = await loadVendorSettings();
+  if (v.sttVendor === 'telroi') {
+    const { telroiStt } = await import('./telroi-speech');
+    return telroiStt({ audio, contentType, language } as any);
+  }
+  if (v.sttVendor === 'deepgram') {
+    if (!v.sttCreds?.apiKey) return { ok: false, reason: 'Deepgram is not configured' };
+    const lang = (language || 'en').split('-')[0] || 'en';
+    const res = await http(
+      `https://api.deepgram.com/v1/listen?punctuate=true&model=nova-2&smart_format=true&language=${encodeURIComponent(lang)}`,
+      { method: 'POST', headers: { Authorization: `Token ${v.sttCreds.apiKey}`, 'Content-Type': contentType }, body: audio as any }
+    );
+    if (!res.ok) return { ok: false, reason: `Deepgram error ${res.status}` };
+    const d: any = await res.json();
+    const t = d?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+    if (!t) return { ok: false, reason: 'Nothing could be transcribed from that recording' };
+    return { ok: true, transcript: t };
+  }
+  return { ok: false, reason: `Transcription is not available on ${v.sttVendor}` };
+}
+
 export async function transcribeSpeech(input: SttInput): Promise<SttResult> {
   const v = await loadVendorSettings();
   const vendor = v.sttVendor;
