@@ -18,8 +18,8 @@
            number wants both, and the wording they saw — which is why the version
            travels with the row and the text is one click away. -->
       <div class="ind-filters">
-        <input v-model="accQ" class="ad-input" placeholder="Number, email or client…" @keyup.enter="loadAcceptances" />
-        <select v-model="accCat" class="ad-input" @change="loadAcceptances">
+        <input v-model="accQ" class="ad-ctl" placeholder="Number, email or client…" @keyup.enter="loadAcceptances" />
+        <select v-model="accCat" class="ad-ctl" @change="loadAcceptances">
           <option value="">All categories</option>
           <option value="authentication">Authentication</option>
           <option value="financial">Financial services</option>
@@ -307,8 +307,16 @@ onMounted(() => { load(); loadForms(); });
 .acc-facts strong { font-size: 13px; font-weight: 600; color: var(--ink); }
 .acc-body { white-space: pre-wrap; font-size: 12.5px; line-height: 1.6; color: var(--ink-soft);
   border: 1px solid var(--rule); border-radius: var(--radius); padding: 20px; max-height: 40vh; overflow-y: auto; }
-.ind-filters { display: flex; gap: 10px; margin-bottom: 16px; align-items: center; }
-.ind-filters .ad-input { max-width: 260px; }
+/* ad-ctl is defined in the clients page's scoped block, so it never reached
+   here — these filters and the note input above were both unstyled. Defined
+   locally rather than reaching for a class this page does not have. */
+.ind-filters { display: flex; gap: 10px; margin-bottom: 18px; align-items: center; flex-wrap: wrap; }
+.ind-filters .ad-ctl { height: 36px; padding: 0 12px; font-size: 13px; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius);
+  outline: none; transition: border-color .12s; max-width: 260px; }
+.ind-filters .ad-ctl:focus { border-color: var(--signal); }
+.ind-filters .ad-ctl:first-child { flex: 1; min-width: 220px; max-width: 340px; }
+.ind-filters select.ad-ctl { cursor: pointer; }
 .ad-sub-use { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; font-size: 13px; line-height: 1.55; }
 .ad-sub-use .ad-doc-label { display: block; }
 .fm-upload { margin-bottom: 18px; }
