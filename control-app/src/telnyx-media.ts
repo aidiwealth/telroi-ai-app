@@ -308,7 +308,26 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
       }
     });
 
-    ws.on('close', () => { playback?.cancel(); log('closed — frames:', frames); });
+    ws.on('close', () => {
+      playback?.cancel();
+      log('closed — frames:', frames);
+      // Meter the call. The Asterisk path has done this since managed AI was
+      // built; this one never did, so every managed AI call through Telnyx was
+      // transcribed, answered and synthesised on our vendors' accounts and
+      // billed to nobody. Nothing failed when it was missing, which is why it
+      // went unnoticed — the call worked perfectly and cost us money.
+      //
+      // On close rather than on a particular ending: a caller hanging up, a
+      // transfer to a human and a dropped socket all arrive here, and the
+      // debit is keyed on the call id so arriving twice is harmless.
+      if (callId && meta.tenantId) {
+        void fetch(`${WEBAPP_URL}/api/voice/ai/finalize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
+          body: JSON.stringify({ tenantId: meta.tenantId, callId })
+        }).catch(() => { /* metering must never break call teardown */ });
+      }
+    });
     ws.on('error', (e) => log('ws error:', (e as Error).message));
   });
 
