@@ -265,6 +265,27 @@
       </div>
     </div>
   </div>
+
+    <!-- The indemnity, in full. Somebody is giving one; the least we can do is
+         put the words in front of them rather than behind a link. -->
+    <div v-if="showIndemnity" class="modal-overlay" @click.self="showIndemnity = false">
+      <div class="modal ind-modal">
+        <button class="modal-x" @click="showIndemnity = false">&times;</button>
+        <h3 class="ind-h">{{ indemnity?.title }}</h3>
+        <p class="ind-sub muted">Version {{ indemnity?.version }} · for {{ picked?.telnum }}</p>
+
+        <div class="ind-body" @scroll="onIndemnityScroll">{{ indemnity?.body }}</div>
+
+        <p v-if="!readToEnd" class="ind-note muted">Scroll to the end to continue.</p>
+        <div class="ind-actions">
+          <button class="btn btn-ghost" @click="showIndemnity = false">Cancel</button>
+          <button class="btn btn-signal" :disabled="!readToEnd || indemnityBusy" @click="acceptIndemnity">
+            {{ indemnityBusy ? 'Recording…' : 'Accept and buy' }}
+          </button>
+        </div>
+        <p class="ind-note muted">Your acceptance is recorded with your name, this number, this version and the time.</p>
+      </div>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -399,14 +420,68 @@ async function openBuy() {
   catch (e: any) { toast.err(e.message); }
 }
 
+// ── The indemnity ────────────────────────────────────────────────────────────
+// Shown in full rather than summarised behind a link. Somebody is giving an
+// indemnity; the least we can do is put the words in front of them.
+const indemnity = ref<any>(null);
+const showIndemnity = ref(false);
+const indemnityBusy = ref(false);
+const readToEnd = ref(false);
+
+/** Enabled only once they have reached the bottom. It is a low bar and easily
+ *  gamed, but a tick box beside unscrolled text is worse: it records agreement
+ *  to something demonstrably unread. */
+function onIndemnityScroll(e: Event) {
+  const el = e.target as HTMLElement;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 24) readToEnd.value = true;
+}
+
+async function openIndemnity() {
+  indemnityBusy.value = true;
+  try {
+    const r = await api.get<any>('/api/legal/number_indemnity');
+    indemnity.value = r.document;
+    readToEnd.value = false;
+    showIndemnity.value = true;
+  } catch (e: any) {
+    toast.err(e?.data?.error?.message || 'Could not load the indemnity. Please try again.');
+  } finally { indemnityBusy.value = false; }
+}
+
+async function acceptIndemnity() {
+  indemnityBusy.value = true;
+  try {
+    const r = await api.post<any>('/api/legal/accept', {
+      documentId: indemnity.value.id,
+      inventoryId: picked.value?.id,
+      categories: buy.value.categories
+    });
+    showIndemnity.value = false;
+    await doPurchase(r.acceptanceId);
+  } catch (e: any) {
+    toast.err(e?.data?.error?.message || 'Could not record your acceptance');
+  } finally { indemnityBusy.value = false; }
+}
+
+/** The button. A sensitive use reads the indemnity first; an ordinary line
+ *  buys straight away. */
 async function purchase() {
+  if (!picked.value) return;
+  if (needsIndemnity.value) return openIndemnity();
+  await doPurchase();
+}
+
+async function doPurchase(acceptanceId?: string) {
   if (!picked.value) return;
   buying.value = true;
   try {
-    await api.post('/api/numbers/purchase', { inventoryId: picked.value.id, channels: buy.value.channels });
+    await api.post('/api/numbers/purchase', {
+      inventoryId: picked.value.id, channels: buy.value.channels,
+      categories: buy.value.categories, acceptanceId
+    });
     toast.ok('Number purchased — wallet charged');
     showBuy.value = false;
-    buy.value = { channels: 1 }; picked.value = null;
+    buy.value = { channels: 1, categories: [] }; picked.value = null;
     const res = await api.get<{ items: TelroiNumber[] }>('/api/voice/numbers');
     numbers.value = res.items || [];
   } catch (e: any) {
@@ -486,6 +561,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.ind-modal { max-width: 720px; width: 92vw; }
+.ind-h { font-size: 17px; font-weight: 600; margin: 0; }
+.ind-sub { font-size: 12.5px; margin: 4px 0 14px; }
+.ind-body { max-height: 46vh; overflow-y: auto; white-space: pre-wrap; font-size: 13px; line-height: 1.6;
+  border: 1px solid var(--rule); border-radius: var(--radius); padding: 16px; background: var(--paper-2); }
+.ind-note { font-size: 12px; margin: 10px 0 0; }
+.ind-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+.buy-cats { margin: 14px 0; }
+.buy-cats-h { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.buy-cat { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.5;
+  color: var(--ink-soft); padding: 4px 0; cursor: pointer; }
+.buy-cat input { margin-top: 3px; flex: none; }
 .num-rec { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; margin: 4px 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13.5px; cursor: pointer; }
 .num-rec-note { display: block; font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin-top: 4px; }
 .num-table { overflow: hidden; }
