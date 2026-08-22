@@ -227,10 +227,27 @@
                    fails teaches somebody the product is broken rather than that
                    there is a step first. -->
               <template v-if="approved">
-                <button class="btn btn-signal btn-block" :disabled="buying" @click="purchase">
-                  {{ buying ? 'Processing…' : 'Buy & charge wallet' }}
+                <!-- What the number is for, asked before payment rather than
+                     after. Six of these carry an indemnity the client has to
+                     accept; a general business line does not, so somebody buying
+                     an ordinary number is not made to sign an OTP undertaking —
+                     an acceptance everybody clicks past means nothing. -->
+                <div class="buy-cats">
+                  <div class="buy-cats-h">What will this number be used for?</div>
+                  <label v-for="c in USE_CATEGORIES" :key="c.key" class="buy-cat">
+                    <input type="checkbox" :value="c.key" v-model="buy.categories" @change="onCategory(c.key)" />
+                    <span><strong>{{ c.label }}</strong> — {{ c.hint }}</span>
+                  </label>
+                </div>
+
+                <button class="btn btn-signal btn-block" :disabled="buying || !buy.categories.length" @click="purchase">
+                  {{ buying ? 'Processing…' : (needsIndemnity ? 'Continue' : 'Buy & charge wallet') }}
                 </button>
-                <p class="muted buy-note">Charged now, then monthly. A low balance blocks the purchase.</p>
+                <p class="muted buy-note">
+                  {{ needsIndemnity
+                    ? 'You will be asked to accept the Number Use Indemnity before anything is charged.'
+                    : 'Charged now, then monthly. A low balance blocks the purchase.' }}
+                </p>
               </template>
               <div v-else class="buy-gate">
                 <p class="buy-gate-h">{{ complianceStatus === 'pending' ? 'Your verification is under review' : 'Verification comes first' }}</p>
@@ -350,7 +367,31 @@ const showBuy = ref(false);
 const buying = ref(false);
 const available = ref<any[]>([]);
 const picked = ref<any>(null);
-const buy = ref({ channels: 1 });
+const buy = ref({ channels: 1, categories: [] as string[] });
+
+// The six from section 2 of the indemnity, plus the ordinary case. Keeping the
+// wording close to the document matters: a client ticking "Authentication" here
+// should recognise the same word when they read what they are signing.
+const USE_CATEGORIES = [
+  { key: 'general',        label: 'General business', hint: 'Ordinary calls to and from your business.', sensitive: false },
+  { key: 'authentication', label: 'Authentication',   hint: 'One-time passcodes, verification, transaction alerts.', sensitive: true },
+  { key: 'financial',      label: 'Financial services', hint: 'Banking, payments, lending, collections, insurance.', sensitive: true },
+  { key: 'health',         label: 'Health & sensitive data', hint: 'Medical, insurance, or special-category data.', sensitive: true },
+  { key: 'emergency',      label: 'Emergency & welfare', hint: 'Crisis, safety, welfare and helpline services.', sensitive: true },
+  { key: 'government',     label: 'Government & public sector', hint: 'Public authority, civic and electoral.', sensitive: true },
+  { key: 'outbound',       label: 'Scaled outbound',  hint: 'Campaigns at volume, or automated and AI dialling.', sensitive: true }
+];
+
+const needsIndemnity = computed(() =>
+  buy.value.categories.some((k) => USE_CATEGORIES.find((c) => c.key === k)?.sensitive));
+
+/** "This is an ordinary line" and "this is for OTPs" cannot both be true, so
+ *  general is exclusive in both directions. */
+function onCategory(key: string) {
+  const cats = buy.value.categories;
+  if (key === 'general' && cats.includes('general')) buy.value.categories = ['general'];
+  else if (key !== 'general') buy.value.categories = cats.filter((c) => c !== 'general');
+}
 
 async function openBuy() {
   showBuy.value = true; picked.value = null;

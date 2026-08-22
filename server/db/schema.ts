@@ -1321,6 +1321,10 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   // second party did not choose a recorded line, so they are told when they
   // answer and a client opts into that deliberately rather than inheriting it.
   recordOutbound: boolean('record_outbound').notNull().default(false),
+  // What the client declared this number is for, at purchase. Kept on the
+  // number so an operator answering a carrier can see it without going through
+  // the acceptance register.
+  useCategories: text('use_categories').array(),
   // Lazy provisioning: numbers are 'local' until first used after go-live, then
   // provisioned on the country's vendor and billed from that point.
   provisionState: text('provision_state').notNull().default('local'), // local | provisioning | provisioned

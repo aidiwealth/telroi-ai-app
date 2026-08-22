@@ -14,10 +14,20 @@ import { getOrCreateWallet, debit, canAfford, chargeCardToWallet, sandboxLedgerE
 import { getPricing, toCurrencyMinor } from '~/server/utils/pricing';
 import { logEvent } from '~/server/utils/logs';
 
+// The six sensitive categories from section 2 of the Number Use Indemnity. A
+// number declared for any of them cannot be provisioned until the indemnity has
+// been accepted — section 1.1 says so, and a carrier asking later will want the
+// acceptance rather than an assurance.
+const SENSITIVE = ['authentication', 'financial', 'health', 'emergency', 'government', 'outbound'];
+
 const Body = z.object({
   inventoryId: z.string().uuid(),
   channels: z.number().int().min(1).max(50).default(1),
-  chargeCard: z.boolean().optional()
+  chargeCard: z.boolean().optional(),
+  // What the client says the number is for, and — where that is sensitive — the
+  // acceptance recorded before they got here.
+  categories: z.array(z.string().max(32)).min(1).optional(),
+  acceptanceId: z.string().uuid().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -25,6 +35,40 @@ export default defineEventHandler(async (event) => {
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'Select a number to buy');
   const db = useDb();
+
+  // The indemnity, before anything is claimed or charged. A client who declines
+  // has not been billed and no number has been taken out of stock.
+  const categories = p.data.categories?.length ? p.data.categories : ['general'];
+  const sensitive = categories.filter((c) => SENSITIVE.includes(c));
+  if (sensitive.length) {
+    if (!p.data.acceptanceId) {
+      throw apiError('indemnity_required',
+        'This use needs the Number Use Indemnity accepted first.', 428);
+    }
+    const [acc] = await db.select().from(schema.legalAcceptances)
+      .where(and(
+        eq(schema.legalAcceptances.id, p.data.acceptanceId),
+        // Their own acceptance, not one somebody handed them the id of.
+        eq(schema.legalAcceptances.tenantId, s.tenantId)
+      )).limit(1);
+    if (!acc) throw apiError('indemnity_required', 'That acceptance could not be found.', 428);
+
+    // Against the version in force. An acceptance of superseded wording is a
+    // record that looks valid and is not.
+    const [doc] = await db.select({ isCurrent: schema.legalDocuments.isCurrent })
+      .from(schema.legalDocuments).where(eq(schema.legalDocuments.id, acc.documentId)).limit(1);
+    if (!doc?.isCurrent) {
+      throw apiError('indemnity_stale', 'The indemnity has been updated. Please read and accept the current version.', 409);
+    }
+
+    // And covering what they are actually declaring — accepting for
+    // authentication does not cover collections.
+    const covered = new Set(acc.declaredCategories || []);
+    const missing = sensitive.filter((c) => !covered.has(c));
+    if (missing.length) {
+      throw apiError('indemnity_required', 'The indemnity you accepted does not cover every use you have selected.', 428);
+    }
+  }
 
   // Verification first. A number is a real identity on a real network and a
   // standing monthly cost — selling one to an unverified account means unwinding
@@ -71,7 +115,8 @@ export default defineEventHandler(async (event) => {
       const next = new Date(); next.setDate(next.getDate() + 30);
       const [sub] = await db.insert(schema.numberSubscriptions).values({
         tenantId: s.tenantId, telnum: claimed.telnum, region: claimed.region,
-        provider: claimed.provider, channels: p.data.channels, nextBillingAt: next, lastBilledAt: new Date()
+        provider: claimed.provider, channels: p.data.channels, nextBillingAt: next, lastBilledAt: new Date(),
+        useCategories: categories
       }).returning();
       // Record a sandbox ledger entry showing the simulated cost (what it WOULD
       // charge live) — visible to client + admin, balance untouched.
@@ -129,8 +174,23 @@ export default defineEventHandler(async (event) => {
     const [sub] = await db.insert(schema.numberSubscriptions).values({
       tenantId: s.tenantId, telnum: claimed.telnum, region: claimed.region,
       provider: claimed.provider,
-      channels: p.data.channels, nextBillingAt: next, lastBilledAt: new Date()
+      channels: p.data.channels, nextBillingAt: next, lastBilledAt: new Date(),
+      useCategories: categories
     }).returning();
+
+    // The acceptance was recorded before the number existed, so it carries the
+    // inventory id and no number. Writing it back now is what lets an operator
+    // search the register by number — without it, every acceptance names
+    // nothing and the register cannot answer the question it exists for.
+    if (p.data.acceptanceId) {
+      await db.update(schema.legalAcceptances)
+        .set({ telnum: claimed.telnum })
+        .where(and(
+          eq(schema.legalAcceptances.id, p.data.acceptanceId),
+          eq(schema.legalAcceptances.tenantId, s.tenantId)
+        ))
+        .catch((e: any) => console.error('[purchase] could not stamp acceptance with number:', e?.message));
+    }
 
     await logEvent({ tenantId: s.tenantId, kind: 'system', action: 'number.purchased', summary: `Bought ${claimed.telnum} (${claimed.region}, ${p.data.channels}ch)`, ref });
     return { subscription: sub, charged: total, currency: wallet.currency };
