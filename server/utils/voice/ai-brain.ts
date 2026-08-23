@@ -143,7 +143,14 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST', headers: { Authorization: `Bearer ${conn.apiKey}` }, body: form as any
       });
-      if (!res.ok) return '';
+      if (!res.ok) {
+        // The reason was thrown away, so a failed transcription looked identical
+        // to silence — and a recording that Whisper refuses outright reported
+        // "no speech" rather than saying it had been refused.
+        const why = await res.text().catch(() => '');
+        console.error(`[ai-brain] STT(openai) ${res.status}: ${why.slice(0, 300)}`);
+        return '';
+      }
       const d: any = await res.json();
       const oaiTx = (d?.text || '').trim();
       const oaiLang = lang;
