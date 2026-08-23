@@ -50,6 +50,8 @@ export default defineEventHandler(async (event) => {
   // every carrier): AI agent, a person, or a department.
   setHeader(event, 'content-type', 'text/xml');
   let twiml = `<Say voice="Polly.Joanna">Thanks for calling.</Say>`;
+  // Set from the route below, and read after every branch has run.
+  let recordThisCall = false;
   try {
     if (to) {
       const tenantId2 = await tenantForNumber(to);
@@ -69,6 +71,11 @@ export default defineEventHandler(async (event) => {
         } else {
           act = await resolveInboundAction(tenantId2, to);
         }
+        // After all three paths, so an IVR call and a direct one behave the
+        // same. Setting this inside one branch is how a number ends up
+        // recording some of its calls and not others.
+        recordThisCall = !!(act as any)?.recordCalls;
+
         if (act.action === 'ai') {
           // Fork the call audio to our media adapter, which drives the same brain
           // the other carrier uses. The greeting comes from there in the agent's
@@ -112,6 +119,22 @@ export default defineEventHandler(async (event) => {
       }
     }
   } catch (e) { console.error('[twilio webhook] route resolve failed', e); }
+  // Recording, if the number is set to. Added here rather than inside each
+  // branch so it applies to all of them — a client turns recording on for a
+  // number, not for the particular way a call happens to be routed, and wiring
+  // it per-branch is how one path ends up recording and another silently does
+  // not.
+  //
+  // The notice plays first. Recording somebody without telling them is unlawful
+  // in Nigeria and most places, so it is part of the feature rather than a
+  // setting, and it has to be heard before the recorder starts.
+  if (recordThisCall) {
+    const cbBase = `${useRuntimeConfig().public.appBaseUrl}/api/webhooks/twilio/recording`;
+    twiml = `<Say voice="Polly.Joanna">Please note, this call is being recorded.</Say>`
+      + `<Start><Record recordingStatusCallback="${escapeXml(cbBase)}" recordingStatusCallbackEvent="completed" recordingChannels="dual"/></Start>`
+      + twiml;
+  }
+
   return `<?xml version="1.0" encoding="UTF-8"?>\n<Response>\n  ${twiml}\n</Response>`;
 });
 

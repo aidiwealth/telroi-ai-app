@@ -49,7 +49,12 @@ export default defineEventHandler(async (event) => {
         headers: { 'x-telroi-internal': (cfg.internalSecret || cfg.provisionAgentSecret) as string },
         body: {
           tenantId: ev.tenantId, callid: sid,
-          telnum: ev.telnum || null, direction: ev.direction || null, phone: ev.phone || null,
+          // ev.telnum does not exist: call_events has no column for the number
+          // called, and `phone` there is the caller's. Ours is in the raw
+          // payload as `to` — the same fault the Telnyx path had, where every
+          // recording was stored without knowing which line it belonged to.
+          telnum: String((ev.raw as any)?.to || (ev.raw as any)?.To || '') || null,
+          direction: ev.direction || null, phone: ev.phone || null,
           durationSeconds: p.RecordingDuration ? Number(p.RecordingDuration) : null,
           carrier: 'twilio',
           audioBase64: audio.toString('base64')
