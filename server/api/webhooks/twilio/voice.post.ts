@@ -131,7 +131,7 @@ export default defineEventHandler(async (event) => {
   if (recordThisCall) {
     const cbBase = `${useRuntimeConfig().public.appBaseUrl}/api/webhooks/twilio/recording`;
     twiml = `<Say voice="Polly.Joanna">Please note, this call is being recorded.</Say>`
-      + `<Start><Record recordingStatusCallback="${escapeXml(cbBase)}" recordingStatusCallbackEvent="completed" recordingChannels="dual"/></Start>`
+      + `<Start><Recording channels="dual" recordingStatusCallback="${escapeXml(cbBase)}" recordingStatusCallbackEvent="completed"/></Start>`
       + twiml;
   }
 
