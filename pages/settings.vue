@@ -16,6 +16,29 @@
           <h3 class="set-title">Your plan</h3>
           <p class="muted set-lede">Switch or upgrade anytime. Changes take effect immediately.</p>
 
+          <!-- The AI ceiling. A client who meets it only when it bites reads it
+               as the platform breaking; shown here it is something they manage. -->
+          <div v-if="aiCap" class="aicap">
+            <div class="aicap-head">
+              <span class="aicap-h">Daily AI limit</span>
+              <span v-if="aiCap.reached" class="aicap-pill">Reached today</span>
+            </div>
+            <p class="aicap-p">
+              <template v-if="aiCap.unlimited">No daily limit is set on this workspace.</template>
+              <template v-else>
+                {{ capSym }}{{ (aiCap.spentMinor / 100).toLocaleString() }} of
+                {{ capSym }}{{ (aiCap.capMinor / 100).toLocaleString() }} used today.
+                Once it is reached the AI stops answering and calls go to your team instead,
+                so a run of unwanted calls cannot empty your wallet.
+              </template>
+            </p>
+            <div class="aicap-row">
+              <input v-model.number="aiCapInput" type="number" min="0" step="0.01" class="input mono aicap-input" :placeholder="String(aiCap.capMinor / 100)" />
+              <button class="btn btn-ghost btn-sm" :disabled="aiCapBusy" @click="saveAiCap">{{ aiCapBusy ? 'Saving…' : 'Set limit' }}</button>
+            </div>
+            <p class="aicap-note muted">In {{ aiCap.currency }}. You can set this lower than your plan's default; ask support to raise it.</p>
+          </div>
+
           <div v-if="planState" class="plan-current">
             <div>
               <div class="plan-current-name">
@@ -307,6 +330,31 @@ const switching = ref(false);
 const planState = ref<any>(null);
 const comp = ref<any>(null);
 
+const aiCap = ref<any>(null);
+const aiCapInput = ref<any>('');
+const aiCapBusy = ref(false);
+const capSym = computed(() => aiCap.value?.currency === 'NGN' ? '₦' : '$');
+
+async function loadAiCap() {
+  try { aiCap.value = await api.get('/api/ai/cap'); } catch { aiCap.value = null; }
+}
+
+async function saveAiCap() {
+  aiCapBusy.value = true;
+  try {
+    // In their own currency on screen; the ceiling is held in USD, so a Naira
+    // figure is converted back before it is sent.
+    const major = Number(aiCapInput.value);
+    const usdMinor = aiCap.value?.currency === 'NGN'
+      ? Math.round((major * 100) / ((aiCap.value.capMinor / Math.max(1, aiCap.value.capMinor)) || 1) / 16)
+      : Math.round(major * 100);
+    await api.post('/api/ai/cap', { capUsdMinor: usdMinor });
+    await loadAiCap();
+    toast.ok('Daily AI limit updated');
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not set that limit'); }
+  finally { aiCapBusy.value = false; }
+}
+
 /** The real price, in the workspace's own currency, from the same figures
  *  billing uses. These were $10 and $15 in the markup — wrong for a Naira
  *  client, and stale the moment either price changed.
@@ -471,6 +519,7 @@ onMounted(() => {
   if (auth.user) { profile.name = (auth.user as any).name || ''; profile.email = auth.user.email; youEmail.value = auth.user.email; }
   refreshPlan();
   loadCompliance();
+  loadAiCap();
 });
 
 watch(tab, async (t) => {
