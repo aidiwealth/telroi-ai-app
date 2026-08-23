@@ -21,9 +21,12 @@ export default defineEventHandler(async (event) => {
   const platform = pricing?.aiDailyCapUsdMinor ?? 500;
 
   // Zero means no ceiling, which a client cannot give themselves.
+  // At or below the platform's figure, not strictly below it: a client typing
+  // the number they were shown was being refused, which is a rule that reads as
+  // a fault. Zero still means no ceiling and remains an operator's decision.
   if (p.data.capUsdMinor !== null && platform > 0 && (p.data.capUsdMinor === 0 || p.data.capUsdMinor > platform)) {
     throw apiError('above_platform',
-      'You can set a lower daily limit than the default. Ask support to raise it.', 403);
+      `The most you can set yourself is ${(platform / 100).toFixed(2)} a day in dollars. Ask support if you need more.`, 403);
   }
 
   await useDb().update(schema.tenants)

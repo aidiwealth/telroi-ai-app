@@ -345,8 +345,14 @@ async function saveAiCap() {
     // In their own currency on screen; the ceiling is held in USD, so a Naira
     // figure is converted back before it is sent.
     const major = Number(aiCapInput.value);
+    // Divided by the rate the endpoint returns. The previous line divided by
+    // capMinor over itself — always one — and then by sixteen, so ₦8,000 was
+    // sent as five hundred dollars and refused, which is what the 403 was.
+    //
+    // Rounded down, because rounding up turns the exact figure a client was
+    // shown into one a kobo above the ceiling.
     const usdMinor = aiCap.value?.currency === 'NGN'
-      ? Math.round((major * 100) / ((aiCap.value.capMinor / Math.max(1, aiCap.value.capMinor)) || 1) / 16)
+      ? Math.floor((major * 100) / (Number(aiCap.value.ngnPerUsd) || 1600))
       : Math.round(major * 100);
     await api.post('/api/ai/cap', { capUsdMinor: usdMinor });
     await loadAiCap();
