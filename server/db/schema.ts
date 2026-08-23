@@ -236,6 +236,9 @@ export const tenants = pgTable('tenants', {
   // monthly | annual. Monthly unless somebody chose otherwise, so nothing
   // existing changes.
   billingInterval: text('billing_interval').notNull().default('monthly'),
+  // Null means the platform's figure. A client can set their own lower, and an
+  // operator can raise it for somebody who genuinely needs more.
+  aiDailyCapUsdMinor: integer('ai_daily_cap_usd_minor'),
   planLastBilledAt: timestamp('plan_last_billed_at', { withTimezone: true }),
   trialDays: integer('trial_days').notNull().default(7), // admin-configurable length
   onboardingStep: integer('onboarding_step').notNull().default(0), // 0..5, 5 = done
@@ -1134,6 +1137,10 @@ export const pricing = pgTable('pricing', {
   // saving shown on the marketing page is derived from the two figures.
   // Per currency rather than one figure converted: ₦15,000 is about $9.40 at our
   // rate, and "₦16,000 minimum" reads as arbitrary where a round number does not.
+  // A ceiling on what AI can spend in a day. A client cannot control who rings
+  // their number, and an agent that listens, reasons and speaks for a robocaller
+  // costs real money for a call nobody wanted. Zero means no cap.
+  aiDailyCapUsdMinor: integer('ai_daily_cap_usd_minor').notNull().default(500),  // $5/day
   minTopupUsdMinor: integer('min_topup_usd_minor').notNull().default(1000),      // $10
   minTopupNgnMinor: integer('min_topup_ngn_minor').notNull().default(1500000),   // ₦15,000
   planStartupAnnualUsdMinor: integer('plan_startup_annual_usd_minor').notNull().default(10000), // $100

@@ -1,9 +1,13 @@
 // server/api/voice/ai/finalize.post.ts — called once when an AI call ends.
-// Sums the call's ai_usage rows and writes ONE sandbox ledger summary (track
-// now, bill later). Flip sandboxLedgerEntry -> debit to bill for real.
+// Sums the call's ai_usage rows and charges the wallet once for the call.
+//
+// This tracked without billing while managed AI was being proved out. It bills
+// now — the platform is live and the vendor costs are real. Sandbox workspaces
+// still only see what it would have cost, because debit routes them to a
+// sandbox entry itself.
 import { eq, and } from 'drizzle-orm';
 import { useDb, schema } from '~/server/db';
-import { sandboxLedgerEntry } from '~/server/utils/wallet';
+import { debit, sandboxLedgerEntry } from '~/server/utils/wallet';
 
 export default defineEventHandler(async (event) => {
   const cfg = useRuntimeConfig() as any;
@@ -30,8 +34,18 @@ export default defineEventHandler(async (event) => {
   // forgo a fraction than to invent one.
   const costMinor = Math.round(totals.cost / 1e7);
   if (totals.managed && costMinor > 0) {
-    await sandboxLedgerEntry({
-      tenantId, amountMinor: costMinor, reason: 'ai_managed', reference: `ai_${callId}`,
+    // Sandbox sees what it would have cost and keeps its balance. debit does
+    // not check this itself — chargeCall checks before calling it, and this
+    // does the same rather than assuming.
+    const { isSandbox } = await import('~/server/utils/sandbox');
+    const sandboxed = await isSandbox(tenantId).catch(() => false);
+    const write = sandboxed ? sandboxLedgerEntry : debit;
+
+    // Keyed on the call, so a finalize arriving twice — a retry, or both a
+    // hangup and a socket close — charges once.
+    await write({
+      tenantId, amountMinor: costMinor, reason: 'ai_managed',
+      reference: sandboxed ? `sbx_ai_${callId}` : `ai_${callId}`,
       meta: { callId, turns: rows.length, sttSeconds: totals.stt, llmInputTokens: totals.inTok, llmOutputTokens: totals.outTok, ttsChars: totals.ttsChars, unit: 'usd_cents' }
     });
   }
