@@ -26,6 +26,10 @@
              can quote, and 16.67% is not. The saving beneath is worked out from
              the two figures, which also catches a mistyped one — $15 entered
              where $150 was meant shows a 92% saving at a glance. -->
+        <div class="ad-field"><label>AI daily cap ($/workspace)</label>
+          <input v-model.number="aiDailyCap" type="number" step="0.01" min="0" class="ad-input mono" />
+          <p class="ad-hint">Managed AI stops answering once a workspace spends this in a day; calls fall through to whoever the number escalates to. 0 removes the ceiling. A client can set their own lower.</p>
+        </div>
         <div class="ad-field"><label>Startup plan ($/yr)</label>
           <input v-model.number="startupAnnual" type="number" step="0.01" class="ad-input mono" />
           <p class="ad-hint">{{ saveStartupPct }}% off twelve months — about {{ startup > 0 ? Math.round((startup * 12 - startupAnnual) / startup * 10) / 10 : 0 }} months free.</p>
@@ -145,6 +149,9 @@ const growth = ref(15);
 // Annual is a price, not a discount off the monthly one. The saving shown to a
 // client is worked out from the two figures, so nobody has to keep a percentage
 // in step with a price.
+// What managed AI may spend for one workspace in a day, before its calls stop
+// being answered by AI and fall through to a person. Zero removes the ceiling.
+const aiDailyCap = ref(5);
 const startupAnnual = ref(100);
 const growthAnnual = ref(150);
 const saveStartupPct = computed(() => startup.value > 0
@@ -188,6 +195,7 @@ async function load() {
       channel.value = pricing.channelMonthlyUsdMinor / 100;
       startup.value = pricing.planStartupUsdMinor / 100;
       growth.value = pricing.planGrowthUsdMinor / 100;
+      aiDailyCap.value = (pricing.aiDailyCapUsdMinor ?? 500) / 100;
       startupAnnual.value = (pricing.planStartupAnnualUsdMinor ?? pricing.planStartupUsdMinor * 12) / 100;
       growthAnnual.value = (pricing.planGrowthAnnualUsdMinor ?? pricing.planGrowthUsdMinor * 12) / 100;
       ngn.value = pricing.ngnPerUsd;
@@ -218,6 +226,7 @@ async function save() {
       channelMonthlyUsdMinor: Math.round(channel.value * 100),
       planStartupUsdMinor: Math.round(startup.value * 100),
       planGrowthUsdMinor: Math.round(growth.value * 100),
+      aiDailyCapUsdMinor: Math.round(aiDailyCap.value * 100),
       planStartupAnnualUsdMinor: Math.round(startupAnnual.value * 100),
       planGrowthAnnualUsdMinor: Math.round(growthAnnual.value * 100),
       ngnPerUsd: Math.round(ngn.value),

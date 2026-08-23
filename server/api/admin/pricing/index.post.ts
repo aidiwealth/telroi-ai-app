@@ -11,6 +11,8 @@ const Body = z.object({
   planStartupUsdMinor: z.number().int().positive().optional(),
   // Annual as a price, not a discount: "$150 a year" is quotable and a
   // percentage is not, and the saving is derived for display.
+  // Zero is meaningful here: no cap at all.
+  aiDailyCapUsdMinor: z.number().int().min(0).optional(),
   planStartupAnnualUsdMinor: z.number().int().positive().optional(),
   planGrowthAnnualUsdMinor: z.number().int().positive().optional(),
   planGrowthUsdMinor: z.number().int().positive().optional(),
