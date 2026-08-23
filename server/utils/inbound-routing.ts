@@ -168,7 +168,11 @@ async function nodeToAction(tenantId: string, nodes: any[], nodeId: string | und
         const [agent] = await db.select({ greeting: schema.aiAgents.greeting }).from(schema.aiAgents).where(eq(schema.aiAgents.id, agentId)).limit(1);
         if (agent?.greeting) greeting = agent.greeting;
       }
-      return { action: 'ai', greeting, agentId };
+      // recordCalls travels with every other action and was missing from this
+      // one, so a number routed to AI — which is most of them — asked Twilio to
+      // record nothing however the setting was set. The comment on the type
+      // says this is carried; it was, four times out of five.
+      return { action: 'ai', greeting, agentId, recordCalls: (route as any).recordCalls };
     }
     case 'route_user': return { action: 'dial_person', dialTarget: node.config?.target || null };
     case 'route_group': return { action: 'dial_department', dialTarget: node.config?.target || null };
