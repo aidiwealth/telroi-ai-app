@@ -116,7 +116,9 @@
       <EmptyState v-else icon="calls" title="No calls yet"
         description="Once calls start flowing through Telroi, they'll appear here." />
     </div>
-    <CallDetailDrawer :call="selectedCall" @close="selectedCall = null" @updated="onCallUpdated" @callback="onCallback" />
+    <CallDetailDrawer :call="selectedCall"
+      :recording-id="selectedCall ? (recordings[selectedCall.uid] || null) : null"
+      @close="selectedCall = null" @updated="onCallUpdated" @callback="onCallback" />
     <DialerModal v-if="dialer.open" :initial-phone="dialer.phone" :auto-start="dialer.autoStart" @close="dialer.open = false" />
   </div>
 </template>
