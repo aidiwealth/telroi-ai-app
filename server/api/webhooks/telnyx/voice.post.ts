@@ -159,11 +159,32 @@ export default defineEventHandler(async (event) => {
             routeAction = await resolveInboundAction(tenantId, matchedOurNumber);
           } catch { /* */ }
         }
+        // How long the call ran. Telnyx does not send a duration, but it sends
+        // both ends of the call on hangup — and without one the billing charge
+        // skips the call entirely, which is what left forty-five completed
+        // Telnyx calls unbilled while Twilio's charged correctly.
+        let durationSeconds: number | undefined;
+        if (eventType === 'call.hangup') {
+          const startedIso = payload.answered_at || payload.start_time;
+          const endedIso = payload.end_time || payload.hangup_at;
+          if (startedIso && endedIso) {
+            const secs = Math.round((new Date(endedIso).getTime() - new Date(startedIso).getTime()) / 1000);
+            // A negative or absurd figure means the timestamps are not what we
+            // think; better no charge than a wrong one.
+            if (secs > 0 && secs < 60 * 60 * 6) durationSeconds = secs;
+          }
+        }
+
         await upsertCallEvent({
           tenantId, callid: callId, carrier: 'telnyx', direction: isInbound ? 'in' : 'out',
           phone: custPhone,
           status: normalizeStatus('telnyx', eventType),
-          raw: { eventType, to, from, route: routeAction }
+          duration: durationSeconds,
+          raw: { eventType, to, from, route: routeAction,
+                 ...(eventType === 'call.hangup' ? {
+                   start_time: payload.start_time, answered_at: payload.answered_at,
+                   end_time: payload.end_time, hangup_cause: payload.hangup_cause
+                 } : {}) }
         });
         // NOTE: do NOT early-return here on routeAction — the call still needs to
         // be answered + driven by the state machine below. Returning early on
