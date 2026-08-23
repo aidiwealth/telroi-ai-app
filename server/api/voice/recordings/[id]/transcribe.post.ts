@@ -1,13 +1,19 @@
 // POST /api/voice/recordings/:id/transcribe
 //
 // Turns a recording into text. Charged per minute of audio, because unlike
-// storing a recording this costs real money on every use — and most recordings
-// are never read, so doing it on request rather than automatically is what
-// keeps the feature affordable.
+// storing a recording this costs real money every time — and most recordings are
+// never read, so doing it on request rather than automatically is what keeps the
+// feature affordable.
 //
-// The audio goes to the vendor as bytes rather than a signed URL: a recording is
-// somebody's private conversation, and a signed link is one that anybody holding
-// it can fetch without authenticating.
+// The work happens in the background and the answer returns immediately.
+// Fetching a megabyte from storage, posting it to a speech vendor and waiting
+// for a reply outlives the gateway's patience: a thirty-six second recording was
+// enough to prove that, and a ten-minute one never had a chance. The client
+// polls transcriptStatus, which is what that column has always been for.
+//
+// The audio goes to the vendor as bytes rather than a signed URL, because a
+// recording is somebody's private conversation and a signed link is one anybody
+// holding it can fetch without authenticating.
 import { and, eq, sql } from 'drizzle-orm';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { hasFeature } from '~/server/utils/entitlements';
@@ -29,20 +35,17 @@ export default defineEventHandler(async (event) => {
     .where(and(eq(schema.callRecordings.id, id), eq(schema.callRecordings.tenantId, s.tenantId)))
     .limit(1);
   if (!rec) throw apiError('not_found', 'No such recording', 404);
-  if (rec.transcript) return { ok: true, transcript: rec.transcript, alreadyDone: true };
+  if (rec.transcript) return { ok: true, status: 'done', transcript: rec.transcript };
+  if (rec.transcriptStatus === 'running') return { ok: true, status: 'running' };
 
-  // The audio, not the row. A recording past its retention has had the object
-  // deleted while the row remains, so this is where that surfaces.
   if (!rec.objectKey || rec.status === 'expired') {
     throw apiError('expired', 'That recording is past its retention and the audio is gone.', 410);
   }
 
-  // Duration is what this is charged by, and a few recordings have none —
-  // calls that connected and dropped, where there was nothing to record. Where
-  // it is missing but the file is substantial, estimate from the size rather
-  // than refuse: 8kHz 16-bit mono is about 16KB a second.
-  const seconds = rec.durationSeconds
-    || (rec.sizeBytes ? Math.round(rec.sizeBytes / 16000) : 0);
+  // Duration is what this is charged by. A few recordings have none — calls that
+  // connected and dropped — so where it is missing but the file is substantial,
+  // estimate from the size: 8kHz 16-bit mono is about 16KB a second.
+  const seconds = rec.durationSeconds || (rec.sizeBytes ? Math.round(rec.sizeBytes / 16000) : 0);
   if (seconds < 1) {
     throw apiError('too_short', 'There is not enough audio in that recording to transcribe.', 400);
   }
@@ -60,18 +63,6 @@ export default defineEventHandler(async (event) => {
   }).from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
   if (!canSpend(t, wallet.balanceMinor, costMinor)) {
     throw apiError('insufficient', 'Not enough in your wallet to transcribe this recording.', 402);
-  }
-
-  await db.update(schema.callRecordings).set({ transcriptStatus: 'running' })
-    .where(eq(schema.callRecordings.id, rec.id));
-
-  let audio: { body: Buffer; contentType: string };
-  try {
-    audio = await getObject(rec.objectKey);
-  } catch {
-    await db.update(schema.callRecordings).set({ transcriptStatus: 'failed' })
-      .where(eq(schema.callRecordings.id, rec.id));
-    throw apiError('audio_missing', 'The audio for that recording could not be read.', 404);
   }
 
   // The agent behind this number, in one lookup: its language, its speech
@@ -105,40 +96,72 @@ export default defineEventHandler(async (event) => {
     }
   } catch { /* English and no connection is a reasonable default, not a failure */ }
 
-  // sttTranscribe is what live calls use: it resolves the connection, handles a
-  // managed agent, and rejects the phantom text Deepgram invents on silence.
-  // This endpoint had its own copy of that, which would have drifted.
-  const text = await sttTranscribe(s.tenantId, sttConnId, audio.body, audio.contentType || 'audio/wav', allowManaged, language)
-    .catch(() => '');
-  const r = text
-    ? { ok: true as const, transcript: text, reason: '' }
-    : { ok: false as const, transcript: '', reason: 'There was no clear speech in that recording.' };
-
-  if (!r.ok || !r.transcript) {
-    await db.update(schema.callRecordings).set({ transcriptStatus: 'failed' })
-      .where(eq(schema.callRecordings.id, rec.id));
-    // Nothing charged: a failed transcription that took money would be a debit
-    // and a refund on the client's statement for something they never received.
-    throw apiError('failed', r.reason || 'That recording could not be transcribed.', 502);
-  }
-
-  await db.update(schema.callRecordings)
-    .set({ transcript: r.transcript, transcriptStatus: 'done' })
+  await db.update(schema.callRecordings).set({ transcriptStatus: 'running' })
     .where(eq(schema.callRecordings.id, rec.id));
 
-  // Charged on success, and after the text is safely stored: if the debit fails
-  // the client has their transcript and we are out a fraction of a penny, which
-  // is the right way round.
+  void runTranscription({
+    recordingId: rec.id, objectKey: rec.objectKey, callid: rec.callid,
+    tenantId: s.tenantId, seconds, costMinor, language, sttConnId, allowManaged
+  });
+
+  return { ok: true, status: 'running', costMinor, currency: wallet.currency };
+});
+
+/** The work itself. Never throws at the caller: the request has already
+ *  returned, so a failure has to be recorded rather than raised. */
+async function runTranscription(o: {
+  recordingId: string; objectKey: string; callid: string; tenantId: string;
+  seconds: number; costMinor: number; language: string;
+  sttConnId: string | null; allowManaged: boolean;
+}) {
+  const db = useDb();
+  const fail = async (why: string) => {
+    console.error('[transcribe]', o.recordingId, why);
+    await db.update(schema.callRecordings).set({ transcriptStatus: 'failed' })
+      .where(eq(schema.callRecordings.id, o.recordingId)).catch(() => undefined);
+  };
+
+  let audio: { body: Buffer; contentType: string };
   try {
-    await debit({
-      tenantId: s.tenantId, amountMinor: costMinor, reason: 'transcription',
-      // Keyed on the recording, so a retry after a failed debit cannot charge
-      // twice for the same transcript.
-      reference: `tr_${rec.id}`, meta: { callid: rec.callid, seconds }
-    });
+    audio = await getObject(o.objectKey);
   } catch (e: any) {
-    console.error('[transcribe] stored but not charged:', e?.message);
+    return fail(`audio unreadable: ${e?.message}`);
   }
 
-  return { ok: true, transcript: r.transcript, chargedMinor: costMinor, currency: wallet.currency };
-});
+  let text = '';
+  try {
+    text = await sttTranscribe(o.tenantId, o.sttConnId, audio.body, audio.contentType || 'audio/wav', o.allowManaged, o.language);
+  } catch (e: any) {
+    return fail(`vendor error: ${e?.message}`);
+  }
+
+  // An empty result is the vendor finding nothing worth returning — silence, or
+  // text it recognised as its own hallucination. Not charged for.
+  if (!text) return fail('no speech returned');
+
+  await db.update(schema.callRecordings)
+    .set({ transcript: text, transcriptStatus: 'done' })
+    .where(eq(schema.callRecordings.id, o.recordingId));
+
+  // Charged after the text is safely stored: a failed debit leaves the client
+  // with their transcript and us out a fraction of a penny, which is the right
+  // way round.
+  try {
+    const { isSandbox } = await import('~/server/utils/sandbox');
+    const sandboxed = await isSandbox(o.tenantId).catch(() => false);
+    if (sandboxed) {
+      const { sandboxLedgerEntry } = await import('~/server/utils/wallet');
+      await sandboxLedgerEntry({
+        tenantId: o.tenantId, amountMinor: o.costMinor, reason: 'transcription',
+        reference: `sbx_tr_${o.recordingId}`, meta: { callid: o.callid, seconds: o.seconds }
+      });
+    } else {
+      await debit({
+        tenantId: o.tenantId, amountMinor: o.costMinor, reason: 'transcription',
+        reference: `tr_${o.recordingId}`, meta: { callid: o.callid, seconds: o.seconds }
+      });
+    }
+  } catch (e: any) {
+    console.error('[transcribe] stored but not charged:', o.recordingId, e?.message);
+  }
+}

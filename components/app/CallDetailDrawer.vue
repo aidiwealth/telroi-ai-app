@@ -89,10 +89,33 @@ async function transcribe() {
   transcribing.value = true; trErr.value = '';
   try {
     const r = await api.post<any>(`/api/voice/recordings/${props.recordingId}/transcribe`, {});
-    transcript.value = r.transcript;
+    if (r.transcript) { transcript.value = r.transcript; return; }
+    // The endpoint returns as soon as the work starts, so this waits for it.
+    // Transcription takes as long as the audio is long, roughly, and a request
+    // held open that long is one the gateway closes.
+    await pollTranscript();
   } catch (e: any) {
     trErr.value = e?.data?.error?.message || 'That recording could not be transcribed.';
   } finally { transcribing.value = false; }
+}
+
+/** Waits for the background work, and gives up rather than polling forever —
+ *  a spinner with no end is worse than a message saying to come back. */
+async function pollTranscript() {
+  const id = props.recordingId;
+  for (let i = 0; i < 40; i++) {                      // ~2 minutes
+    await new Promise((r) => setTimeout(r, 3000));
+    if (props.recordingId !== id) return;             // they moved to another call
+    try {
+      const r = await api.get<any>(`/api/voice/recordings/${id}`);
+      if (r?.recording?.transcript) { transcript.value = r.recording.transcript; return; }
+      if (r?.recording?.transcriptStatus === 'failed') {
+        trErr.value = 'There was no clear speech in that recording.';
+        return;
+      }
+    } catch { /* keep waiting */ }
+  }
+  trErr.value = 'Still working on it — check back in a minute.';
 }
 const toast = useToast();
 const saving = ref(false);

@@ -408,7 +408,43 @@ function part(m: number) { return money.parts(m, wallet.value.currency); }
 function fmtDate(iso: string) { return new Date(iso).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: '2-digit' }); }
 function fmtDateTime(iso: string) { return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
 function describe(reason: string) {
-  return ({ topup: 'Wallet top-up', voice_minute: 'Voice airtime', plan_fee: 'Plan fee', did_monthly: 'Number rental', channel_monthly: 'Voice channel' } as any)[reason] || reason;
+  return ({
+    topup: 'Wallet top-up', voice_minute: 'Voice airtime', plan_fee: 'Plan fee',
+    did_monthly: 'Number rental', channel_monthly: 'Voice channel',
+    number_monthly: 'Number rental', number_purchase: 'Number purchase',
+    ai_managed: 'AI on calls', transcription: 'Transcript', voice_otp: 'Verification call',
+    manual_topup: 'Credit from Telroi', sandbox_topup: 'Test funds'
+  } as any)[reason] || reason.replace(/_/g, ' ');
+}
+
+/** What made up a charge, from what was recorded at the time. A figure with no
+ *  explanation is the first thing a client asks about, and the answer is
+ *  already in the ledger — it was simply never shown. */
+function breakdown(l: any): string {
+  const m = l?.meta || {};
+  const bits: string[] = [];
+  if (l.reason === 'voice_minute') {
+    if (m.seconds) bits.push(`${m.seconds}s`);
+    if (m.source === 'inbound') bits.push('incoming');
+    else if (m.source === 'dialer') bits.push('outgoing');
+    else if (m.source === 'live_call') bits.push('web call');
+    if (m.provider) bits.push(String(m.provider));
+  } else if (l.reason === 'ai_managed') {
+    if (m.turns) bits.push(`${m.turns} exchange${m.turns === 1 ? '' : 's'}`);
+    if (m.sttSeconds) bits.push(`${m.sttSeconds}s heard`);
+    if (m.ttsChars) bits.push(`${m.ttsChars} characters spoken`);
+  } else if (l.reason === 'transcription') {
+    if (m.seconds) bits.push(`${m.seconds}s of audio`);
+  } else if (l.reason === 'voice_otp') {
+    if (m.to) bits.push(String(m.to));
+  } else if (l.reason === 'number_monthly' || l.reason === 'number_purchase') {
+    if (m.telnum) bits.push(String(m.telnum));
+    if (m.channels) bits.push(`${m.channels} channel${m.channels === 1 ? '' : 's'}`);
+  } else if (l.reason === 'plan_fee') {
+    if (m.plan) bits.push(String(m.plan));
+    if (m.interval) bits.push(m.interval === 'annual' ? 'yearly' : 'monthly');
+  }
+  return bits.join(' · ');
 }
 
 async function loadSummary() {
