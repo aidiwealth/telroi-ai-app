@@ -22,6 +22,10 @@ export default defineEventHandler(async (event) => {
 
   return paged(rows.map((r) => ({
     id: r.id, kind: r.kind, amountMinor: r.amountMinor, balanceAfterMinor: r.balanceAfterMinor,
-    reason: r.reason, reference: r.reference, sandbox: !!r.sandbox, createdAt: r.createdAt
+    reason: r.reason, reference: r.reference, sandbox: !!r.sandbox, createdAt: r.createdAt,
+    // What made up the charge. It has been recorded on every entry since
+    // billing was written and never returned, so a figure a client queried had
+    // no answer anywhere on the page.
+    meta: r.meta
   })), Number(total), p);
 });

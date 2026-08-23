@@ -184,6 +184,7 @@
               <div class="wal-desc">
                 <span class="wal-desc-icon" :class="l.kind">{{ l.kind === 'credit' ? '↓' : '↑' }}</span>
                 {{ describe(l.reason) }}
+                <span v-if="breakdown(l)" class="wal-bd">{{ breakdown(l) }}</span>
                 <span v-if="l.sandbox" class="sbx-badge">Sandbox</span>
               </div>
             </td>
@@ -284,7 +285,8 @@
           <dl class="drawer-dl">
             <div><dt>Reference</dt><dd class="mono">{{ selected.reference || '—' }}</dd></div>
             <div><dt>Balance after</dt><dd class="money">{{ part(selected.balanceAfterMinor).sym }}{{ part(selected.balanceAfterMinor).whole }}<span class="cents">{{ part(selected.balanceAfterMinor).cents }}</span></dd></div>
-            <div><dt>Type</dt><dd style="text-transform:capitalize">{{ selected.reason.replace('_', ' ') }}</dd></div>
+            <div><dt>Type</dt><dd>{{ describe(selected.reason) }}</dd></div>
+            <div v-if="breakdown(selected)"><dt>Made up of</dt><dd>{{ breakdown(selected) }}</dd></div>
           </dl>
         </aside>
       </div>
@@ -551,6 +553,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.wal-bd { display: block; font-size: 11.5px; color: var(--ink-mute); margin-top: 2px; }
 .wal-cardfile { padding: 14px 16px; margin: 0 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
 .wal-cardfile-h { font-size: 13px; font-weight: 600; color: var(--ink); }
 .wal-cardfile-p { font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin: 4px 0 10px; }
