@@ -36,8 +36,15 @@ export default defineEventHandler(async (event) => {
 
       // Their URL has no extension; .wav asks for the audio rather than JSON
       // about it.
+      // An API key pair, not the account's auth token — that is what we store,
+      // and `creds.authToken` was undefined, so every fetch went out as
+      // accountSid:undefined and came back 401. Twilio accepts either pair.
+      const user = creds.apiKeySid || creds.accountSid;
+      const pass = creds.apiKeySecret || creds.authToken;
+      if (!pass) { console.error('[twilio] no secret to fetch a recording with'); return; }
+
       const res = await fetch(`${url}.wav`, {
-        headers: { Authorization: 'Basic ' + Buffer.from(`${creds.accountSid}:${creds.authToken}`).toString('base64') },
+        headers: { Authorization: 'Basic ' + Buffer.from(`${user}:${pass}`).toString('base64') },
         signal: AbortSignal.timeout(120000)
       });
       if (!res.ok) { console.error(`[twilio] recording fetch failed: HTTP ${res.status}`); return; }
