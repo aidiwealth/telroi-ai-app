@@ -2,6 +2,8 @@
 //   call.initiated -> ringing, call.answered -> answered, call.hangup -> completed
 // We attribute inbound calls to the tenant owning the destination number and
 // upsert one row per call_control_id. Verified via the Telnyx-Signature header.
+import { and, eq } from 'drizzle-orm';
+import { useDb, schema } from '~/server/db';
 import { upsertCallEvent, tenantForNumber, normalizeStatus } from '~/server/utils/call-log';
 
 export default defineEventHandler(async (event) => {
@@ -171,7 +173,19 @@ export default defineEventHandler(async (event) => {
         // Telnyx calls unbilled while Twilio's charged correctly.
         let durationSeconds: number | undefined;
         if (eventType === 'call.hangup') {
-          const startedIso = payload.answered_at || payload.start_time;
+          // The answered stamp we kept, then Telnyx's own field, then arrival
+          // as a last resort. Billing from arrival overcharges by however long
+          // it rang, which on an unanswered-then-voicemail call is all of it.
+          let answeredFromRow: string | undefined;
+          try {
+            const [prev] = await useDb().select({ raw: schema.callEvents.raw })
+              .from(schema.callEvents)
+              .where(and(eq(schema.callEvents.tenantId, tenantId), eq(schema.callEvents.callid, callId)))
+              .limit(1);
+            answeredFromRow = (prev?.raw as any)?.answered_at;
+          } catch { /* fall through to the payload */ }
+
+          const startedIso = answeredFromRow || payload.answered_at || payload.start_time;
           const endedIso = payload.end_time || payload.hangup_at;
           if (startedIso && endedIso) {
             const secs = Math.round((new Date(endedIso).getTime() - new Date(startedIso).getTime()) / 1000);
@@ -187,6 +201,10 @@ export default defineEventHandler(async (event) => {
           status: normalizeStatus('telnyx', eventType),
           duration: durationSeconds,
           raw: { eventType, to, from, route: routeAction,
+                 // Kept because hangup does not carry it, and without it the
+                 // duration runs from when the call arrived — billing the
+                 // caller's ringing as though it were conversation.
+                 ...(eventType === 'call.answered' ? { answered_at: new Date().toISOString() } : {}),
                  ...(eventType === 'call.hangup' ? {
                    start_time: payload.start_time, answered_at: payload.answered_at,
                    end_time: payload.end_time, hangup_cause: payload.hangup_cause
