@@ -72,7 +72,13 @@ export default defineEventHandler(async (event) => {
             headers: { 'x-telroi-internal': (cfg.internalSecret || cfg.provisionAgentSecret) as string },
             body: {
               tenantId: ev.tenantId, callid: callId,
-              telnum: ev.telnum || null, direction: ev.direction || null, phone: ev.phone || null,
+              // ev.telnum does not exist — call_events has no column for the
+              // number called, only `phone` for the caller's. Ours is in the
+              // raw payload as `to`, so every Telnyx recording was stored
+              // without a number and nothing downstream could tell which of a
+              // client's lines it belonged to.
+              telnum: String((ev.raw as any)?.to || '') || null,
+              direction: ev.direction || null, phone: ev.phone || null,
               durationSeconds: payload.recording_ended_at && payload.recording_started_at
                 ? Math.round((new Date(payload.recording_ended_at).getTime() - new Date(payload.recording_started_at).getTime()) / 1000)
                 : null,
