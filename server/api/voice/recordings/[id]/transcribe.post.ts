@@ -75,9 +75,25 @@ export default defineEventHandler(async (event) => {
   let sttConnId: string | null = null;
   let allowManaged = false;
   try {
-    const digits = (rec.telnum || '').replace(/\D/g, '').slice(-10);
+    // Telnyx recordings arrive with no number of their own, so fall back to the
+    // call log — which does know which of our numbers the call came in on.
+    // Without this the lookup found nothing, no speech connection was resolved,
+    // and every Telnyx recording reported "no speech" without a vendor ever
+    // being asked.
+    let telnum = rec.telnum || '';
+    if (!telnum) {
+      // call_events has no column for the number called — `phone` is the
+      // caller's. The one we own is kept in the raw webhook payload as `to`.
+      const [ev] = await db.select({ raw: schema.callEvents.raw })
+        .from(schema.callEvents)
+        .where(and(eq(schema.callEvents.tenantId, s.tenantId), eq(schema.callEvents.callid, rec.callid)))
+        .limit(1);
+      telnum = String((ev?.raw as any)?.to || '');
+    }
+
+    const digits = telnum.replace(/\D/g, '').slice(-10);
     if (digits) {
-      const [sub] = await db.select({ agentId: schema.numberSubscriptions.agentId })
+      const [sub] = await db.select({ agentId: schema.numberSubscriptions.routeAgentId })
         .from(schema.numberSubscriptions)
         .where(and(
           eq(schema.numberSubscriptions.tenantId, s.tenantId),
