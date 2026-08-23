@@ -75,6 +75,13 @@
             <td>
               <audio v-if="recordings[c.callid]" class="log-audio" controls preload="none"
                      :src="`/api/admin/recordings/${recordings[c.callid]}/audio`"></audio>
+              <!-- Reading somebody's conversation is the same kind of act as
+                   listening to it, so this is logged by name the way playback
+                   already is. -->
+              <button v-if="recordings[c.callid]" class="btn btn-ghost btn-sm log-tr-btn"
+                      :disabled="trBusy === c.callid" @click="showTranscript(c.callid)">
+                {{ trBusy === c.callid ? 'Loading…' : 'Transcript' }}
+              </button>
               <span v-else class="ad-dim">—</span>
             </td>
           </tr>
@@ -103,6 +110,22 @@
       <Pagination v-bind="auditMeta" query-key="aud" @change="goAuditPage" />
     </div>
   </div>
+
+    <div v-if="viewingTr" class="modal-overlay" @click.self="viewingTr = null">
+      <div class="modal tr-modal">
+        <button class="modal-x" @click="viewingTr = null">&times;</button>
+        <h3 class="tr-modal-h">Transcript</h3>
+        <p class="tr-modal-sub muted">
+          {{ viewingTr.telnum || viewingTr.callid }}
+          <template v-if="viewingTr.durationSeconds"> &middot; {{ viewingTr.durationSeconds }}s</template>
+        </p>
+        <div v-if="viewingTr.transcript" class="tr-modal-body">{{ viewingTr.transcript }}</div>
+        <p v-else class="muted">
+          This call has not been transcribed. The client can do it from their own call log — it is
+          charged to them, so it is theirs to ask for rather than ours to take.
+        </p>
+      </div>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -182,6 +205,25 @@ function onAuditFilter() { auditPage.value = 1; loadAudit(); }
 // Recordings, keyed by the call they belong to. Fetched once for the page
 // rather than asked for per row.
 const recordings = ref<Record<string, string>>({});
+
+const trBusy = ref<string | null>(null);
+const viewingTr = ref<any>(null);
+
+/** The transcript, where one exists. An operator diagnosing a complaint wants
+ *  the text; if there is none, they are told rather than shown an empty box —
+ *  making one spends the client's money on work the client did not ask for, so
+ *  it is a thing to request from them rather than take. */
+async function showTranscript(callid: string) {
+  const recId = recordings.value[callid];
+  if (!recId) return;
+  trBusy.value = callid;
+  try {
+    const r = await $fetch<any>(`/api/admin/recordings/${recId}`);
+    viewingTr.value = r.recording;
+  } catch (e: any) {
+    alert(e?.data?.error?.message || 'Could not load that transcript');
+  } finally { trBusy.value = null; }
+}
 async function loadRecordings() {
   try {
     const r = await $fetch<any>('/api/admin/recordings?perPage=200');
@@ -213,6 +255,13 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.log-tr-btn { margin-left: 8px; vertical-align: middle; }
+.tr-modal { max-width: 720px; width: 92vw; padding: 26px 30px 22px; max-height: 86vh; display: flex; flex-direction: column; }
+.tr-modal-h { font-size: 17px; font-weight: 600; margin: 0 0 2px; }
+.tr-modal-sub { font-size: 12.5px; margin: 0 0 16px; }
+.tr-modal-body { flex: 1; min-height: 0; overflow-y: auto; white-space: pre-wrap; font-size: 13px;
+  line-height: 1.65; color: var(--ink-soft); border: 1px solid var(--rule);
+  border-radius: var(--radius); padding: 18px 20px; background: var(--paper-2); }
 .log-audio { height: 32px; max-width: 220px; }
 /* Audit tab */
 .aud-filters { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
