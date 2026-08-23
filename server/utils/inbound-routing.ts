@@ -3,7 +3,7 @@
 // dialplan, Sotel/Twilio/Telnyx webhooks, the Live Call widget) consults THIS
 // to decide how a call to a given number should be handled — so a number
 // behaves the same regardless of which vendor carries it.
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 
 export type InboundRoute =
@@ -13,6 +13,64 @@ export type InboundRoute =
   | { type: 'ai'; agentId: string | null; escalateMode: string | null; escalateTo: string | null; escalateAfter: number; telnum: string; provider: string; recordCalls?: boolean }
   | { type: 'none'; telnum: string; provider: string };
 
+/** Has this workspace spent its daily AI allowance?
+ *
+ *  Runs on every inbound call to an AI number, so it is one summed query over an
+ *  indexed range rather than anything clever. Failing open: an error here should
+ *  not stop a client's calls being answered — the cap is a courtesy, and losing
+ *  a day's calls to protect a few dollars would be the wrong trade.
+ */
+async function aiCapReached(tenantId: string): Promise<boolean> {
+  try {
+    const db = useDb();
+    const [t] = await db.select({
+      cap: schema.tenants.aiDailyCapUsdMinor,
+      tz: schema.tenants.timezone
+    }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+
+    const { getPricing } = await import('./pricing');
+    const pricing: any = await getPricing(tenantId).catch(() => null);
+    // The workspace's own figure, or the platform's. Zero means no cap at all.
+    const capUsdMinor = t?.cap ?? pricing?.aiDailyCapUsdMinor ?? 500;
+    if (!capUsdMinor || capUsdMinor <= 0) return false;
+
+    // Their midnight, not ours — a Lagos client's day should end in Lagos.
+    const since = startOfDayIn(t?.tz || 'Africa/Lagos');
+    const [row] = await db.select({ spent: sql<number>`coalesce(sum(${schema.ledger.amountMinor}), 0)` })
+      .from(schema.ledger)
+      .where(and(
+        eq(schema.ledger.tenantId, tenantId),
+        eq(schema.ledger.reason, 'ai_managed'),
+        eq(schema.ledger.kind, 'debit'),
+        gte(schema.ledger.createdAt, since)
+      ));
+
+    // The cap is in USD; the ledger is in the wallet's currency.
+    const ngnPerUsd = Number(pricing?.ngnPerUsd) || 1600;
+    const [w] = await db.select({ currency: schema.wallets.currency })
+      .from(schema.wallets).where(eq(schema.wallets.tenantId, tenantId)).limit(1);
+    const capInWallet = w?.currency === 'NGN' ? Math.round(capUsdMinor * ngnPerUsd) : capUsdMinor;
+
+    return Number(row?.spent || 0) >= capInWallet;
+  } catch (e: any) {
+    // Said out loud. Failing open is right — losing a day's calls to protect a
+    // few dollars would be the wrong trade — but a check that silently never
+    // applies looks exactly like a cap that works, and this one was shipped
+    // with a missing import that would have done precisely that.
+    console.error('[ai-cap] check failed, allowing the call:', e?.message);
+    return false;
+  }
+}
+
+/** Midnight today, in the workspace's own timezone. */
+function startOfDayIn(tz: string): Date {
+  const now = new Date();
+  const local = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+  const offset = now.getTime() - local.getTime();
+  local.setHours(0, 0, 0, 0);
+  return new Date(local.getTime() + offset);
+}
+
 export async function resolveInboundRoute(tenantId: string, telnum: string): Promise<InboundRoute> {
   const db = useDb();
   const [sub] = await db.select().from(schema.numberSubscriptions)
@@ -20,6 +78,19 @@ export async function resolveInboundRoute(tenantId: string, telnum: string): Pro
   if (!sub) return { type: 'none', telnum, provider: 'telroi' };
   const provider = sub.provider;
   if (sub.routeType === 'ai') {
+    // A ceiling on what AI can spend in a day. A client cannot choose who rings
+    // their number, and an agent that listens, reasons and speaks for a
+    // robocaller costs real money for a call nobody wanted — without a bound the
+    // first they know is the bill.
+    //
+    // Over it, the AI does not answer and the call takes whatever the number's
+    // escalation target would have been. A caller reaching a person is a good
+    // outcome; one answered by something nobody can pay for is not.
+    if (await aiCapReached(tenantId)) {
+      if (sub.routeEscalateMode === 'ring_all') return { type: 'ring_all', telnum, provider, recordCalls: !!sub.recordCalls };
+      if (sub.routeEscalateTo) return { type: 'person', target: sub.routeEscalateTo, telnum, provider, recordCalls: !!sub.recordCalls };
+      return { type: 'none', telnum, provider };
+    }
     return { type: 'ai', agentId: sub.routeAgentId || null, escalateMode: sub.routeEscalateMode || 'none', escalateTo: sub.routeEscalateTo || null, escalateAfter: sub.routeEscalateAfter || 0, telnum, provider, recordCalls: !!sub.recordCalls };
   }
   if (sub.routeType === 'department') {
