@@ -296,6 +296,13 @@
           </label>
           <button class="btn btn-signal btn-sm" :disabled="intervalBusy" @click="saveInterval">{{ intervalBusy ? 'Saving…' : 'Save' }}</button>
         </div>
+        <div class="ad-adjust-row" style="margin-top:12px">
+          <label class="ad-ovr"><span>AI daily cap ($)</span>
+            <input v-model="aiCapForm" type="number" step="0.01" min="0" class="ad-ctl mono" placeholder="platform default" />
+          </label>
+          <button class="btn btn-ghost btn-sm" :disabled="aiCapBusy" @click="saveAiCap">{{ aiCapBusy ? 'Saving…' : 'Save cap' }}</button>
+        </div>
+        <p class="ad-hint">Blank uses the platform figure. 0 removes the ceiling for this client — worth doing only where somebody expects real volume, since it is what stops a robocaller running up their bill.</p>
         <p class="ad-hint">Takes effect at their next billing date — they finish the period they have paid for, and the new interval applies from then. Annual prices are set under Pricing, globally or for this client alone.</p>
       </section>
 
@@ -737,6 +744,20 @@ const ppForm = ref({ postpaid: false, creditLimit: 0, billingDay: 1, termsDays: 
 // when it comes round. That is also what makes switching back safe — a client
 // who paid for a year keeps the year they paid for.
 const intervalForm = ref<'monthly' | 'annual'>('monthly');
+const aiCapForm = ref<any>('');
+const aiCapBusy = ref(false);
+async function saveAiCap() {
+  aiCapBusy.value = true;
+  try {
+    await $fetch(`/api/admin/clients/${route.params.domain}/ai-cap`, {
+      method: 'POST',
+      // Blank means "use the platform's", which is not the same as zero.
+      body: { capUsdMinor: aiCapForm.value === '' ? null : Math.round(Number(aiCapForm.value) * 100) }
+    });
+    alert('Saved');
+  } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }
+  finally { aiCapBusy.value = false; }
+}
 const intervalBusy = ref(false);
 async function saveInterval() {
   const tid = data.value?.tenant?.id;
@@ -791,6 +812,7 @@ function syncPostpaidForm() {
   // Or the select shows Monthly over a client who is on annual, and an operator
   // saving anything else would quietly put them back on monthly.
   intervalForm.value = t.billingInterval === 'annual' ? 'annual' : 'monthly';
+  aiCapForm.value = t.aiDailyCapUsdMinor == null ? '' : t.aiDailyCapUsdMinor / 100;
 }
 const planBusy = ref(false);
 const gatewayForm = ref('default');
