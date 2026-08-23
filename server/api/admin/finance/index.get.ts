@@ -58,6 +58,10 @@ export default defineEventHandler(async (event) => {
       balanceAfterMinor: r.balanceAfterMinor,
       reason: r.reason, category: cat.category, label: cat.label,
       reference: r.reference,
+      // Passed on rather than only read for the rate. An operator asked what a
+      // charge was for had to open the database to answer, when the seconds,
+      // the provider and the source were already in hand here.
+      meta: m,
       sandbox: !!r.sandbox,
       workspace: t?.name || '—', internal: !!t?.isInternal
     };

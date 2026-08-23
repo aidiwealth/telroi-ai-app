@@ -184,7 +184,7 @@
               <div class="wal-desc">
                 <span class="wal-desc-icon" :class="l.kind">{{ l.kind === 'credit' ? '↓' : '↑' }}</span>
                 {{ describe(l.reason) }}
-                <span v-if="breakdown(l)" class="wal-bd">{{ breakdown(l) }}</span>
+                <span v-if="chargeBreakdown(l)" class="wal-bd">{{ chargeBreakdown(l) }}</span>
                 <span v-if="l.sandbox" class="sbx-badge">Sandbox</span>
               </div>
             </td>
@@ -286,7 +286,7 @@
             <div><dt>Reference</dt><dd class="mono">{{ selected.reference || '—' }}</dd></div>
             <div><dt>Balance after</dt><dd class="money">{{ part(selected.balanceAfterMinor).sym }}{{ part(selected.balanceAfterMinor).whole }}<span class="cents">{{ part(selected.balanceAfterMinor).cents }}</span></dd></div>
             <div><dt>Type</dt><dd>{{ describe(selected.reason) }}</dd></div>
-            <div v-if="breakdown(selected)"><dt>Made up of</dt><dd>{{ breakdown(selected) }}</dd></div>
+            <div v-if="chargeBreakdown(selected)"><dt>Made up of</dt><dd>{{ chargeBreakdown(selected) }}</dd></div>
           </dl>
         </aside>
       </div>
@@ -419,35 +419,6 @@ function describe(reason: string) {
   } as any)[reason] || reason.replace(/_/g, ' ');
 }
 
-/** What made up a charge, from what was recorded at the time. A figure with no
- *  explanation is the first thing a client asks about, and the answer is
- *  already in the ledger — it was simply never shown. */
-function breakdown(l: any): string {
-  const m = l?.meta || {};
-  const bits: string[] = [];
-  if (l.reason === 'voice_minute') {
-    if (m.seconds) bits.push(`${m.seconds}s`);
-    if (m.source === 'inbound') bits.push('incoming');
-    else if (m.source === 'dialer') bits.push('outgoing');
-    else if (m.source === 'live_call') bits.push('web call');
-    if (m.provider) bits.push(String(m.provider));
-  } else if (l.reason === 'ai_managed') {
-    if (m.turns) bits.push(`${m.turns} exchange${m.turns === 1 ? '' : 's'}`);
-    if (m.sttSeconds) bits.push(`${m.sttSeconds}s heard`);
-    if (m.ttsChars) bits.push(`${m.ttsChars} characters spoken`);
-  } else if (l.reason === 'transcription') {
-    if (m.seconds) bits.push(`${m.seconds}s of audio`);
-  } else if (l.reason === 'voice_otp') {
-    if (m.to) bits.push(String(m.to));
-  } else if (l.reason === 'number_monthly' || l.reason === 'number_purchase') {
-    if (m.telnum) bits.push(String(m.telnum));
-    if (m.channels) bits.push(`${m.channels} channel${m.channels === 1 ? '' : 's'}`);
-  } else if (l.reason === 'plan_fee') {
-    if (m.plan) bits.push(String(m.plan));
-    if (m.interval) bits.push(m.interval === 'annual' ? 'yearly' : 'monthly');
-  }
-  return bits.join(' · ');
-}
 
 async function loadSummary() {
   const monthStr = monthDate.value.toISOString().slice(0, 7);

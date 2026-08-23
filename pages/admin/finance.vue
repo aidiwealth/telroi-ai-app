@@ -90,7 +90,10 @@
           <tr v-for="e in entries" :key="e.id">
             <td class="mono ad-dim">{{ fmt(e.createdAt) }}</td>
             <td class="">{{ e.workspace }}<span v-if="e.internal" class="fin-internal">internal</span><span v-if="e.sandbox" class="fin-sandbox">sandbox</span></td>
-            <td><span class="fin-cat" :class="e.category">{{ e.label }}</span></td>
+            <td>
+              <span class="fin-cat" :class="e.category">{{ e.label }}</span>
+              <span v-if="chargeBreakdown(e)" class="fin-bd">{{ chargeBreakdown(e) }}</span>
+            </td>
             <td><span class="fin-kind" :class="e.kind">{{ e.kind === 'credit' ? 'Float in' : 'Debit' }}</span></td>
             <td class="ad-r mono" :class="e.kind">{{ e.kind === 'credit' ? '+' : '−' }}{{ amount(e) }}</td>
             <td class="ad-r mono ad-dim">{{ e.nativeCurrency === 'NGN' ? ('₦' + e.fxRate.toLocaleString()) : '—' }}</td>
@@ -187,6 +190,7 @@ onMounted(() => { load(); loadAccounts(); });
 </script>
 
 <style scoped>
+.fin-bd { display: block; font-size: 11px; color: var(--ink-mute); margin-top: 3px; }
 .fin-cur { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
 .fin-rate { font-size: 12.5px; color: var(--ink-soft); }
 .fin-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
