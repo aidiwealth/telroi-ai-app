@@ -92,7 +92,22 @@ export async function asteriskVoiceToken(identity: string) {
   }
   const sipDomain = process.env.SIP_DOMAIN || DEFAULT_SIP_DOMAIN;
   const wsServer = (useRuntimeConfig().public as any)?.sipWsServer || `wss://${sipDomain}:8089/ws`;
-  return { provider: 'telroi', sipUsername: ep.sipUsername, sipPassword: decrypt(ep.secretEnc!), sipDomain, wsServer };
+  return {
+    provider: 'telroi',
+    sipUsername: ep.sipUsername,
+    sipPassword: decrypt(ep.secretEnc!),
+    sipDomain,
+    // The browser path, unchanged.
+    wsServer,
+    // The native path. A mobile client cannot speak SIP over WebSocket, so it
+    // registers to the same endpoint over TLS on 5061. Sent rather than
+    // assumed, so the port can move without shipping a new app build.
+    transport: 'tls',
+    sipPort: Number(process.env.SIP_TLS_PORT || 5061),
+    // The endpoint is webrtc=yes, which negotiates DTLS-SRTP. linphone supports
+    // it; saying so beats letting the client discover it by failing.
+    mediaEncryption: 'dtls'
+  };
 }
 
 

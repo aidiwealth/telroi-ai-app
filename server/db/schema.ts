@@ -1562,3 +1562,24 @@ export const adminCopilotConversations = pgTable('admin_copilot_conversations', 
 }, (t) => ({
   adminEmailIdx: index('admin_copilot_conv_email_idx').on(t.adminEmail)
 }));
+
+/* Handsets that can be woken for a call. One row per install: reinstalling the
+ * app issues a new FCM token, and the old row is swept the first time FCM says
+ * it is permanently invalid. */
+export const userDevices = pgTable('user_devices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  pushToken: text('push_token').notNull(),
+  platform: text('platform').notNull(),          // android | ios
+  model: text('model'),
+  appVersion: text('app_version'),
+  // Set rather than deleted when somebody is removed from a workspace, so the
+  // handset stops ringing without losing the record that it was here.
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  tokenIdx: uniqueIndex('user_devices_token_idx').on(t.pushToken),
+  userIdx: index('user_devices_user_idx').on(t.tenantId, t.userId)
+}));
