@@ -163,7 +163,10 @@ function maybeChargeCall(input: CallEventInput, before: string, after?: string |
       callId: input.callid,
       seconds,
       provider: input.carrier || undefined,
-      source: 'inbound'
+      // The direction it actually was. This said 'inbound' unconditionally,
+      // which was true when only carrier webhooks reached here and stopped
+      // being true the moment dialplan calls did.
+      source: input.direction === 'out' ? 'outbound' : 'inbound'
     }))
     // Logged rather than thrown: a webhook that fails here would be retried by
     // the carrier, and losing the call record to protect a charge would be the
