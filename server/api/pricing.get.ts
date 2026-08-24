@@ -13,6 +13,9 @@ export default defineEventHandler(async (event) => {
     channelMonthlyUsdMinor: p.channelMonthlyUsdMinor,
     didMonthlyUsdMinor: p.didMonthlyUsdMinor,
     voiceMinuteUsdMinor: p.voiceMinuteUsdMinor,
+    // Airtime is $0.0102/min, so the rounded cent figure above is 2% out. A
+    // client showing "how long can I keep calling" needs the real rate.
+    voiceMinuteUsdMicro: p.voiceMinuteUsdMicro,
     // What a transcript costs, and how long a recording survives — both shown
     // where a client is deciding, rather than discovered afterwards.
     transcriptionMinuteUsdMicro: p.transcriptionMinuteUsdMicro,

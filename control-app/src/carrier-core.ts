@@ -142,6 +142,17 @@ exten => _${P}234XXXXXXXXXX,1,Set(DEST=\${EXTEN:${strip}})
 exten => _${P}0XXXXXXXXXX,1,Set(DEST=234\${EXTEN:${strip + 1}})
  same => n,Goto(${dialRoutine},1)
 exten => ${dialRoutine},1,NoOp(${c.displayName || c.name} out -> \${DEST})
+ ; Log from a hangup handler rather than after Dial. Asterisk stops running the
+ ; dialplan the moment the calling channel hangs up, so a CURL on the next
+ ; priority only fires when Dial returns by itself — busy, no answer,
+ ; congestion. An answered call where the caller hangs up first never reached
+ ; it, so it was never logged and never charged: not one completed outbound
+ ; call existed for any Nigerian carrier, only the failures.
+ ;
+ ; Pushed before Dial so it is registered whatever happens afterwards, and
+ ; CDR(billsec) inside a handler reports the answered duration, which is what
+ ; the charge is calculated from.
+ same => n,Set(CHANNEL(hangup_handler_push)=telroi-log,s,1(${c.name}))
  same => n,Set(CID=\${ODBC_CALLERID_FOR(\${CHANNEL(endpoint)},${c.name})})
  same => n,GotoIf($["\${CID}"=""]?nodid)
  same => n,Set(CALLERID(num)=\${CID})
@@ -158,8 +169,7 @@ ${c.sipGateway2 ? ` ; The carrier's second SBC. Their maintenance windows move t
  same => n(second),NoOp(${c.displayName || c.name} primary unreachable — trying secondary)
  same => n,Dial(PJSIP/${c.name}-endpoint/sip:\${DEST}@${c.sipGateway2}:${port},60)
  same => n(logit),NoOp(dial finished: \${DIALSTATUS})
-` : ''} same => n,Set(TELROI_LOG=\${CURL(http://127.0.0.1:8090/log-outbound?callid=\${UNIQUEID}&agent=\${CHANNEL(endpoint)}&dialed=\${DEST}&carrier=${c.name}&dialstatus=\${DIALSTATUS}&hangupcause=\${HANGUPCAUSE}&duration=\${CDR(billsec)}&start=\${TELROI_START})})
- same => n,Hangup()
+` : ''} same => n,Hangup()
  same => n(nodid),NoOp(Rejected: caller owns no DID on ${c.name} — buy/select a DID or contact support)
  same => n,Hangup(21)
 
