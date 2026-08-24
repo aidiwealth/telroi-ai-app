@@ -143,23 +143,42 @@ async function resolveFlowAction(tenantId: string, telnum: string): Promise<Inbo
     .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.status, 'published')));
   const flow = pub.find((fl) => { const h = digits(fl.telnum || ''); return h && want && (h === want || h.endsWith(want) || want.endsWith(h)); });
   if (!flow || !Array.isArray(flow.nodes) || !flow.nodes.length) return null;
-  return await nodeToAction(tenantId, flow.nodes as any[], (flow.nodes as any[])[0]?.id);
+  return await nodeToAction(tenantId, flow.nodes as any[], (flow.nodes as any[])[0]?.id, telnum);
 }
 
 // Resolve a specific node (by id) in a flow into an InboundAction. IVR menus
 // carry their option map so the webhook can branch on the pressed digit by
 // re-entering the flow at the chosen node.
-async function nodeToAction(tenantId: string, nodes: any[], nodeId: string | undefined): Promise<InboundAction> {
+async function nodeToAction(tenantId: string, nodes: any[], nodeId: string | undefined, telnum?: string): Promise<InboundAction> {
   const db = useDb();
+
+  // Whether this number records. A flow-routed call is still a call on a number
+  // the client set to record — the menu and the greeting are part of it — and
+  // every other action carries this flag while these did not, so a client using
+  // Connect got no recordings at all.
+  //
+  // A parameter rather than a reference to the caller's route: `route` is not in
+  // scope here, and an optional-chained reference to it compiles cleanly and
+  // yields undefined, which is a fix that looks applied and does nothing.
+  let recordCalls = false;
+  if (telnum) {
+    try {
+      const [sub] = await db.select({ recordCalls: schema.numberSubscriptions.recordCalls })
+        .from(schema.numberSubscriptions)
+        .where(and(eq(schema.numberSubscriptions.tenantId, tenantId), eq(schema.numberSubscriptions.telnum, telnum)))
+        .limit(1);
+      recordCalls = !!sub?.recordCalls;
+    } catch { /* not recording is the safe answer when we cannot tell */ }
+  }
   const node = nodes.find((n) => n.id === nodeId) || nodes[0];
   if (!node) return { action: 'reject' };
   switch (node.type) {
     case 'greeting': {
-      return { action: 'ivr', ivr: { nodeId: node.id, kind: 'say', text: node.config?.text || '', nextNodeId: node.config?.next || nodes[nodes.indexOf(node) + 1]?.id || null } };
+      return { recordCalls, action: 'ivr', ivr: { nodeId: node.id, kind: 'say', text: node.config?.text || '', nextNodeId: node.config?.next || nodes[nodes.indexOf(node) + 1]?.id || null } };
     }
     case 'menu': {
       const options = (node.config?.options || []).map((o: any) => ({ digit: String(o.digit ?? o.key ?? ''), nextNodeId: o.target || o.next || null, label: o.label || '' }));
-      return { action: 'ivr', ivr: { nodeId: node.id, kind: 'menu', text: node.config?.text || node.config?.prompt || 'Please choose an option.', options } };
+      return { recordCalls, action: 'ivr', ivr: { nodeId: node.id, kind: 'menu', text: node.config?.text || node.config?.prompt || 'Please choose an option.', options } };
     }
     case 'route_van': {
       let greeting = 'Hello, thanks for calling. How can I help you today?';
@@ -176,7 +195,7 @@ async function nodeToAction(tenantId: string, nodes: any[], nodeId: string | und
     }
     case 'route_user': return { action: 'dial_person', dialTarget: node.config?.target || null };
     case 'route_group': return { action: 'dial_department', dialTarget: node.config?.target || null };
-    case 'voicemail': return { action: 'ivr', ivr: { nodeId: node.id, kind: 'voicemail', text: node.config?.text || '' } };
+    case 'voicemail': return { recordCalls, action: 'ivr', ivr: { nodeId: node.id, kind: 'voicemail', text: node.config?.text || '' } };
     case 'hangup': return { action: 'reject' };
     default: return { action: 'reject' };
   }
@@ -191,7 +210,7 @@ export async function resolveFlowNode(tenantId: string, telnum: string, nodeId: 
     .where(and(eq(schema.connectFlows.tenantId, tenantId), eq(schema.connectFlows.status, 'published')));
   const flow = pub.find((fl) => { const h = digits(fl.telnum || ''); return h && want && (h === want || h.endsWith(want) || want.endsWith(h)); });
   if (!flow || !Array.isArray(flow.nodes)) return { action: 'reject' };
-  return await nodeToAction(tenantId, flow.nodes as any[], nodeId);
+  return await nodeToAction(tenantId, flow.nodes as any[], nodeId, telnum);
 }
 
 export async function resolveInboundAction(tenantId: string, telnum: string): Promise<InboundAction> {
