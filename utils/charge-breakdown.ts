@@ -14,7 +14,10 @@ export function chargeBreakdown(entry: { reason: string; meta?: any } | null | u
       if (m.source === 'inbound') bits.push('incoming');
       else if (m.source === 'dialer') bits.push('outgoing');
       else if (m.source === 'live_call') bits.push('web call');
-      if (m.provider) bits.push(String(m.provider));
+      // The carrier is deliberately not named. Which network carried a call is
+      // our arrangement, not the client's, and putting Twilio or Telnyx on
+      // somebody's statement tells them nothing they can act on while telling
+      // them who we buy from.
       break;
     case 'ai_managed':
       if (m.turns) bits.push(`${m.turns} exchange${m.turns === 1 ? '' : 's'}`);
@@ -37,7 +40,10 @@ export function chargeBreakdown(entry: { reason: string; meta?: any } | null | u
       if (m.interval) bits.push(m.interval === 'annual' ? 'yearly' : 'monthly');
       break;
     case 'topup':
-      if (m.provider) bits.push(String(m.provider));
+      // Card or transfer, not which processor. A client knows how they paid;
+      // naming Monnify or Paystack is our plumbing.
+      if (m.provider === 'monnify') bits.push('bank transfer');
+      else if (m.provider) bits.push('card');
       break;
   }
   return bits.join(' · ');
