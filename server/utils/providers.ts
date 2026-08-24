@@ -19,7 +19,19 @@ export const twilio = {
   },
   // Click-to-call: rings `to`, and on answer fetches TwiML from `voiceUrl`.
   async makeCall(c: TwilioCreds, to: string, voiceUrl: string) {
-    const body = new URLSearchParams({ To: to, From: c.fromNumber || '', Url: voiceUrl });
+    // A status callback, or nothing ever reports how the call ended. Twilio
+    // posts here when it completes, with the duration — which is what the call
+    // log and the charge are built from. Without it an outbound call is placed,
+    // carried, paid for at Twilio and invisible to us: the same fault the
+    // dialplan had, in a different mechanism.
+    //
+    // The same URL as the TwiML: the voice handler already distinguishes a
+    // status post from a TwiML request by the fields present.
+    const body = new URLSearchParams({
+      To: to, From: c.fromNumber || '', Url: voiceUrl,
+      StatusCallback: voiceUrl, StatusCallbackMethod: 'POST',
+      StatusCallbackEvent: 'completed'
+    });
     const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${c.accountSid}/Calls.json`, {
       method: 'POST',
       headers: {
