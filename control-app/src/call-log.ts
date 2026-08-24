@@ -12,6 +12,40 @@ import { db, schema } from './db.ts';
 import { sql, and, eq, like, desc } from 'drizzle-orm';
 import { normalizePhone } from './phone.ts';
 
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
+const INTERNAL_SECRET = process.env.PROVISION_AGENT_SECRET || process.env.TELROI_INTERNAL_SECRET || '';
+
+// The statuses that mean a call is over. Mirrors TERMINAL in the web app's
+// call-log — a second copy, which is not ideal, but the alternative is the
+// control app importing from a codebase it does not share.
+//
+// 'answered' is deliberately absent: logCall fires on it mid-call, and charging
+// then would bill a conversation still in progress.
+const TERMINAL_FOR_CHARGE = new Set(['ended', 'completed', 'failed', 'missed', 'busy', 'no-answer', 'no_answer']);
+
+/** Charge for a call, through the web app.
+ *
+ *  Only the charge goes over — the log is written here, because this path does
+ *  more than upsertCallEvent does and routing it wholesale would lose the
+ *  duration inference and the ring-to-answer wait.
+ *
+ *  chargeCall keys its debit on the call id, so a repeated report charges once.
+ */
+async function chargeViaWebApp(body: {
+  tenantId: string; callId: string; seconds: number; provider?: string; direction?: string;
+}): Promise<boolean> {
+  if (!INTERNAL_SECRET) return false;
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/internal/charge-call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(4000)
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 export interface CallLogInput {
   tenantId: string;
   callid: string;             // Asterisk channel id or Call-ID
@@ -91,6 +125,34 @@ export function logCall(input: CallLogInput): void {
           raw: sql`${schema.callEvents.raw} || excluded.raw`
         }
       });
+
+      // Charge, once the call has finished.
+      //
+      // This path writes to call_events directly — it infers a duration from
+      // timestamps, preserves agent time, computes the ring-to-answer wait, none
+      // of which upsertCallEvent does — so the log stays here and only the
+      // charge goes to the web app, where chargeCall lives. Inbound PBX calls
+      // were logged and never billed until now.
+      //
+      // Only on a terminal status: logCall fires on 'answered' as well, and
+      // charging then would bill a call still in progress.
+      if (input.status && TERMINAL_FOR_CHARGE.has(input.status)) {
+        // Read the duration back rather than trusting the input: the SQL above
+        // infers one from the timestamps when the caller did not supply it, and
+        // that inferred value is the one to bill by.
+        const [row] = await db.select({ duration: schema.callEvents.duration })
+          .from(schema.callEvents)
+          .where(and(eq(schema.callEvents.tenantId, input.tenantId), eq(schema.callEvents.callid, callid)))
+          .limit(1);
+        const seconds = row?.duration ?? input.duration ?? 0;
+        if (seconds > 0) {
+          const charged = await chargeViaWebApp({
+            tenantId: input.tenantId, callId: callid, seconds,
+            provider: input.carrier || undefined, direction: input.direction ?? 'in'
+          });
+          if (!charged) console.error('[call-log] logged but NOT charged:', callid);
+        }
+      }
     } catch (err) {
       console.error('[call-log] write failed (dropped):', (err as Error)?.message || err);
     }
@@ -112,9 +174,6 @@ export interface OutboundLogInput {
   startEpoch?: number;
   callid?: string;
 }
-
-const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
-const INTERNAL_SECRET = process.env.PROVISION_AGENT_SECRET || process.env.TELROI_INTERNAL_SECRET || '';
 
 /** Report a call through the web app, so it is charged.
  *
