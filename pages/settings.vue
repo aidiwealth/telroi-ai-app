@@ -23,15 +23,17 @@
               <span class="aicap-h">Daily AI limit</span>
               <span v-if="aiCap.reached" class="aicap-pill">Reached today</span>
             </div>
-            <p class="aicap-p">
-              <template v-if="aiCap.unlimited">No daily limit is set on this workspace.</template>
-              <template v-else>
-                {{ capSym }}{{ (aiCap.spentMinor / 100).toLocaleString() }} of
-                {{ capSym }}{{ (aiCap.capMinor / 100).toLocaleString() }} used today.
-                Once it is reached the AI stops answering and calls go to your team instead,
-                so a run of unwanted calls cannot empty your wallet.
-              </template>
-            </p>
+            <template v-if="aiCap.unlimited">
+              <p class="aicap-p">No daily limit on this workspace — the AI answers for as long as calls keep coming.</p>
+            </template>
+            <template v-else>
+              <div class="aicap-figures">
+                <span class="aicap-spent">{{ capSym }}{{ (aiCap.spentMinor / 100).toLocaleString() }}</span>
+                <span class="aicap-of">of {{ capSym }}{{ (aiCap.capMinor / 100).toLocaleString() }} today</span>
+              </div>
+              <div class="aicap-bar"><div class="aicap-fill" :style="{ width: Math.min(100, (aiCap.spentMinor / Math.max(1, aiCap.capMinor)) * 100) + '%' }"></div></div>
+              <p class="aicap-p">At the limit the AI stops answering and calls go to your team, so a run of unwanted calls cannot empty your wallet.</p>
+            </template>
             <div class="aicap-row">
               <input v-model.number="aiCapInput" type="number" min="0" step="0.01" class="input mono aicap-input" :placeholder="String(aiCap.capMinor / 100)" />
               <button class="btn btn-ghost btn-sm" :disabled="aiCapBusy" @click="saveAiCap">{{ aiCapBusy ? 'Saving…' : 'Set limit' }}</button>
@@ -545,6 +547,25 @@ async function saveWs() {
 </script>
 
 <style scoped>
+/* The AI daily limit. The figure leads, the day's spend is a bar rather than a
+   sentence, and the explanation is one line — nobody reads a paragraph to find
+   a number. */
+.aicap { margin: 0 0 20px; padding: 16px 18px; border: 1px solid var(--rule);
+  border-radius: var(--radius); background: var(--paper-2); }
+.aicap-head { display: flex; align-items: center; gap: 10px; }
+.aicap-h { font-size: 13px; font-weight: 600; color: var(--ink); }
+.aicap-pill { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px;
+  border-radius: 999px; font-weight: 600; background: rgba(183,121,31,.14); color: var(--warn); }
+.aicap-figures { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 8px; }
+.aicap-spent { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+.aicap-of { font-size: 12.5px; color: var(--ink-soft); }
+.aicap-bar { height: 5px; border-radius: 999px; background: var(--paper-3); overflow: hidden; margin-bottom: 12px; }
+.aicap-fill { height: 100%; background: var(--signal); transition: width .3s; }
+.aicap-p { font-size: 12.5px; line-height: 1.55; color: var(--ink-soft); margin: 0 0 12px; max-width: 60ch; }
+.aicap-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.aicap-lbl { font-size: 12px; color: var(--ink-soft); }
+.aicap-input { max-width: 140px; }
+.aicap-note { font-size: 11.5px; margin: 8px 0 0; }
 .card-on-file { display: flex; align-items: baseline; gap: 10px; padding: 16px 18px; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--paper-2); margin-bottom: 14px; }
 .card-brand { font-size: 14px; font-weight: 600; color: var(--ink); text-transform: capitalize; }
 .card-digits { font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .04em; }
