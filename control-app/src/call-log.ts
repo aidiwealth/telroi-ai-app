@@ -81,7 +81,7 @@ export function logCall(input: CallLogInput): void {
           // set it once (keep the first answered value); other updates preserve it.
           wait: sql`case
                          when excluded.wait is not null then excluded.wait
-                         when excluded.status = 'answered' and ${schema.callEvents.wait} is null
+                         when excluded.status in ('answered', 'completed') and ${schema.callEvents.wait} is null
                               then greatest(0, round(extract(epoch from (now() - ${schema.callEvents.startedAt}))))::int
                          else ${schema.callEvents.wait} end`,
           // Merge raw rather than overwrite: status-update calls pass an empty
@@ -113,9 +113,37 @@ export interface OutboundLogInput {
   callid?: string;
 }
 
+const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
+const INTERNAL_SECRET = process.env.PROVISION_AGENT_SECRET || process.env.TELROI_INTERNAL_SECRET || '';
+
+/** Report a call through the web app, so it is charged.
+ *
+ *  Writing straight into call_events went around upsertCallEvent, and
+ *  maybeChargeCall lives inside it — so every call logged from the dialplan was
+ *  recorded and never billed. Reporting here puts one path under both.
+ *
+ *  Returns false if it could not be reported, so the caller can fall back to the
+ *  direct insert: a call logged without a charge is recoverable by
+ *  reconciliation, and one not logged at all is not.
+ */
+async function reportToWebApp(body: Record<string, unknown>): Promise<boolean> {
+  if (!INTERNAL_SECRET) return false;
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/internal/call-logged`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
+      body: JSON.stringify(body),
+      // Short: this runs inside a hangup handler, and a slow web app must not
+      // hold a channel open while it tears down.
+      signal: AbortSignal.timeout(4000)
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
 function mapDialStatus(s?: string, hangupcause?: string, duration?: number): string {
   switch ((s || '').toUpperCase()) {
-    case 'ANSWER': return 'answered';
+    case 'ANSWER': return 'completed';
     case 'NOANSWER':
     case 'CANCEL': return 'missed';
     case 'BUSY':
@@ -125,7 +153,7 @@ function mapDialStatus(s?: string, hangupcause?: string, duration?: number): str
     case 'TORTURE':
     case 'INVALIDARGS': return 'failed';
   }
-  if (duration && duration > 0) return 'answered';
+  if (duration && duration > 0) return 'completed';
   const cause = Number(hangupcause);
   if (cause === 17) return 'failed';
   if (cause === 18 || cause === 19) return 'missed';
@@ -146,6 +174,27 @@ export function logOutbound(input: OutboundLogInput): void {
       const callid = input.callid || `out-${username}-${input.startEpoch || Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = input.startEpoch ? new Date(input.startEpoch * 1000) : new Date();
       const status = mapDialStatus(input.dialstatus, input.hangupcause, input.duration);
+
+      // Through the web app, so the call is charged. A direct insert goes around
+      // upsertCallEvent, and maybeChargeCall lives inside it — which is why not
+      // one call placed through the dialplan had ever been billed.
+      const reported = await reportToWebApp({
+        tenantId: ep.tenantId, callid, direction: 'out',
+        phone: input.dialed ? normalizePhone(input.dialed) : null,
+        status, carrier: input.carrier || null,
+        startedAt: startedAt.toISOString(), duration: input.duration ?? null,
+        user: username,
+        raw: { agent: username, dialed: input.dialed, dialstatus: input.dialstatus, hangupcause: input.hangupcause, carrier: input.carrier }
+      });
+      if (reported) {
+        console.log(`[call-log] outbound reported: ${username} -> ${input.dialed} (${status}, ${input.duration ?? '?'}s via ${input.carrier || '?'})`);
+        return;
+      }
+
+      // The web app could not be reached. Write it here anyway and say so
+      // loudly: a call logged without a charge can be recovered by
+      // reconciliation, and one not logged at all cannot.
+      console.error('[call-log] could not reach the web app — writing directly, NOT charged:', callid);
       await db.insert(schema.callEvents).values({
         tenantId: ep.tenantId,
         callid,

@@ -463,7 +463,11 @@ async function main() {
                 // A prefix, not the whole id — the address can't carry a full
                 // carrier call id, so logCall resolves it to the real one.
                 tenantId: route.tenantId, callid: escCallId!, callidIsPrefix: true, phone: callerNum, direction: 'in',
-                status: 'answered', user: agent,
+                // The event's own status, not always 'answered'. Writing the
+                // latter meant an escalated call was marked answered and stayed
+                // there — never reaching a terminal status, so never charged.
+                // Six calls, but the same word in the next path would be more.
+                status: status === 'ended' ? 'completed' : 'answered', user: agent,
                 agentSeconds: status === 'ended' ? Math.round((Date.now() - escStart) / 1000) : undefined
               } as any);
             } : undefined
