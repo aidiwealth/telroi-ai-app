@@ -21,6 +21,10 @@ export default defineNuxtConfig({
     encryptionKey: process.env.ENCRYPTION_KEY || '', // 32-byte base64
     provisionAgentUrl: process.env.PROVISION_AGENT_URL || '',
     provisionAgentSecret: process.env.PROVISION_AGENT_SECRET || '',
+    // Turnstile needs a separate widget for native apps; a web site key is
+    // rejected by the mobile SDKs. The web key already lives in platform
+    // settings, written by the admin page, so only this one is new.
+    captchaMobileSiteKey: process.env.CAPTCHA_MOBILE_SITE_KEY || '',
     // Voice OTP: which trunk the calls leave on and what number they present.
     // Ruach's own dialplan refuses a call with no caller id, and a recipient
     // seeing nothing is unlikely to answer a verification call.
