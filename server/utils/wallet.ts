@@ -285,6 +285,17 @@ export async function sandboxLedgerEntry(opts: {
   const db = useDb();
   try {
     const wallet = await getOrCreateWallet(opts.tenantId);
+
+    // Idempotent by reference, as debit is. Without this a call reported twice —
+    // once when it answered, once when it ended — wrote two entries, and a
+    // sandbox client comparing their usage against their calls found twice the
+    // charges. Harmless to a balance that never moves, misleading to read.
+    if (opts.reference) {
+      const [existing] = await db.select({ id: schema.ledger.id }).from(schema.ledger)
+        .where(and(eq(schema.ledger.reference, opts.reference), eq(schema.ledger.kind, 'debit'))).limit(1);
+      if (existing) return existing;
+    }
+
     const [row] = await db.insert(schema.ledger).values({
       walletId: wallet.id, tenantId: opts.tenantId, kind: 'debit',
       amountMinor: opts.amountMinor, balanceAfterMinor: wallet.balanceMinor, // balance UNCHANGED

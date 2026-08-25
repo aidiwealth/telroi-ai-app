@@ -85,7 +85,11 @@ def main():
                coalesce(ce.duration, 0) || 's | ' || t.name
         from call_events ce
         join tenants t on t.id = ce.tenant_id
-        left join ledger l on l.reference = 'call_' || ce.callid and l.reason = 'voice_minute'
+        -- Both prefixes: a sandbox workspace's charges are recorded as
+        -- sbx_call_, and looking only for call_ reported every sandbox call as
+        -- unbilled — which is how a tool that cries wolf gets ignored.
+        left join ledger l on l.reference in ('call_' || ce.callid, 'sbx_call_' || ce.callid)
+                          and l.reason = 'voice_minute'
         where ce.started_at > now() - interval '{days} days'
           and ce.status in ('completed', 'ended')
           and coalesce(ce.duration, 0) > 0
