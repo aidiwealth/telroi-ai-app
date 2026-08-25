@@ -166,13 +166,13 @@ match=${ipAddress}
 `;
 }
 
-export function provisionEndpoint(tenantId: string, label: string, webrtc = false, context?: string): ProvisionResult {
+export function provisionEndpoint(tenantId: string, label: string, webrtc = false, context?: string, transport?: string): ProvisionResult {
   const username = genUsername();
   const password = genPassword();
   const configPath = `${PJSIP_D}/${username}.conf`;
 
   ensurePlaceholder();
-  writeFileSync(configPath, endpointConfig(username, password, tenantId, label, webrtc, context), { mode: 0o640 });
+  writeFileSync(configPath, endpointConfig(username, password, tenantId, label, webrtc, context, transport), { mode: 0o640 });
   chownToAsterisk(configPath);
   pjsipReload();
 
