@@ -111,8 +111,17 @@ export default defineEventHandler(async (event) => {
       }));
     } catch { /* the log is still worth showing without them */ }
 
+    // Honour the caller's limit on the merged set, not on each source.
+    //
+    // It was passed to the PBX history alone while local events and OTP calls
+    // each fetched up to 500 of their own, so a client asking for 100 received
+    // 228 — and on a busy workspace would receive a great deal more. Sliced
+    // after sorting, so the newest hundred are the newest hundred overall
+    // rather than whatever survived three separate caps.
+    const wanted = Math.min(Math.max(Number(q.limit) || 100, 1), 1000);
     const merged = [...otpCalls, ...localCalls, ...(calls as any[])]
-      .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
+      .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime())
+      .slice(0, wanted);
     await resolveAgentNames(merged);
     return { calls: merged };
   } catch {
