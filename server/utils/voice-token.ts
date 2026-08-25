@@ -80,11 +80,20 @@ export async function asteriskVoiceToken(identity: string) {
   const db = useDb();
   const rows = await db.select().from(schema.sipEndpoints)
     .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
-  // Prefer this user's own endpoint (meta.userId match); fall back for old data.
+  // Their own endpoint of the right kind. meta.kind where it exists, meta.webrtc
+  // for rows written before native clients did.
+  const isKind = (r: any) => {
+    const m = (r.meta as any) || {};
+    return (m.kind || (m.webrtc ? 'browser' : null)) === client;
+  };
   let ep = userId
-    ? rows.find((r: any) => r.secretEnc && (r.meta as any)?.webrtc && (r.meta as any)?.userId === userId)
+    ? rows.find((r: any) => r.secretEnc && isKind(r) && (r.meta as any)?.userId === userId)
     : undefined;
-  if (!ep) ep = rows.find((r: any) => r.secretEnc && (((r.meta as any)?.webrtc) || r.label === 'browser-dialer'));
+  // The fallback is for old data and is browser-only: handing a native client
+  // somebody's WebRTC endpoint is what the 488 was.
+  if (!ep && client === 'browser') {
+    ep = rows.find((r: any) => r.secretEnc && (((r.meta as any)?.webrtc) || r.label === 'browser-dialer'));
+  }
   if (!ep) {
     throw Object.assign(new Error('Browser calling is not set up yet for this workspace.'), {
       statusCode: 409, data: { error: { code: 'webrtc_not_provisioned' } }
@@ -104,14 +113,16 @@ export async function asteriskVoiceToken(identity: string) {
     // assumed, so the port can move without shipping a new app build.
     transport: 'tls',
     sipPort: Number(process.env.SIP_TLS_PORT || 5061),
-    // The endpoint is webrtc=yes, which negotiates DTLS-SRTP. linphone supports
-    // it; saying so beats letting the client discover it by failing.
-    mediaEncryption: 'dtls'
+    // What this endpoint actually offers. A browser endpoint is webrtc=yes and
+    // negotiates DTLS-SRTP; a native one offers plain RTP. Saying dtls to a
+    // native client was the 488 — it refused an offer it could not take,
+    // whatever codecs it had enabled.
+    mediaEncryption: client === 'native' ? 'none' : 'dtls'
   };
 }
 
 
-export async function voiceTokenFor(provider: string, identity: string, preferredCallerId?: string | null) {
+export async function voiceTokenFor(provider: string, identity: string, preferredCallerId?: string | null, client: 'browser' | 'native' = 'browser') {
   if (provider === 'twilio') return await twilioVoiceToken(identity, preferredCallerId);
   if (provider === 'telnyx') return await telnyxVoiceToken(preferredCallerId);
   if (provider === 'telroi' || provider === 'asterisk') return await asteriskVoiceToken(identity);
