@@ -19,7 +19,17 @@ export default defineEventHandler(async (event) => {
   // caller says which it wants: incoming always lands on our PBX, outgoing follows
   // whichever carrier owns the number being dialled from.
   const purpose = String(body?.purpose || 'receive');
-  const registerOn = purpose === 'dial' ? dial.provider : 'telroi';
+
+  // A native client always registers on our PBX, whatever it is doing.
+  //
+  // The rule above — outgoing follows the number's carrier — exists because a
+  // browser dials Twilio and Telnyx through their own SDKs, which a native app
+  // does not have. It talks SIP, and our PBX already reaches every carrier over
+  // its trunks: internal-route sends Nigerian numbers to whichever carrier owns
+  // the caller's DID and everything else to Telnyx. So the app gets one path,
+  // and a carrier added later needs no change in the app at all.
+  const client = String(body?.client || 'browser');
+  const registerOn = (client === 'native' || purpose !== 'dial') ? 'telroi' : dial.provider;
   if (registerOn === 'telroi') {
     try {
       const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
