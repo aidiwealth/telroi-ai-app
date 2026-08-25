@@ -176,8 +176,12 @@ export function provisionEndpoint(tenantId: string, label: string, webrtc = fals
   chownToAsterisk(configPath);
   pjsipReload();
 
-  const transport = webrtc ? 'transport-wss' : TRANSPORT;
-  return { username, password, domain: SIP_DOMAIN, transport, context: context || CONTEXT, configPath };
+  // The transport actually written, not the default. Threading the override
+  // into the config and not the return meant the endpoint was TLS and reported
+  // as UDP — and the client would be told to use a port the endpoint does not
+  // listen on.
+  const reported = webrtc ? 'transport-wss' : (transport || TRANSPORT);
+  return { username, password, domain: SIP_DOMAIN, transport: reported, context: context || CONTEXT, configPath };
 }
 
 /** Trust a client's own PBX by address. No password is minted because none is
