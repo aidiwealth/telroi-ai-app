@@ -38,32 +38,14 @@ export function genPassword(): string {
   return crypto.randomBytes(18).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 20);
 }
 
-function endpointConfig(username: string, password: string, tenantId: string, label: string, webrtc: boolean, context?: string, transportOverride?: string): string {
+function endpointConfig(username: string, password: string, tenantId: string, label: string, webrtc: boolean, context?: string): string {
   // Live Call guests land in a context with one extension and no route to a
   // trunk, and carry their tenant as a channel variable — their credentials are
   // readable in the browser, so a stolen one must be able to ring an agent and
   // nothing else, for one tenant only.
   const ctx = context || CONTEXT;
   const pinned = context === 'widget-guest' ? `set_var=WIDGET_TENANT=${tenantId}\n` : '';
-  // A native client wants TLS; a carrier trunk wants UDP; a browser wants WSS.
-  // The default was whatever PROVISION_TRANSPORT said, which is right for
-  // trunks and wrong for a phone.
-  const transport = webrtc ? 'transport-wss' : (transportOverride || TRANSPORT);
-
-  // A browser and a phone want opposite things here, and one AOR cannot serve
-  // both. A browser reconnects on every page load, so replacing its own binding
-  // is right. A phone holds one registration for its expiry — and if it churns,
-  // stale bindings sitting alongside a live one and being pruned is far better
-  // than a re-registration evicting the working contact. Which is what left a
-  // registered phone unreachable while the browser rang.
-  const aorPolicy = webrtc
-    ? `max_contacts=3
-remove_existing=yes
-`
-    : `max_contacts=5
-remove_existing=no
-remove_unavailable=yes
-`;
+  const transport = webrtc ? 'transport-wss' : TRANSPORT;
   const mediaBlock = webrtc
     ? `webrtc=yes
 direct_media=no
@@ -94,7 +76,9 @@ password=${password}
 
 [${username}]
 type=aor
-${aorPolicy}qualify_frequency=30
+max_contacts=1
+remove_existing=yes
+qualify_frequency=30
 `;
 }
 
