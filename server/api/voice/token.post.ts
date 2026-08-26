@@ -35,8 +35,10 @@ export default defineEventHandler(async (event) => {
       // A browser gets the WebRTC endpoint, a native app gets one with plain
       // RTP over TLS. Offering DTLS-SRTP to a native SIP client returns 488
       // whatever codecs it has enabled, so they cannot share an endpoint.
+      console.log('[token] ensuring endpoint', { client, purpose, tenantId: s.tenantId, userId: s.userId });
       const { ensureUserEndpoint } = await import('~/server/utils/provision-agent');
-      await ensureUserEndpoint(s.tenantId, s.userId, client === 'native' ? 'native' : 'browser');
+      const ensured = await ensureUserEndpoint(s.tenantId, s.userId, client === 'native' ? 'native' : 'browser');
+      console.log('[token] endpoint ready', ensured);
     } catch (e: any) {
       throw apiError('voice_not_configured', e?.message || 'Browser calling could not be set up. Try again.', 503);
     }
@@ -61,9 +63,15 @@ export default defineEventHandler(async (event) => {
 
   try {
     // The number the dialer selected is the caller ID — the user picked it.
+    console.log('[token] fetching token', { registerOn, client });
     const tok = await voiceTokenFor(registerOn, `tenant_${s.tenantId}_${s.userId}`, dial.fromNumber, client === 'native' ? 'native' : 'browser');
+    console.log('[token] got token', { provider: (tok as any)?.provider, sipUsername: (tok as any)?.sipUsername });
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready, dialPrefix };
   } catch (e: any) {
+    // Logged raw, before anything else touches it. If the error path itself
+    // throws — building a response, reading config — the original is lost and
+    // only a gateway 504 survives, which is what has hidden this all evening.
+    console.error('[token] FAILED', e?.message, e?.stack);
     throw apiError('voice_not_configured', e?.message || 'Voice provider not configured', 503);
   }
 });
