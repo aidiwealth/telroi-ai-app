@@ -69,7 +69,7 @@ export async function telnyxVoiceToken(preferredCallerId?: string | null) {
 
 
 
-export async function asteriskVoiceToken(identity: string) {
+export async function asteriskVoiceToken(identity: string, client: 'browser' | 'native' = 'browser') {
   const { useDb, schema } = await import('~/server/db');
   const { and, eq } = await import('drizzle-orm');
   const { decrypt } = await import('~/server/utils/crypto');
@@ -125,6 +125,10 @@ export async function asteriskVoiceToken(identity: string) {
 export async function voiceTokenFor(provider: string, identity: string, preferredCallerId?: string | null, client: 'browser' | 'native' = 'browser') {
   if (provider === 'twilio') return await twilioVoiceToken(identity, preferredCallerId);
   if (provider === 'telnyx') return await telnyxVoiceToken(preferredCallerId);
-  if (provider === 'telroi' || provider === 'asterisk') return await asteriskVoiceToken(identity);
+  // client threads through: the lookup and the media profile live in
+  // asteriskVoiceToken, not here, and a parameter added to the wrapper alone
+  // left `client` undefined where it is actually used — which took the browser
+  // dialler down with it.
+  if (provider === 'telroi' || provider === 'asterisk') return await asteriskVoiceToken(identity, client);
   throw new Error(`Unknown voice provider: ${provider}`);
 }
