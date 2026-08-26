@@ -48,10 +48,10 @@ async function agentCall(path: string, body: unknown): Promise<any> {
   return json;
 }
 
-export async function agentProvision(tenantId: string, label: string, webrtc = false, context?: string): Promise<AgentProvisionResult> {
+export async function agentProvision(tenantId: string, label: string, webrtc = false, context?: string, transport?: string): Promise<AgentProvisionResult> {
   // context lets a caller put the endpoint somewhere other than the agents'
   // dialplan — Live Call guests go in a restricted one with no trunk access.
-  const j = await agentCall('/provision', { tenantId, label, webrtc, context });
+  const j = await agentCall('/provision', { tenantId, label, webrtc, context, transport });
   return {
     username: j.username, password: j.password, domain: j.domain,
     transport: j.transport, context: j.context, configPath: j.configPath
@@ -104,26 +104,47 @@ export async function ensureWebrtcEndpoint(tenantId: string): Promise<{ created:
 // inbound routing (which rings memberships.pbx_login) can reach the specific
 // person who's online in their browser. Aligns three things: the endpoint we
 // provision, the credentials the token issues, and the pbx_login routing rings.
-export async function ensureUserWebrtcEndpoint(tenantId: string, userId: string): Promise<{ created: boolean; sipUsername: string }> {
+/** The endpoint a person's client registers on.
+ *
+ *  Two kinds, because a browser and a native app want different things and one
+ *  endpoint cannot serve both: a browser needs WebRTC media over WSS, an app
+ *  needs plain RTP over TLS, and offering DTLS-SRTP to a native SIP client gets
+ *  a 488 whatever codecs it has enabled.
+ *
+ *  Existing rows carry meta.webrtc and are treated as browser, so nothing needs
+ *  migrating.
+ */
+export async function ensureUserEndpoint(
+  tenantId: string, userId: string, kind: 'browser' | 'native' = 'browser'
+): Promise<{ created: boolean; sipUsername: string }> {
   const { useDb, schema } = await import('~/server/db');
   const { and, eq } = await import('drizzle-orm');
   const { encrypt } = await import('~/server/utils/crypto');
   const db = useDb();
   const rows = await db.select().from(schema.sipEndpoints)
     .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')));
-  const mine = rows.find((r: any) => r.secretEnc && (r.meta as any)?.webrtc && (r.meta as any)?.userId === userId);
+  const isKind = (r: any) => {
+    const m = (r.meta as any) || {};
+    // meta.kind where it exists; otherwise meta.webrtc, which every row written
+    // before native clients existed carries.
+    const rowKind = m.kind || (m.webrtc ? 'browser' : null);
+    return rowKind === kind;
+  };
+  const mine = rows.find((r: any) => r.secretEnc && isKind(r) && (r.meta as any)?.userId === userId);
   let sipUsername: string;
   let created = false;
   if (mine) {
     sipUsername = mine.sipUsername!;
   } else {
-    const result = await agentProvision(tenantId, `user-${userId.slice(0, 8)}`, true);
+    const result = kind === 'native'
+      ? await agentProvision(tenantId, `app-${userId.slice(0, 8)}`, false, undefined, 'transport-tls')
+      : await agentProvision(tenantId, `user-${userId.slice(0, 8)}`, true);
     try {
       await db.insert(schema.sipEndpoints).values({
         tenantId, provider: 'telroi', kind: 'registration',
-        externalId: result.username, label: `user-${userId.slice(0, 8)}`, sipUsername: result.username,
+        externalId: result.username, label: `${kind === 'native' ? 'app' : 'user'}-${userId.slice(0, 8)}`, sipUsername: result.username,
         secretEnc: encrypt(result.password), domain: result.domain,
-        meta: { transport: result.transport, webrtc: true, userId }
+        meta: { transport: result.transport, webrtc: kind === 'browser', kind, userId }
       });
       sipUsername = result.username;
     } catch (e: any) {
@@ -133,7 +154,7 @@ export async function ensureUserWebrtcEndpoint(tenantId: string, userId: string)
       // loses takes the winner's endpoint rather than failing the request.
       const [winner] = await db.select().from(schema.sipEndpoints)
         .where(and(eq(schema.sipEndpoints.tenantId, tenantId), eq(schema.sipEndpoints.provider, 'telroi')))
-        .then((rs: any[]) => rs.filter((r) => (r.meta as any)?.webrtc && (r.meta as any)?.userId === userId));
+        .then((rs: any[]) => rs.filter((r) => isKind(r) && (r.meta as any)?.userId === userId));
       if (!winner) throw e;
       // The endpoint this request provisioned before losing has no row behind it
       // now, so take it off the PBX rather than leaving a config file nothing
@@ -147,11 +168,21 @@ export async function ensureUserWebrtcEndpoint(tenantId: string, userId: string)
     }
     created = true;
   }
-  try {
-    await db.update(schema.memberships).set({ pbxLogin: sipUsername })
-      .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.userId, userId)));
-  } catch { /* membership may not exist yet; endpoint still usable */ }
+  // pbxLogin is what the escalation rings, and it names one endpoint. Only the
+  // browser writes it, or provisioning an app would quietly stop the browser
+  // being found. Ringing both is a separate change.
+  if (kind === 'browser') {
+    try {
+      await db.update(schema.memberships).set({ pbxLogin: sipUsername })
+        .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.userId, userId)));
+    } catch { /* membership may not exist yet; endpoint still usable */ }
+  }
   return { created, sipUsername };
+}
+
+/** The browser endpoint. Kept so existing callers need no change. */
+export async function ensureUserWebrtcEndpoint(tenantId: string, userId: string) {
+  return ensureUserEndpoint(tenantId, userId, 'browser');
 }
 
 // ─── Carrier (SIP trunk) management — calls the PBX agent to generate/remove
