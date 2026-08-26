@@ -206,6 +206,7 @@ async function main() {
     // spends can be recorded against it rather than disappearing as an untracked
     // second leg. Handoffs made before this carry no id — route them anyway.
     let escCallId: string | null = null;
+    let escCallerNum: string | null = null;
     if (isEscalation) {
       const rest = dialedDid.slice(4);
       const cut = rest.indexOf('--');
@@ -213,10 +214,27 @@ async function main() {
         // Hex on the wire: a SIP user part can't carry the colon one carrier puts
         // in its call ids. Anything that isn't hex is from an older handoff — take
         // it as-is rather than dropping the call over a formatting change.
-        const raw = rest.slice(cut + 2);
+        // Two segments now: the call id, and the caller's number. A handoff
+        // made before this carries only the first, so split rather than assume
+        // — taking everything after the first '--' as the id would swallow the
+        // caller and leave an id that resolves to nothing.
+        const after = rest.slice(cut + 2);
+        const parts = after.split('--');
+        const raw = parts[0] || '';
+        const rawCid = parts[1] || '';
+
+        // Hex on the wire: a SIP user part can't carry the colon one carrier puts
+        // in its call ids. Anything that isn't hex is from an older handoff — take
+        // it as-is rather than dropping the call over a formatting change.
         escCallId = /^[0-9a-f]+$/i.test(raw) && raw.length % 2 === 0
           ? Buffer.from(raw, 'hex').toString('utf8')
           : (raw || null);
+
+        // Who is calling. Without it an escalation showed the agent the number
+        // that was dialled — their own workspace's — rather than the caller.
+        if (/^[0-9a-f]+$/i.test(rawCid) && rawCid.length % 2 === 0) {
+          escCallerNum = Buffer.from(rawCid, 'hex').toString('utf8') || null;
+        }
         dialedDid = rest.slice(0, cut);
       }
       else dialedDid = rest;
@@ -452,7 +470,11 @@ async function main() {
         try {
           const escStart = Date.now();
           escRes = await bridgeToDepartment({
-            client, caller: channel, endpoints, callerIdNum: callerNum || 'Telroi', ringTimeoutSec: 40,
+            // The caller carried on the escalation address, where there is one.
+            // callerNum here is whatever the INVITE said, and on a handoff that
+            // is the number dialled rather than the person calling — so an agent
+            // saw their own workspace's number and learned nothing from it.
+            client, caller: channel, endpoints, callerIdNum: escCallerNum || callerNum || 'Telroi', ringTimeoutSec: 40,
             // Record against the call this continues. Without an id there's
             // nothing to attach to, so the leg stays unlogged as before rather
             // than creating a row the customer would find baffling.

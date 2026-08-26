@@ -51,7 +51,7 @@ function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[telnyx-media]', ...args);
 }
 
-interface Meta { agentId?: string; tenantId?: string; telnum?: string; escalateTo?: string | null; escalateAfter?: number; escalateMode?: string | null }
+interface Meta { agentId?: string; tenantId?: string; telnum?: string; escalateTo?: string | null; escalateAfter?: number; escalateMode?: string | null; needsNotice?: boolean; callerNum?: string | null }
 
 // Hand the call off to a human. The AI has already spoken the "connecting you"
 // line by this point, so we just issue the Call Control transfer. Note Telnyx can
@@ -162,7 +162,14 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     // thing overran what the address could carry and arrived truncated;
     // twelve characters is unique in practice and always fits.
     const tag = callId ? Buffer.from(String(callId).slice(0, 12), 'utf8').toString('hex') : '';
-        return `sip:esc-${did}--${tag}@${PBX_SIP_HOST}`;
+        // The caller, hex-encoded for the same reason the tag is: a SIP user
+        // part cannot carry a plus sign reliably. Without it the escalation
+        // arrives showing the number dialled rather than who is calling, so an
+        // agent sees their own workspace number and learns nothing.
+        const cid = meta.callerNum
+          ? Buffer.from(String(meta.callerNum).replace(/[^0-9+]/g, ''), 'utf8').toString('hex')
+          : '';
+        return `sip:esc-${did}--${tag}--${cid}@${PBX_SIP_HOST}`;
       }
       return null;
     }

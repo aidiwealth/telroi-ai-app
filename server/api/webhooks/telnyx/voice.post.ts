@@ -284,7 +284,13 @@ export default defineEventHandler(async (event) => {
                   // any of this. Telnyx has none, so the greeting carries it —
                   // and the adapter has to be told, since by then it knows only
                   // what we sent it.
-                  needsNotice: !!(act as any).recordCalls
+                  needsNotice: !!(act as any).recordCalls,
+                  // Who is calling. The escalation address the adapter builds
+                  // carries the number dialled, not the caller — so a handoff
+                  // reached an agent showing the workspace's own number. The
+                  // Asterisk path does not have this problem: its channel
+                  // already knows the caller by the time it escalates.
+                  callerNum: custPhone || null
                 });
               } catch (e: any) {
                 console.error('[telnyx] streaming_start failed:', e?.message || e);
