@@ -83,6 +83,11 @@ export default defineEventHandler(async (event) => {
         wait: e.wait || 0, duration: e.duration || 0,
         failed: e.status === 'failed',
         reason: (e.raw as any)?.reason || undefined,
+        // The same flag rowToCall carries. Two mappers produce a call — this
+        // one for local events, rowToCall for the rest — and a field added to
+        // one alone is present or absent depending on which branch a row came
+        // through, which reads as an intermittent fault.
+        escalatedUnanswered: !!(e.raw as any)?.escalatedUnanswered,
         local: true
       }));
     // Verification calls count as calls. A workspace sending nothing but OTP was
