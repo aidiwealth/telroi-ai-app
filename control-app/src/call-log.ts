@@ -59,6 +59,11 @@ export interface CallLogInput {
   startedAt?: Date;
   duration?: number;
   wait?: number;
+  // Somebody asked for a person and did not get one — the ring timed out, or
+  // they hung up while it rang. Worth its own flag because it cannot be inferred
+  // from the status: the AI answers every call, so every one of them is
+  // 'completed' and a missed-call count built on that is always zero.
+  escalatedUnanswered?: boolean;
   // Seconds a human spent on a call the AI handed over. Kept apart from duration,
   // which stays the whole conversation.
   agentSeconds?: number;
@@ -96,7 +101,12 @@ export function logCall(input: CallLogInput): void {
         agentSeconds: input.agentSeconds ?? null,
         user: input.user ?? null,
         wait: input.wait ?? null,
-        raw: input.raw ?? {}
+        // Merged into raw rather than given a column: it may prove better
+        // expressed differently once it is used, and the conflict clause
+        // concatenates raw, so a later status update cannot erase it.
+        raw: input.escalatedUnanswered
+          ? { ...(input.raw ?? {}), escalatedUnanswered: true }
+          : (input.raw ?? {})
       }).onConflictDoUpdate({
         target: [schema.callEvents.tenantId, schema.callEvents.callid],
         set: {

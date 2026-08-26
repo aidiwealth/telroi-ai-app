@@ -457,7 +457,12 @@ async function main() {
             // nothing to attach to, so the leg stays unlogged as before rather
             // than creating a row the customer would find baffling.
             onStatus: escCallId ? (status, details) => {
-              if (status !== 'ended' && status !== 'answered') return;
+              // 'no-answer' was discarded, so a caller who asked for a person
+              // and got nobody left no trace — the call stayed 'completed' from
+              // the AI answering it, and a missed-call alert built on that would
+              // never have fired. It is the one outcome worth surfacing: the
+              // agent dealt with everything else.
+              if (status !== 'ended' && status !== 'answered' && status !== 'no-answer') return;
               const agent = details?.endpoint ? details.endpoint.replace(/^PJSIP\//, '') : undefined;
               logCall({
                 // A prefix, not the whole id — the address can't carry a full
@@ -467,7 +472,11 @@ async function main() {
                 // latter meant an escalated call was marked answered and stayed
                 // there — never reaching a terminal status, so never charged.
                 // Six calls, but the same word in the next path would be more.
-                status: status === 'ended' ? 'completed' : 'answered', user: agent,
+                status: status === 'ended' ? 'completed' : status === 'no-answer' ? 'completed' : 'answered', user: agent,
+                // Somebody wanted a person and did not get one — the ring timed
+                // out, or they hung up while it rang. Distinct from a missed
+                // call in the ordinary sense, since the AI answers everything.
+                escalatedUnanswered: status === 'no-answer' ? true : undefined,
                 agentSeconds: status === 'ended' ? Math.round((Date.now() - escStart) / 1000) : undefined
               } as any);
             } : undefined
