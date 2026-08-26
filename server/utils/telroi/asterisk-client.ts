@@ -152,7 +152,12 @@ export class AsteriskClient {
       wait: e.wait || 0,
       duration: e.duration || 0,
       record: e.recordingUrl || undefined,
-      rating: e.rating ?? undefined
+      rating: e.rating ?? undefined,
+      // Somebody asked for a person and got nobody. A field rather than left in
+      // raw, so an app need not parse JSON and a client can be shown a number
+      // that means something: a missed-call count built on status is always
+      // zero, the AI having answered everything.
+      escalatedUnanswered: !!(raw as any)?.escalatedUnanswered
     };
   }
 
