@@ -127,10 +127,7 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
         const webrtc = body.webrtc === true || body.webrtc === 'true';
         if (!tenantId) return send(res, 400, { ok: false, error: 'tenantId required' });
         const context = body.context ? String(body.context).trim() : undefined;
-        // A native client registers over TLS; the default is UDP, which is right
-        // for a trunk and wrong for a phone.
-        const transport = body.transport ? String(body.transport).trim() : undefined;
-        const result = provisionEndpoint(tenantId, label, webrtc, context, transport);
+        const result = provisionEndpoint(tenantId, label, webrtc, context);
         log(`provisioned ${result.username} for tenant ${tenantId}`);
         return send(res, 200, { ok: true, ...result });
       }

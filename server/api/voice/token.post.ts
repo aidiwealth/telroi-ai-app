@@ -32,11 +32,8 @@ export default defineEventHandler(async (event) => {
   const registerOn = (client === 'native' || purpose !== 'dial') ? 'telroi' : dial.provider;
   if (registerOn === 'telroi') {
     try {
-      // A browser gets the WebRTC endpoint, a native app gets one with plain
-      // RTP over TLS. Offering DTLS-SRTP to a native SIP client returns 488
-      // whatever codecs it has enabled, so they cannot share an endpoint.
-      const { ensureUserEndpoint } = await import('~/server/utils/provision-agent');
-      await ensureUserEndpoint(s.tenantId, s.userId, client === 'native' ? 'native' : 'browser');
+      const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
+      await ensureUserWebrtcEndpoint(s.tenantId, s.userId);
     } catch (e: any) {
       throw apiError('voice_not_configured', e?.message || 'Browser calling could not be set up. Try again.', 503);
     }
@@ -61,7 +58,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // The number the dialer selected is the caller ID — the user picked it.
-    const tok = await voiceTokenFor(registerOn, `tenant_${s.tenantId}_${s.userId}`, dial.fromNumber, client === 'native' ? 'native' : 'browser');
+    const tok = await voiceTokenFor(registerOn, `tenant_${s.tenantId}_${s.userId}`, dial.fromNumber);
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready, dialPrefix };
   } catch (e: any) {
     throw apiError('voice_not_configured', e?.message || 'Voice provider not configured', 503);
