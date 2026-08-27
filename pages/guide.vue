@@ -17,7 +17,14 @@
     </header>
 
     <div class="gd-stage">
-      <aside class="gd-rail">
+      <!-- On a phone the rail becomes a single row that opens on tap: 17 steps
+           stacked above the content would push the first screen off the fold. -->
+      <button class="gd-railtoggle" @click="railOpen = !railOpen">
+        <span>{{ cur ? cur.t : 'Contents' }}</span>
+        <span class="gd-caret" :class="{ up: railOpen }">&#9662;</span>
+      </button>
+
+      <aside class="gd-rail" :class="{ open: railOpen }">
         <div class="gd-railhead">
           <div class="gd-brand">The platform</div>
           <p class="gd-brandsub">From the front page to a live call, in {{ steps.length }} screens.</p>
@@ -27,7 +34,7 @@
             <div class="gd-grp">{{ g.g }}</div>
             <button v-for="s in g.items" :key="s.id"
                     class="gd-link" :class="{ on: active === s.id }"
-                    @click="go(s.id)">
+                    @click="go(s.id); railOpen = false">
               <span class="gd-lbl">{{ s.t }}</span>
             </button>
           </template>
@@ -120,6 +127,7 @@ const next = computed(() => steps.value[idx.value + 1] || null);
    in visitor, and empty for everyone else, so nothing needs fetching. */
 const auth = useAuthStore();
 const menu = ref(false);
+const railOpen = ref(false);
 const signedIn = computed(() => !!auth.user);
 const initials = computed(() => {
   const n = auth.user?.name || auth.user?.email || '';
@@ -244,10 +252,28 @@ function go(id: string) {
   border-top: 1px solid var(--rule); }
 .gd-sp { flex: 1; }
 
+/* Desktop keeps the rail open beside the content and has no need of a toggle. */
+.gd-railtoggle { display: none; }
+
 @media (max-width: 900px) {
-  .gd-stage { grid-template-columns: 1fr; gap: 24px; }
-  .gd-rail { position: static; max-height: none; }
+  .gd-stage { grid-template-columns: 1fr; gap: 0; }
   .gd-h { font-size: 23px; }
   .gd-frame { height: 560px; margin-bottom: -224px; }
+
+  .gd-railtoggle { display: flex; align-items: center; justify-content: space-between;
+    width: 100%; gap: 12px; padding: 12px 15px; margin-bottom: 14px;
+    border: 1px solid var(--rule); border-radius: var(--radius);
+    background: var(--paper); font-size: 13.5px; font-weight: 600; text-align: left; }
+  .gd-caret { color: var(--ink-mute); font-size: 11px; transition: transform .2s; }
+  .gd-caret.up { transform: rotate(180deg); }
+
+  /* Closed by default: seventeen steps stacked above the content would push the
+     screen itself off the fold, which is the thing somebody came to look at. */
+  .gd-rail { position: static; max-height: none; display: none;
+    border: 1px solid var(--rule); border-radius: var(--radius);
+    padding: 14px 15px; margin-bottom: 20px; background: var(--paper); }
+  .gd-rail.open { display: block; }
+  .gd-railhead { display: none; }
+  .gd-grp:first-child { margin-top: 0; }
 }
 </style>
