@@ -42,6 +42,7 @@
           <a href="#introduction" class="docs-side-link" :class="{ on: activeId === 'introduction' }" @click="go('introduction')">{{ t('introduction') }}</a>
           <a href="#authentication" class="docs-side-link" :class="{ on: activeId === 'authentication' }" @click="go('authentication')">{{ t('authentication') }}</a>
           <a href="#errors" class="docs-side-link" :class="{ on: activeId === 'errors' }" @click="go('errors')">{{ t('errors') }}</a>
+          <a href="#livecall" class="docs-side-link" :class="{ on: activeId === 'livecall' }" @click="go('livecall')">{{ t('lcTitle') }}</a>
           <div v-for="tag in tags" :key="tag.name" class="docs-side-group">
             <div class="docs-side-grouphead">
               <span class="docs-side-icon" v-html="tagIcon(tag.name)" />
@@ -147,6 +148,44 @@
 
           <h3 class="docs-h3">{{ t('rateLimits') }}</h3>
           <p>{{ t('rateLimitBody') }}</p>
+        </section>
+
+        <!-- Live Call. Not part of the REST API, but it is the thing developers
+             embed most often and the mistakes are predictable. -->
+        <section id="livecall" class="docs-sec">
+          <h2>{{ t('lcTitle') }}</h2>
+          <p>{{ t('lcSub') }}</p>
+
+          <h3 class="docs-h3">{{ t('lcInstall') }}</h3>
+          <p>{{ t('lcInstallBody') }}</p>
+          <CodeBlock label="HTML" :code="lcInstallExample" />
+
+          <table class="docs-ptable">
+            <thead><tr><th>{{ t('lcAttrs') }}</th><th>{{ t('colDescription') }}</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code class="docs-param-name">data-telroi-key</code></td>
+                <td><span class="docs-pdesc">{{ t('lcKeyDesc') }}</span></td>
+              </tr>
+              <tr>
+                <td><code class="docs-param-name">data-telroi-launcher</code></td>
+                <td><span class="docs-pdesc">{{ t('lcLauncherDesc') }}</span></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3 class="docs-h3">{{ t('lcApi') }}</h3>
+          <p>{{ t('lcApiBody') }}</p>
+          <CodeBlock label="HTML" :code="lcOpenExample" />
+          <p>{{ t('lcTiming') }}</p>
+
+          <h3 class="docs-h3">{{ t('lcOnCall') }}</h3>
+          <p>{{ t('lcOnCallBody') }}</p>
+          <CodeBlock label="HTML" :code="lcOnCallExample" />
+
+          <h3 class="docs-h3">{{ t('lcSize') }}</h3>
+          <p>{{ t('lcSizeBody') }}</p>
+          <p>{{ t('lcKeyWarn') }}</p>
         </section>
 
         <!-- Endpoints -->
@@ -259,6 +298,21 @@ const I18N: Record<string, Record<string, string>> = {
     capSpeechName: 'Speech', capSpeechDesc: 'Text-to-speech synthesis and speech-to-text transcription via simple endpoints.',
     capVoiceName: 'Voice calls', capVoiceDesc: 'Place and manage calls programmatically across your provisioned numbers.',
     startBuilding: 'Start building',
+    lcTitle: 'Live Call widget',
+    lcSub: 'A button on your site that lets a visitor talk to you without dialling. They click, you get a call, and it rings your team like any other — because it is one.',
+    lcInstall: 'Installing it',
+    lcInstallBody: 'One script tag, before the closing body tag. The key identifies which workspace the call reaches and which route answers it.',
+    lcAttrs: 'Attributes',
+    lcKeyDesc: 'Required. Identifies your workspace and the route the call takes.',
+    lcLauncherDesc: 'Optional. Set to none to suppress the floating button when you raise the panel from your own control. Defaults to auto.',
+    lcApi: 'Opening it yourself',
+    lcApiBody: 'The script attaches window.TelroiLiveCall once it has initialised. Call open() from your own button — a link in your navigation, a call-to-action mid-page — and the panel appears without a floating launcher.',
+    lcTiming: 'The method exists only after the script has loaded. Calling it from code that runs earlier will find nothing there, so bind it to a user action rather than to page load, or check for it first.',
+    lcOnCall: 'Knowing when a call starts',
+    lcOnCallBody: 'Set onCall before the script loads and it will be invoked when a session begins, with the session id, where it routed, and whether an AI voice answered. Useful for your own analytics.',
+    lcSize: 'How it appears',
+    lcSizeBody: 'On a desktop the panel is a card of about 360px over a dimmed page. Below 640px it fills the screen instead, because a small rounded card on a handset leaves a strip of page around something somebody is trying to talk into. The size is decided each time the panel opens, so a rotated tablet gets the right shape.',
+    lcKeyWarn: 'The key is visible in your page source by design — it has to be, for the script to read it. It identifies a route rather than granting account access, but treat it as a public support line: anybody who copies it can place a call that rings your team and draws from your wallet.',
     taskOtp: 'Send a voice OTP', taskOtpDesc: 'Place a call that reads a one-time code aloud',
     taskTts: 'Synthesize speech', taskTtsDesc: 'Turn text into natural-sounding audio',
     taskStt: 'Transcribe audio', taskSttDesc: 'Convert recorded speech into text',
@@ -365,7 +419,8 @@ const searchIndexData = computed(() => {
     { id: 'introduction', title: t('introduction'), group: t('apiTitle') },
     { id: 'authentication', title: t('authentication'), group: t('apiTitle') },
     { id: 'capabilities', title: t('capabilities'), group: t('apiTitle') },
-    { id: 'errors', title: t('errors'), group: t('apiTitle') }
+    { id: 'errors', title: t('errors'), group: t('apiTitle') },
+    { id: 'livecall', title: t('lcTitle'), group: t('apiTitle') }
   ];
   const ops = operations.value.map((o) => ({ id: o.id, title: o.summary, group: o.tag, extra: `${o.method} ${o.path}` }));
   return [...staticSecs, ...ops];
@@ -448,6 +503,32 @@ const quickstartSamples = computed(() => buildSamples('post', '/v1/otp', {
 
 const authExample = computed(() => `curl ${appBase.value || 'https://app.telroi.ai'}/v1/numbers \\
   -H "Authorization: Bearer tlr_live_xxx"`);
+const lcInstallExample = `<script src="https://app.telroi.ai/widget/v1.js"
+  data-telroi-key="wgt_your_key_here"></scr` + `ipt>`;
+
+const lcOpenExample = `<!-- Your own control, anywhere on the page -->
+<button id="talk-to-us">Talk to us</button>
+
+<script>
+  document.getElementById('talk-to-us').onclick = function () {
+    // Bound to a click rather than to page load: the method exists only once
+    // the widget script has initialised.
+    if (window.TelroiLiveCall && window.TelroiLiveCall.open) {
+      window.TelroiLiveCall.open();
+    }
+  };
+</scr` + `ipt>`;
+
+const lcOnCallExample = `<script>
+  // Set before the widget script loads, so it is there when a call begins.
+  window.TelroiLiveCall = { onCall: function (c) {
+    console.log(c.sessionId, c.routedTo, c.voice);
+  } };
+</scr` + `ipt>
+<script src="https://app.telroi.ai/widget/v1.js"
+  data-telroi-key="wgt_your_key_here"
+  data-telroi-launcher="none"></scr` + `ipt>`;
+
 const errorExample = `{
   "error": {
     "code": "unauthorized",
