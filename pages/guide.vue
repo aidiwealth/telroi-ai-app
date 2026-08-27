@@ -1,8 +1,19 @@
 <template>
   <div class="gd">
     <header class="gd-top">
-      <NuxtLink to="/" class="gd-back">&larr; Back to Telroi</NuxtLink>
       <span class="gd-ws">A guided tour</span>
+      <span class="gd-sp" />
+      <!-- Signed out this is a prospect, so the useful thing is a way in.
+           Signed in it is a client who came from their dashboard and wants a
+           way back. -->
+      <NuxtLink v-if="!signedIn" to="/login" class="gd-signin">Sign in</NuxtLink>
+      <div v-else class="gd-me" @click="menu = !menu">
+        <span class="gd-av">{{ initials }}</span>
+        <div v-if="menu" class="gd-menu">
+          <NuxtLink to="/" class="gd-mi">Return to dashboard</NuxtLink>
+          <NuxtLink to="/settings" class="gd-mi">Settings</NuxtLink>
+        </div>
+      </div>
     </header>
 
     <div class="gd-stage">
@@ -74,13 +85,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { TOUR } from '~/composables/useGuideTour';
+import { useAuthStore } from '~/stores/auth';
 
 /* Its own page rather than the app shell: somebody being walked through the
    platform is reading, not navigating. Nothing here reads the caller's
    workspace — the setup panel in their sidebar already tracks what they have
    done, and keeping this independent of it is also what lets an admin open it. */
 definePageMeta({ layout: 'bare' });
-useHead({ title: 'A guided tour — Telroi' });
+useHead({
+  title: 'A guided tour — Telroi',
+  // The same Live Call widget the marketing site offers visitors. Somebody
+  // being walked through the product should be able to ask a question without
+  // finding a contact page first.
+  script: [{
+    src: 'https://app.telroi.ai/widget/v1.js',
+    'data-telroi-key': 'wgt_ec9ae0fdd28f1a2a4a73b0a65dde9437',
+    async: true
+  }]
+});
 
 const steps = computed(() => {
   let n = 0;
@@ -92,6 +114,18 @@ const cur  = computed(() => steps.value.find(s => s.id === active.value) || null
 const idx  = computed(() => steps.value.findIndex(s => s.id === active.value));
 const prev = computed(() => steps.value[idx.value - 1] || null);
 const next = computed(() => steps.value[idx.value + 1] || null);
+
+/* Who is reading. A prospect gets a way in; a client who wandered here from
+   their dashboard gets a way back. The store is already populated for a signed-
+   in visitor, and empty for everyone else, so nothing needs fetching. */
+const auth = useAuthStore();
+const menu = ref(false);
+const signedIn = computed(() => !!auth.user);
+const initials = computed(() => {
+  const n = auth.user?.name || auth.user?.email || '';
+  return n.split(/[\s@.]+/).filter(Boolean).slice(0, 2)
+    .map((w: string) => w[0]?.toUpperCase()).join('') || '?';
+});
 
 const external = (u: string) => /^https?:/.test(u);
 const pretty = (u: string) => external(u) ? u.replace(/^https?:\/\//, '') : 'app.telroi.ai' + u;
@@ -114,6 +148,19 @@ function go(id: string) {
 .gd-top { display: flex; align-items: center; justify-content: space-between;
   padding-bottom: 18px; margin-bottom: 26px; border-bottom: 1px solid var(--rule); }
 .gd-back { font-size: 12.5px; color: var(--ink-mute); text-decoration: none; }
+.gd-signin { font-size: 12.5px; font-weight: 600; color: var(--signal);
+  text-decoration: none; padding: 6px 14px; border-radius: 999px;
+  background: var(--signal-soft); }
+.gd-me { position: relative; cursor: pointer; }
+.gd-av { width: 28px; height: 28px; border-radius: 50%; background: var(--signal);
+  color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center;
+  justify-content: center; }
+.gd-menu { position: absolute; right: 0; top: 36px; min-width: 178px; z-index: 20;
+  background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius);
+  padding: 5px; box-shadow: 0 12px 30px -10px rgba(10, 10, 11, .2); }
+.gd-mi { display: block; font-size: 12.5px; color: var(--ink); text-decoration: none;
+  padding: 8px 11px; border-radius: 7px; }
+.gd-mi:hover { background: var(--paper-3); }
 .gd-back:hover { color: var(--ink); }
 .gd-ws { font-size: 12px; color: var(--ink-mute); }
 

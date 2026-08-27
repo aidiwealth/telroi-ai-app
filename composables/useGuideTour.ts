@@ -24,22 +24,6 @@ export interface TourStep {
 export const TOUR: { g: string; items: TourStep[] }[] = [
   { g: 'Welcome to Telroi', items: [
     {
-      id: 'front', t: 'What Telroi is',
-      // A link rather than a frame: the marketing site is served as static files
-      // from object storage, so the frame-ancestors header in its Nuxt config
-      // never reaches the response and the frame comes back blank. Worth fixing
-      // in the hosting spec, not here.
-      ext: 'https://telroi.ai',
-      lede: 'Phone numbers your business can answer three ways: a person, a team, or an AI agent that picks up when nobody is free.',
-      body: [
-        'Everything runs in the browser &mdash; no handsets to buy, no lines to install, no engineer to book.',
-        'You pay for what you use from a prepaid wallet, so there is no contract to escape and no bill you did not expect.',
-        'The same number can be answered by a person today and an agent tomorrow. Nothing is wired in.'
-      ],
-      know: ['Numbers available across Nigeria and internationally',
-             'One workspace holds your numbers, team, call history and money']
-    },
-    {
       id: 'login', t: 'Signing in',
       src: '/login?demo=1',
       lede: 'There are no passwords. You enter your email, we send a six-digit code, and that is the sign-in.',
