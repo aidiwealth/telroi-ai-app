@@ -22,6 +22,9 @@ const WIDGET_JS = String.raw`(function () {
     || (function () { var all = document.querySelectorAll('script[data-telroi-key],script[src*="/widget/v1.js"]'); return all.length ? all[all.length - 1] : null; })();
   var KEY = S && S.getAttribute('data-telroi-key');
   if (!KEY) { console.warn('[Telroi] data-telroi-key missing'); return; }
+  // data-telroi-launcher="none" suppresses the floating button, for embedders
+  // who raise the panel from their own control via TelroiLiveCall.open().
+  var LAUNCHER = (S && S.getAttribute('data-telroi-launcher')) || 'auto';
   var BASE = '__BASE__';
   var userId = S.getAttribute('data-user-id') || '';
   var userName = S.getAttribute('data-user-name') || '';
@@ -91,9 +94,19 @@ const WIDGET_JS = String.raw`(function () {
     bubble.onmouseenter = function () { bubble.style.transform = (isMiddle ? 'translateY(-50%) ' : '') + 'scale(1.06)'; bubble.style.transform = 'scale(1.06)'; };
     bubble.onmouseleave = function () { bubble.style.transform = 'scale(1)'; };
 
+    // Below a handset width the panel fills the screen, so the overlay must not
+    // hold it away from the edges.
+    var narrowPad = window.matchMedia('(max-width:640px)').matches;
     // Centered modal overlay over the whole page (matches the to-do modal).
-    var overlay = el('div', 'display:none;position:fixed;inset:0;z-index:2147483001;background:rgba(10,10,11,.40);align-items:center;justify-content:center;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif');
-    var panel = el('div', 'width:100%;max-width:360px;max-height:84vh;display:flex;flex-direction:column;background:#fff;border-radius:20px;box-shadow:0 32px 80px rgba(10,10,11,.32),0 2px 8px rgba(10,10,11,.08);overflow:hidden;animation:tlrPop .22s cubic-bezier(.16,1,.3,1)');
+    var overlay = el('div', 'display:none;position:fixed;inset:0;z-index:2147483001;background:rgba(10,10,11,.40);align-items:center;justify-content:center;padding:' + (narrowPad ? '0' : '24px') + ';font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Helvetica,Arial,sans-serif');
+    // Full screen on a phone, a floating card above it. A 360px card with
+    // rounded corners is a website's shape; on a handset it leaves a strip of
+    // page around a panel somebody is trying to talk into.
+    var narrow = window.matchMedia('(max-width:640px)').matches;
+    var panelCss = narrow
+      ? 'width:100%;max-width:none;height:100%;max-height:none;border-radius:0;'
+      : 'width:100%;max-width:360px;max-height:84vh;border-radius:20px;';
+    var panel = el('div', panelCss + 'display:flex;flex-direction:column;background:#fff;box-shadow:0 32px 80px rgba(10,10,11,.32),0 2px 8px rgba(10,10,11,.08);overflow:hidden;animation:tlrPop .22s cubic-bezier(.16,1,.3,1)');
     overlay.appendChild(panel);
     overlay.onclick = function (e) { if (e.target === overlay) closePanel(); };
 
@@ -348,9 +361,35 @@ const WIDGET_JS = String.raw`(function () {
     function thanks() { bodyWrap.innerHTML = '<div style="text-align:center;padding:18px 0;font-size:14px;color:#333">Thanks for your feedback!</div>'; setTimeout(function(){ closePanel(); reset(); }, 1500); }
     function reset() { sessionId = null; showForm(); }
 
-    function openPanel() { overlay.style.display = 'flex'; }
+    // Sized when it opens rather than when the page loaded: a window resized
+    // or a tablet rotated after load would otherwise keep whichever shape it
+    // happened to start with.
+    function fitPanel() {
+      var narrow = window.matchMedia('(max-width:640px)').matches;
+      overlay.style.padding = narrow ? '0' : '24px';
+      panel.style.maxWidth = narrow ? 'none' : '360px';
+      panel.style.height = narrow ? '100%' : 'auto';
+      panel.style.maxHeight = narrow ? 'none' : '84vh';
+      panel.style.borderRadius = narrow ? '0' : '20px';
+    }
+    window.addEventListener('resize', function () {
+      if (overlay.style.display === 'flex') fitPanel();
+    });
+
+    function openPanel() { fitPanel(); overlay.style.display = 'flex'; }
     function closePanel() { overlay.style.display = 'none'; }
     bubble.onclick = function () { openPanel(); };
+
+    // The panel, openable from anywhere. An embedder with their own button —
+    // our mobile app, or a site with a "talk to us" link in its own nav —
+    // should not have to accept a floating launcher positioned for a website
+    // corner in order to offer a call.
+    window.TelroiLiveCall = window.TelroiLiveCall || {};
+    window.TelroiLiveCall.open = function () { openPanel(); };
+    window.TelroiLiveCall.close = function () { closePanel(); };
+
+    // And no launcher at all, for embedders who have their own.
+    if (LAUNCHER === 'none') root.style.display = 'none';
     showForm();
     root.appendChild(bubble);
     document.body.appendChild(root);
