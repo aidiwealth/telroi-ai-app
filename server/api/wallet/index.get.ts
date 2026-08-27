@@ -1,10 +1,14 @@
 // GET /api/wallet -> balance, currency, plan
 import { requireTenantManager } from '~/server/utils/api';
+import { demoIfAsked } from '~/server/utils/demo';
 import { getOrCreateWallet } from '~/server/utils/wallet';
 import { useDb } from '~/server/db';
 import { eq } from 'drizzle-orm';
 export default defineEventHandler(async (event) => {
   const s = await requireTenantManager(event);
+  // The guided tour frames this page. Sample data rather than an empty
+  // table, and never a database read — see server/utils/demo.ts.
+  const demo = demoIfAsked(event, 'wallet'); if (demo) return demo;
   const w = await getOrCreateWallet(s.tenantId);
   // Postpaid changes what this number means: it goes negative by design, and a
   // client watching that without context would reasonably think something had

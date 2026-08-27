@@ -2,6 +2,7 @@
 // What the client needs to render their go-live state: whether they're live,
 // where compliance stands, and how much sandbox allowance is left.
 import { requireTenant } from '~/server/utils/api';
+import { demoIfAsked } from '~/server/utils/demo';
 import { goLiveState } from '~/server/utils/go-live';
 import { sandboxStatus } from '~/server/utils/sandbox-limits';
 import { useDb, schema } from '~/server/db';
@@ -9,6 +10,9 @@ import { eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
+  // Framed by the guided tour: sample data rather than an empty table,
+  // and never a database read. See server/utils/demo.ts.
+  const demo = demoIfAsked(event, 'goLive'); if (demo) return demo;
   const [live, sandbox] = await Promise.all([
     goLiveState(s.tenantId),
     sandboxStatus(s.tenantId)

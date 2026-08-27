@@ -19,6 +19,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   const isLogin = to.path === '/login' || to.path.startsWith('/login');
   const isOnboarding = to.path === '/onboarding' || to.path.startsWith('/onboarding');
+  // The guided tour. It reads fixtures rather than a workspace, so it needs a
+  // signed-in user but not a finished one — which is what lets a platform admin
+  // with no workspace of their own open it to show somebody.
+  const isGuide = to.path === '/guide' || to.path.startsWith('/guide');
 
   // Not signed in -> the login page (allow the login page itself through).
   if (!auth.isAuthed) {
@@ -27,7 +31,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   // Signed in but workspace setup incomplete -> the onboarding wizard
   // (allow the wizard itself through to avoid a redirect loop).
-  if (auth.needsOnboarding && !isOnboarding) {
+  if (auth.needsOnboarding && !isOnboarding && !isGuide) {
     return navigateTo('/onboarding');
   }
 

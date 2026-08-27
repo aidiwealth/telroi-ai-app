@@ -1,7 +1,17 @@
 // Thin wrapper around $fetch that surfaces the { error: { code, message } } envelope.
 export function useApi() {
+  // The guided tour frames real pages and asks them for sample data. A page
+  // opened as /wallet?demo=1 has to pass that on, or its own fetch goes to the
+  // API without it and the fixture never appears. Read-only methods only: a
+  // tour should never be able to write, whatever it asks for.
+  const route = useRoute();
+  const demo = () => String(route?.query?.demo || '') === '1';
+
   async function call<T>(url: string, opts: any = {}): Promise<T> {
     try {
+      if (demo() && (opts.method || 'GET') === 'GET') {
+        opts = { ...opts, query: { ...(opts.query || {}), demo: '1' } };
+      }
       return await $fetch<T>(url, opts);
     } catch (e: any) {
       const msg = e?.data?.error?.message || e?.data?.message || e?.statusMessage || 'Something went wrong';

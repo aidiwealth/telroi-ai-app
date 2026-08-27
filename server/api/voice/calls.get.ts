@@ -3,11 +3,15 @@
 // user's persisted rating, not just whatever the PBX returned.
 import { inArray, and, eq, gte, desc } from 'drizzle-orm';
 import { requireTenant } from '~/server/utils/api';
+import { demoIfAsked } from '~/server/utils/demo';
 import { telroiFor } from '~/server/utils/tenant';
 import { useDb, schema } from '~/server/db';
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
+  // Framed by the guided tour: sample data rather than an empty table,
+  // and never a database read. See server/utils/demo.ts.
+  const demo = demoIfAsked(event, 'calls'); if (demo) return demo;
   const q = getQuery(event);
   const client = await telroiFor(s.tenantId);
 

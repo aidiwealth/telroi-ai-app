@@ -37,7 +37,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'login', t: 'Signing in',
-      src: '/login',
+      src: '/login?demo=1',
       lede: 'There are no passwords. You enter your email, we send a six-digit code, and that is the sign-in.',
       body: [
         'Type your work email. If your company has a domain, use it &mdash; colleagues joining later are easier to recognise.',
@@ -50,7 +50,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'workspace', t: 'Your workspace',
-      src: '/settings',
+      src: '/settings?demo=1',
       lede: 'The workspace holds everything. A few details here decide what the rest of the platform can do.',
       body: [
         'Your business name appears on invoices and to anyone you invite.',
@@ -66,7 +66,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
   { g: 'Going live', items: [
     {
       id: 'wallet', t: 'Funding your wallet',
-      src: '/wallet',
+      src: '/wallet?demo=1',
       lede: 'Telroi is prepaid. Calls, numbers and AI draw from a wallet, so no invoice arrives at month end and no direct debit runs against your account.',
       body: [
         '<b>Bank transfer</b> &mdash; your workspace gets its own dedicated account number, permanently. Transfer to it from your bank and the balance moves on its own: no reference to quote, nothing to send us. Cheaper, and better for the amount you would put in at the start of a month.',
@@ -80,7 +80,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'compliance', t: 'Passing compliance',
-      src: '/settings',
+      src: '/settings?demo=1',
       lede: 'Before a real number can be issued, regulators require that it traces to an identified business. What is asked for depends on where you are.',
       body: [
         '<b>In Nigeria</b> the NCC requires a <b>NIN</b> for an individual, or a <b>CAC registration</b> for a company, plus proof of address &mdash; and a signed <b>NCC undertaking</b> confirming the numbers will not be used for fraud, unsolicited marketing or impersonation.',
@@ -96,7 +96,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
   { g: 'Your first number', items: [
     {
       id: 'numbers', t: 'Claiming a number',
-      src: '/numbers',
+      src: '/numbers?demo=1',
       lede: 'A number is what customers dial. What happens after they dial it is entirely yours to decide, and can change whenever you like.',
       body: [
         'Search by country and area. Nigerian numbers come from several carriers; international numbers from our global ones.',
@@ -110,7 +110,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'routing', t: 'Setting up routing',
-      src: '/numbers',
+      src: '/numbers?demo=1',
       lede: 'Open a number and choose what happens when it rings. Four options, and changes take effect on the next call.',
       body: [
         '<b>One person</b> &mdash; a direct line, ringing wherever they are signed in.',
@@ -124,7 +124,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'tab', t: 'Why your browser tab must stay open',
-      src: '/',
+      src: '/?demo=1',
       lede: 'The single most important thing to tell a new team, and the most common cause of &ldquo;our number does not work&rdquo;.',
       body: [
         'Browser calling works only while Telroi is open. <b>A closed tab is an unplugged phone</b> &mdash; the call rings, nobody answers, and the caller hears your unavailable message.',
@@ -140,7 +140,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
   { g: 'Unlocking Telroi AI', items: [
     {
       id: 'van', t: 'Setting up an AI number',
-      src: '/vans',
+      src: '/vans?demo=1',
       lede: 'An agent answers the phone, holds a conversation, and hands over to a person when it should. It is the part of Telroi that changes how a small team handles volume.',
       body: [
         'Give it a name and a voice. Callers hear the name in the greeting, so pick something that suits the business.',
@@ -154,7 +154,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'aikeys', t: 'Managed AI, or your own keys',
-      src: '/ai',
+      src: '/ai?demo=1',
       lede: 'The intelligence behind an agent &mdash; hearing speech, deciding what to say, speaking it aloud &mdash; comes from specialist providers. You can let us handle that, or bring your own accounts.',
       body: [
         '<b>Managed</b> means we provide everything and you pay Telroi per conversation. One bill, no accounts to open, nothing to maintain. Right for almost everyone, and the only sensible way to start.',
@@ -166,7 +166,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'prompt', t: 'Writing instructions that cost less',
-      src: '/vans',
+      src: '/vans?demo=1',
       lede: 'AI is charged by how much the agent hears and says. Well-written instructions cost less and work better, because the thing that makes an agent expensive is the same thing that makes it unhelpful: rambling.',
       body: [
         '<b>Be specific about scope.</b> &ldquo;You answer questions about delivery times, opening hours and order status. For anything else, offer to fetch a colleague.&rdquo; An agent that knows its limits stops sooner.',
@@ -184,7 +184,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
   { g: 'Your team and customers', items: [
     {
       id: 'people', t: 'Inviting people, and what they can do',
-      src: '/people',
+      src: '/people?demo=1',
       lede: 'Adding somebody takes seconds. Deciding what each of them can do takes a moment and saves awkwardness later.',
       body: [
         'Invite by email. They sign in with a code the same way you did &mdash; nothing for you to communicate securely, and no password to set.',
@@ -198,7 +198,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'teams', t: 'Teams that ring together',
-      src: '/teams',
+      src: '/teams?demo=1',
       lede: 'A team is a group that rings at once. Put three salespeople in a Sales team, point a number at it, and all three ring &mdash; first to answer takes the call.',
       body: [
         'Somebody can belong to more than one team. A small business often has everyone in everything, which is fine and worth revisiting as you grow.',
@@ -210,7 +210,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'calls', t: 'Call history and recordings',
-      src: '/calls',
+      src: '/calls?demo=1',
       lede: 'Every call in and out, with who it was, how long it lasted, who dealt with it and what it cost.',
       body: [
         'Open any call for the detail: play the recording if the number records, read a transcript, add a note, or jump to that person&rsquo;s contact record.',
@@ -223,7 +223,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'crm', t: 'Contacts build themselves',
-      src: '/crm',
+      src: '/crm?demo=1',
       lede: 'Anybody who calls you, or who you call, becomes a contact automatically. You never import a list.',
       body: [
         'Open a contact and you see every call you have ever had with them, in order, with your notes against each.',
@@ -238,7 +238,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
   { g: 'Advanced routing', items: [
     {
       id: 'connect', t: 'Building a Connect flow',
-      src: '/connect',
+      src: '/connect?demo=1',
       lede: 'A Connect flow is a call path you draw. Instead of a number ringing one place, it can play a greeting, offer a menu, check the time of day, and send the caller somewhere different depending on what they choose.',
       body: [
         '<b>A menu.</b> Press 1 for sales, 2 for support, 3 for accounts &mdash; each going to a different team.',
@@ -252,7 +252,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'live', t: 'The Live Call widget',
-      src: '/live-call',
+      src: '/live-call?demo=1',
       lede: 'A button on your website that lets a visitor talk to you without dialling anything. They click, you get a call, and it rings your team exactly like a phone call &mdash; because it is one.',
       body: [
         'Choose where it rings: a team, a person, or your AI agent.',
@@ -265,7 +265,7 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'apps', t: 'Connecting other tools',
-      src: '/apps',
+      src: '/apps?demo=1',
       lede: 'Telroi does not have to be where the work ends. Calls, contacts and recordings can reach the tools your team already uses.',
       body: [
         'Browse what is available and connect what fits how you work.',
