@@ -525,7 +525,7 @@ onMounted(async () => {
 
 <style scoped>
 .wal-bd { display: block; font-size: 11.5px; color: var(--ink-mute); margin-top: 2px; }
-.wal-cardfile { padding: 14px 16px; margin: 0 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.wal-cardfile { padding: 18px 20px; margin: 0 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
 .wal-cardfile-h { font-size: 13px; font-weight: 600; color: var(--ink); }
 .wal-cardfile-p { font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin: 4px 0 10px; }
 .wal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin: 26px 0 20px; }

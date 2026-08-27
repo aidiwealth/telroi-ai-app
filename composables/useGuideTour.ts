@@ -68,7 +68,9 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
     },
     {
       id: 'compliance', t: 'Passing compliance',
-      src: '/settings?demo=1',
+      // The tab, not just the page: settings opens on Plan by default, so a
+      // compliance step landing there shows the wrong thing entirely.
+      src: '/settings?tab=compliance&demo=1',
       lede: 'Before a real number can be issued, regulators require that it traces to an identified business. What is asked for depends on where you are.',
       body: [
         '<b>In Nigeria</b> the NCC requires a <b>NIN</b> for an individual, or a <b>CAC registration</b> for a company, plus proof of address &mdash; and a signed <b>NCC undertaking</b> confirming the numbers will not be used for fraud, unsolicited marketing or impersonation.',
