@@ -40,6 +40,12 @@
           <iframe :key="cur.id" :src="cur.src" class="gd-frame" loading="lazy" title="Preview" />
         </div>
 
+        <!-- A step that links out rather than framing. -->
+        <a v-if="cur.ext" :href="cur.ext" target="_blank" class="gd-extlink">
+          <span>{{ pretty(cur.ext) }}</span>
+          <span class="gd-extgo">Open &rarr;</span>
+        </a>
+
         <div class="gd-do">
           <ul class="gd-body">
             <li v-for="(d, i) in cur.body" :key="i" v-html="d" />
@@ -153,6 +159,13 @@ function go(id: string) {
 .gd-frame { width: 166.67%; height: 700px; border: 0; display: block;
   transform: scale(.6); transform-origin: 0 0; margin-bottom: -280px;
   background: var(--paper-2); }
+
+.gd-extlink { display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; border: 1px solid var(--rule); border-radius: var(--radius);
+  padding: 15px 18px; margin-bottom: 22px; background: var(--paper);
+  text-decoration: none; color: var(--ink); font-size: 13.5px; }
+.gd-extlink:hover { border-color: var(--signal); }
+.gd-extgo { font-size: 12px; font-weight: 600; color: var(--signal); flex: 0 0 auto; }
 
 .gd-do { border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px 22px;
   background: var(--paper); }

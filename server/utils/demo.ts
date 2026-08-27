@@ -16,9 +16,22 @@ export function wantsDemo(event: H3Event): boolean {
   return String(getQuery(event).demo || '') === '1';
 }
 
-/** Returns the fixture for `key` when the caller asked for the tour, else null. */
+/**
+ * The fixture for `key`, when the caller asked for the tour.
+ *
+ * This is called BEFORE the endpoint's auth check, so the tour renders for a
+ * signed-out viewer — a prospect, or an admin with no workspace. That places
+ * the whole weight of the thing on this function, so it is deliberately narrow:
+ *
+ *   - GET only. A tour must never be able to write, whatever it asks for.
+ *   - Returns a constant. It takes no tenant id, opens no connection, and
+ *     cannot reach the database however it is called.
+ *   - Unknown keys return null, so an endpoint falls through to its normal
+ *     auth check rather than answering with something it should not.
+ */
 export function demoIfAsked(event: H3Event, key: keyof typeof FIXTURES) {
   if (!wantsDemo(event)) return null;
+  if ((event.node?.req?.method || 'GET').toUpperCase() !== 'GET') return null;
   return FIXTURES[key] ?? null;
 }
 

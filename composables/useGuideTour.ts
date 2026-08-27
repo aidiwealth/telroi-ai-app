@@ -25,7 +25,11 @@ export const TOUR: { g: string; items: TourStep[] }[] = [
   { g: 'Welcome to Telroi', items: [
     {
       id: 'front', t: 'What Telroi is',
-      src: 'https://telroi.ai',
+      // A link rather than a frame: the marketing site is served as static files
+      // from object storage, so the frame-ancestors header in its Nuxt config
+      // never reaches the response and the frame comes back blank. Worth fixing
+      // in the hosting spec, not here.
+      ext: 'https://telroi.ai',
       lede: 'Phone numbers your business can answer three ways: a person, a team, or an AI agent that picks up when nobody is free.',
       body: [
         'Everything runs in the browser &mdash; no handsets to buy, no lines to install, no engineer to book.',

@@ -9,10 +9,10 @@ import { useDb, schema } from '~/server/db';
 import { eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
-  // Framed by the guided tour: sample data rather than an empty table,
+    // Framed by the guided tour: sample data rather than an empty table,
   // and never a database read. See server/utils/demo.ts.
   const demo = demoIfAsked(event, 'goLive'); if (demo) return demo;
+  const s = await requireTenant(event);
   const [live, sandbox] = await Promise.all([
     goLiveState(s.tenantId),
     sandboxStatus(s.tenantId)

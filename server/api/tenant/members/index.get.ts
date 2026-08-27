@@ -4,10 +4,10 @@ import { requireTenant } from '~/server/utils/api';
 import { demoIfAsked } from '~/server/utils/demo';
 import { useDb, schema } from '~/server/db';
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
-  // Framed by the guided tour: sample data rather than an empty table,
+    // Framed by the guided tour: sample data rather than an empty table,
   // and never a database read. See server/utils/demo.ts.
   const demo = demoIfAsked(event, 'people'); if (demo) return demo;
+  const s = await requireTenant(event);
   const db = useDb();
   const rows = await db.select({
     userId: schema.users.id,

@@ -4,10 +4,10 @@ import { hasFeature } from '~/server/utils/entitlements';
 import { listContacts, syncCallsToContacts } from '~/server/utils/crm';
 import { pageParams } from '~/server/utils/paginate';
 export default defineEventHandler(async (event) => {
-  const s = await requireTenant(event);
-  // Framed by the guided tour: sample data rather than an empty table,
+    // Framed by the guided tour: sample data rather than an empty table,
   // and never a database read. See server/utils/demo.ts.
   const demo = demoIfAsked(event, 'contacts'); if (demo) return demo;
+  const s = await requireTenant(event);
   if (!(await hasFeature(s.tenantId, 'crm'))) throw apiError('feature_locked', 'CRM is part of Telroi One. Upgrade to unlock.', 402);
   // Pull recent inbound call numbers into the CRM first (idempotent; respects
   // the autoLinkCalls setting), so calls flow into contacts automatically.

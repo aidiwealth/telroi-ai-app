@@ -9,10 +9,10 @@ import { useDb, schema } from '~/server/db';
 import { pageParams, paged } from '~/server/utils/paginate';
 
 export default defineEventHandler(async (event) => {
-  const s = await requireTenantManager(event);
-  // Framed by the guided tour: sample data rather than an empty table,
+    // Framed by the guided tour: sample data rather than an empty table,
   // and never a database read. See server/utils/demo.ts.
   const demo = demoIfAsked(event, 'ledger'); if (demo) return demo;
+  const s = await requireTenantManager(event);
   const db = useDb();
   const p = pageParams(event);
 
