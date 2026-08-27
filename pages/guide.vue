@@ -1,28 +1,22 @@
 <template>
   <div class="gd">
-    <!-- A light strip rather than the app's topbar. Somebody reading this is
-         mid-setup, not navigating. -->
     <header class="gd-top">
       <NuxtLink to="/" class="gd-back">&larr; Back to Telroi</NuxtLink>
-      <span class="gd-ws">{{ ws }}</span>
+      <span class="gd-ws">A guided tour</span>
     </header>
 
     <div class="gd-stage">
       <aside class="gd-rail">
         <div class="gd-railhead">
-          <div class="gd-brand">Your setup</div>
-          <p class="gd-brandsub">{{ doneCount }} of {{ steps.length }} done</p>
-          <div class="gd-bar"><div class="gd-fill" :style="{ width: pct + '%' }" /></div>
+          <div class="gd-brand">The platform</div>
+          <p class="gd-brandsub">From the front page to a live call, in {{ steps.length }} screens.</p>
         </div>
         <nav>
-          <template v-for="g in groups" :key="g.label">
-            <div class="gd-grp">{{ g.label }}</div>
-            <button v-for="s in g.steps" :key="s.id"
-                    class="gd-link" :class="{ on: active === s.id, dn: s.done }"
+          <template v-for="g in TOUR" :key="g.g">
+            <div class="gd-grp">{{ g.g }}</div>
+            <button v-for="s in g.items" :key="s.id"
+                    class="gd-link" :class="{ on: active === s.id }"
                     @click="go(s.id)">
-              <span class="gd-dot" :class="{ dn: s.done }">
-                <span v-if="s.done">&#10003;</span><span v-else>{{ s.n }}</span>
-              </span>
               <span class="gd-lbl">{{ s.t }}</span>
             </button>
           </template>
@@ -30,26 +24,26 @@
       </aside>
 
       <section class="gd-main" v-if="cur">
-        <div class="gd-eyebrow">Step {{ cur.n }} of {{ steps.length }}</div>
+        <div class="gd-eyebrow">{{ cur.g }} &middot; {{ cur.n }} of {{ steps.length }}</div>
         <h1 class="gd-h">{{ cur.t }}</h1>
+        <p class="gd-lede">{{ cur.lede }}</p>
 
-        <!-- Where they actually stand, not a description of the feature. -->
-        <div class="gd-state" :class="cur.state.tone">
-          <span class="gd-state-dot" />
-          <div>
-            <div class="gd-state-h">{{ cur.state.h }}</div>
-            <p v-if="cur.state.p">{{ cur.state.p }}</p>
+        <!-- The real page, framed. A drawn copy would drift the next time we
+             changed the design; this cannot. -->
+        <div class="gd-screen" v-if="cur.src">
+          <div class="gd-chrome">
+            <span class="gd-dotc" /><span class="gd-dotc" /><span class="gd-dotc" />
+            <span class="gd-url">{{ pretty(cur.src) }}</span>
+            <a v-if="external(cur.src)" :href="cur.src" target="_blank" class="gd-open">Open</a>
+            <NuxtLink v-else :to="cur.src" class="gd-open">Open</NuxtLink>
           </div>
+          <iframe :key="cur.id" :src="cur.src" class="gd-frame" loading="lazy" title="Preview" />
         </div>
 
         <div class="gd-do">
-          <ol class="gd-steps">
-            <li v-for="(d, i) in cur.doThis" :key="i" v-html="d" />
-          </ol>
-          <div class="gd-actions">
-            <NuxtLink :to="cur.to" class="gd-btn gd-btn-pri">{{ cur.cta }}</NuxtLink>
-            <button v-if="next" class="gd-btn gd-btn-gho" @click="go(next.id)">Skip for now</button>
-          </div>
+          <ul class="gd-body">
+            <li v-for="(d, i) in cur.body" :key="i" v-html="d" />
+          </ul>
         </div>
 
         <div v-if="cur.watch" class="gd-watch">
@@ -64,7 +58,7 @@
         <div class="gd-foot">
           <button v-if="prev" class="gd-btn" @click="go(prev.id)">&larr; {{ prev.t }}</button>
           <span class="gd-sp" />
-          <button v-if="next" class="gd-btn" @click="go(next.id)">{{ next.t }} &rarr;</button>
+          <button v-if="next" class="gd-btn gd-btn-pri" @click="go(next.id)">{{ next.t }} &rarr;</button>
         </div>
       </section>
     </div>
@@ -73,29 +67,32 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { useGuideSteps } from '~/composables/useGuideSteps';
+import { TOUR } from '~/composables/useGuideTour';
 
-/* Its own page rather than the app shell: bare gives a centred logo and a clean
-   field. auth.global.ts already means this is signed-in only, so there is
-   nothing to guard here. */
+/* Its own page rather than the app shell: somebody being walked through the
+   platform is reading, not navigating. Nothing here reads the caller's
+   workspace — the setup panel in their sidebar already tracks what they have
+   done, and keeping this independent of it is also what lets an admin open it. */
 definePageMeta({ layout: 'bare' });
-useHead({ title: 'Your setup — Telroi' });
+useHead({ title: 'A guided tour — Telroi' });
 
-const { ws, steps, groups, doneCount, pct } = useGuideSteps();
+const steps = computed(() => {
+  let n = 0;
+  return TOUR.flatMap(g => g.items.map(it => ({ ...it, n: ++n, g: g.g })));
+});
 
-const active = ref('wallet');
+const active = ref(steps.value[0]?.id || 'front');
 const cur  = computed(() => steps.value.find(s => s.id === active.value) || null);
 const idx  = computed(() => steps.value.findIndex(s => s.id === active.value));
 const prev = computed(() => steps.value[idx.value - 1] || null);
 const next = computed(() => steps.value[idx.value + 1] || null);
 
+const external = (u: string) => /^https?:/.test(u);
+const pretty = (u: string) => external(u) ? u.replace(/^https?:\/\//, '') : 'app.telroi.ai' + u;
+
 onMounted(() => {
-  // A link to a specific step wins; otherwise open at the first thing still
-  // outstanding, since that is what they came for.
   const h = location.hash.slice(1);
-  if (h && steps.value.some(s => s.id === h)) { active.value = h; return; }
-  const first = steps.value.find(s => !s.done);
-  if (first) active.value = first.id;
+  if (h && steps.value.some(s => s.id === h)) active.value = h;
 });
 
 function go(id: string) {
@@ -106,7 +103,7 @@ function go(id: string) {
 </script>
 
 <style scoped>
-.gd { width: 100%; max-width: 1000px; }
+.gd { width: 100%; max-width: 1060px; }
 
 .gd-top { display: flex; align-items: center; justify-content: space-between;
   padding-bottom: 18px; margin-bottom: 26px; border-bottom: 1px solid var(--rule); }
@@ -114,75 +111,63 @@ function go(id: string) {
 .gd-back:hover { color: var(--ink); }
 .gd-ws { font-size: 12px; color: var(--ink-mute); }
 
-.gd-stage { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 44px;
+.gd-stage { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px;
   align-items: start; }
 
-.gd-rail { position: sticky; top: 20px; }
-.gd-railhead { margin-bottom: 20px; }
+.gd-rail { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+.gd-railhead { margin-bottom: 18px; }
 .gd-brand { font-size: 14.5px; font-weight: 600; }
-.gd-brandsub { font-size: 11.5px; color: var(--ink-mute); margin: 3px 0 9px; }
-.gd-bar { height: 3px; background: var(--paper-3); border-radius: 999px; overflow: hidden; }
-.gd-fill { height: 100%; background: var(--signal); border-radius: 999px; transition: width .35s; }
+.gd-brandsub { font-size: 11.5px; color: var(--ink-mute); margin: 3px 0 0; line-height: 1.5; }
 
 .gd-grp { font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
-  color: var(--ink-mute); font-weight: 600; margin: 18px 0 7px; }
+  color: var(--ink-mute); font-weight: 600; margin: 18px 0 6px; }
 .gd-grp:first-child { margin-top: 0; }
-.gd-link { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-  font-size: 13px; color: var(--ink-soft); padding: 6px 9px; border-radius: 8px; border: 0;
-  background: none; cursor: pointer; line-height: 1.4; }
+.gd-link { display: block; width: 100%; text-align: left; font-size: 12.5px;
+  color: var(--ink-soft); padding: 5px 9px; border-radius: 7px; border: 0;
+  background: none; cursor: pointer; line-height: 1.45; }
 .gd-link:hover { background: var(--paper-3); color: var(--ink); }
 .gd-link.on { background: var(--signal-soft); color: var(--signal); font-weight: 600; }
-.gd-dot { width: 19px; height: 19px; border-radius: 50%; background: var(--paper-3);
-  color: var(--ink-mute); font-size: 10.5px; font-weight: 600; display: flex;
-  align-items: center; justify-content: center; flex: 0 0 auto; }
-.gd-dot.dn { background: var(--green-ink, #0a8a5c); color: #fff; }
-.gd-link.on .gd-dot:not(.dn) { background: var(--signal); color: #fff; }
-.gd-link.dn .gd-lbl { color: var(--ink-mute); }
-.gd-link.on.dn .gd-lbl { color: var(--signal); }
 
-.gd-main { max-width: 620px; }
-.gd-eyebrow { font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em;
+.gd-main { max-width: 660px; }
+.gd-eyebrow { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em;
   color: var(--ink-mute); font-weight: 600; margin-bottom: 8px; }
 .gd-h { font-size: 27px; line-height: 1.16; letter-spacing: -.02em; font-weight: 600;
-  margin: 0 0 18px; }
+  margin: 0 0 12px; }
+.gd-lede { font-size: 15.5px; line-height: 1.62; color: var(--ink-soft); margin: 0 0 22px; }
 
-.gd-state { display: flex; gap: 12px; align-items: flex-start; padding: 14px 17px;
-  border-radius: var(--radius); margin-bottom: 22px; background: var(--paper);
-  border: 1px solid var(--rule); }
-.gd-state-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; margin-top: 6px;
-  background: var(--ink-mute); }
-.gd-state-h { font-size: 14px; font-weight: 600; }
-.gd-state p { font-size: 13px; color: var(--ink-soft); margin: 3px 0 0; line-height: 1.55; }
-.gd-state.ok { border-color: color-mix(in srgb, var(--green-ink, #0a8a5c) 30%, var(--rule)); }
-.gd-state.ok .gd-state-dot { background: var(--green-ink, #0a8a5c); }
-.gd-state.wait .gd-state-dot { background: var(--warn); }
-.gd-state.todo .gd-state-dot { background: var(--signal); }
-.gd-state.opt .gd-state-dot { background: var(--rule-2); }
+/* A tablet-ish frame: rounded, a light chrome strip, the page beneath it. */
+.gd-screen { border: 1px solid var(--rule); border-radius: 14px; overflow: hidden;
+  background: var(--paper); margin-bottom: 22px;
+  box-shadow: 0 18px 40px -20px rgba(10, 10, 11, .22); }
+.gd-chrome { height: 34px; background: var(--paper-3); border-bottom: 1px solid var(--rule);
+  display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+.gd-dotc { width: 8px; height: 8px; border-radius: 50%; background: var(--rule-2); flex: 0 0 auto; }
+.gd-url { flex: 1; margin-left: 8px; font-size: 10.5px; color: var(--ink-mute);
+  font-family: var(--font-mono, monospace); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.gd-open { font-size: 10.5px; font-weight: 600; color: var(--signal); text-decoration: none;
+  padding: 3px 9px; border-radius: 999px; background: var(--signal-soft); flex: 0 0 auto; }
+/* Scaled so a desktop layout fits the column and still looks like itself: the
+   width is the inverse of the scale, and the negative margin absorbs the space
+   the untransformed height would otherwise leave behind. */
+.gd-frame { width: 166.67%; height: 700px; border: 0; display: block;
+  transform: scale(.6); transform-origin: 0 0; margin-bottom: -280px;
+  background: var(--paper-2); }
 
-.gd-do { border: 1px solid var(--rule); border-radius: var(--radius); padding: 20px 22px;
+.gd-do { border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px 22px;
   background: var(--paper); }
-.gd-steps { counter-reset: gs; margin: 0; padding: 0; list-style: none; }
-.gd-steps li { counter-increment: gs; position: relative; padding-left: 30px;
-  margin-bottom: 11px; font-size: 13.5px; line-height: 1.62; }
-.gd-steps li:last-child { margin-bottom: 0; }
-.gd-steps li::before { content: counter(gs); position: absolute; left: 0; top: 1px;
-  width: 20px; height: 20px; border-radius: 50%; background: var(--signal-soft);
-  color: var(--signal); font-size: 10.5px; font-weight: 600; display: flex;
-  align-items: center; justify-content: center; }
-.gd-actions { display: flex; gap: 9px; margin-top: 18px; flex-wrap: wrap; }
-
-.gd-btn { font-size: 12.5px; font-weight: 600; padding: 8px 15px; border-radius: 8px;
-  border: 1px solid var(--rule); background: var(--paper); color: var(--ink);
-  cursor: pointer; text-decoration: none; display: inline-block; }
-.gd-btn-pri { background: var(--signal); border-color: var(--signal); color: #fff; }
-.gd-btn-gho { border-color: transparent; color: var(--ink-mute); }
-.gd-btn-gho:hover { color: var(--ink); }
+.gd-body { margin: 0; padding: 0; list-style: none; }
+.gd-body li { position: relative; padding-left: 18px; margin-bottom: 11px;
+  font-size: 13.5px; line-height: 1.65; }
+.gd-body li:last-child { margin-bottom: 0; }
+.gd-body li::before { content: ""; position: absolute; left: 2px; top: .68em; width: 5px;
+  height: 5px; border-radius: 50%; background: var(--signal); opacity: .5; }
 
 .gd-watch { border: 1px solid var(--rule); border-left: 3px solid var(--warn);
   border-radius: var(--radius); padding: 14px 17px; margin-top: 16px; background: var(--paper); }
 .gd-watch-h { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
   font-weight: 600; color: var(--warn); margin-bottom: 4px; }
-.gd-watch p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-soft); }
+.gd-watch p { margin: 0; font-size: 13px; line-height: 1.62; color: var(--ink-soft); }
 
 .gd-know { margin-top: 18px; }
 .gd-know ul { margin: 0; padding: 0; list-style: none; }
@@ -191,13 +176,18 @@ function go(id: string) {
 .gd-know li::before { content: ""; position: absolute; left: 2px; top: .6em; width: 3.5px;
   height: 3.5px; border-radius: 50%; background: var(--signal); opacity: .5; }
 
+.gd-btn { font-size: 12.5px; font-weight: 600; padding: 8px 15px; border-radius: 8px;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--ink); cursor: pointer; }
+.gd-btn-pri { background: var(--signal); border-color: var(--signal); color: #fff; }
+
 .gd-foot { display: flex; align-items: center; margin-top: 30px; padding-top: 18px;
   border-top: 1px solid var(--rule); }
 .gd-sp { flex: 1; }
 
 @media (max-width: 900px) {
-  .gd-stage { grid-template-columns: 1fr; gap: 26px; }
-  .gd-rail { position: static; }
+  .gd-stage { grid-template-columns: 1fr; gap: 24px; }
+  .gd-rail { position: static; max-height: none; }
   .gd-h { font-size: 23px; }
+  .gd-frame { height: 560px; margin-bottom: -224px; }
 }
 </style>
