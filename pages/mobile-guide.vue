@@ -42,6 +42,11 @@
         <div class="phone"><div class="app" id="mt-app" /></div>
         <div class="caption" id="mt-caption" />
       </div>
+
+      <!-- What the screen is for. The prototype wrapped window.render to paint
+           this; the page already knows which screen is showing, so it renders
+           it directly. -->
+      <aside class="notes" v-html="note" />
     </div>
   </div>
 </template>
@@ -49,6 +54,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { mountMobileTour } from '~/composables/mobileTour';
+import { MOBILE_NOTES } from '~/composables/mobileNotes';
 import { useAuthStore } from '~/stores/auth';
 
 /* Its own page rather than the app shell, like the web tour. Nothing here reads
@@ -96,6 +102,9 @@ const initials = computed(() => {
   return n.split(/[\s@.]+/).filter(Boolean).slice(0, 2)
     .map((w: string) => w[0]?.toUpperCase()).join('') || '?';
 });
+const note = computed(() => MOBILE_NOTES[current.value]
+  || '<p class="nkick">Telroi mobile</p><h2>This screen</h2>'
+   + '<p class="nlede">Pick a screen from the menu, or tap through the phone.</p>');
 const currentLabel = computed(() => {
   for (const g of GROUPS) for (const s of g.items) if (s.id === current.value) return s.label;
   return 'Screens';
@@ -166,7 +175,7 @@ html.dark .mtour{
   color-scheme:dark;
 }
 .mtour *, .mtour *::before, .mtour *::after{box-sizing:border-box}
-.mtour{margin:0;background:var(--paper-3);color:var(--ink);font-family:var(--font-sans);
+.mtour{margin:0;color:var(--ink);font-family:var(--font-sans);
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 .mtour button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 .mtour ul, .mtour ol{list-style:none;margin:0;padding:0}
@@ -591,4 +600,24 @@ html.dark .mtour .markglyph{filter:brightness(0) invert(1)}
   .mtour .rail { display: none; }
   .mtour .rail.open { display: block; }
 }
+
+.mtour .notes{width:330px;flex-shrink:0;position:sticky;top:40px;font-family:var(--font-sans);color:var(--ink)}
+.mtour .notes h2{font:600 22px/1.25 var(--font-display);margin:0 0 10px;letter-spacing:-.015em}
+.mtour .nkick{font:600 10px/1 var(--font-sans);letter-spacing:.11em;text-transform:uppercase;
+  color:var(--ink-mute);margin:0 0 10px}
+.mtour .nlede{margin:0 0 18px;color:var(--ink-soft);font-size:15px;line-height:1.55}
+.mtour ol.ndo{margin:0 0 18px;padding:0;list-style:none;counter-reset:s}
+.mtour ol.ndo li{counter-increment:s;position:relative;padding-left:31px;margin-bottom:9px;font-size:14px;line-height:1.5}
+.mtour ol.ndo li::before{content:counter(s);position:absolute;left:0;top:0;width:21px;height:21px;border-radius:50%;
+  background:var(--paper-3);color:var(--ink-soft);font:600 11px/21px var(--font-sans);text-align:center}
+.mtour .nwatch{border-left:3px solid var(--warn);background:var(--paper);border-radius:0 10px 10px 0;
+  padding:12px 14px;margin-bottom:16px}
+.mtour .nwatch h5{font:600 10px/1 var(--font-sans);letter-spacing:.1em;text-transform:uppercase;color:var(--warn);margin:0 0 6px}
+.mtour .nwatch p{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-soft)}
+.mtour ul.nwhy{list-style:none;margin:0;padding:0}
+.mtour ul.nwhy li{position:relative;padding-left:22px;margin-bottom:6px;font-size:13.5px;color:var(--ink-soft);line-height:1.5}
+.mtour ul.nwhy li::before{content:"";position:absolute;left:4px;top:7px;width:6px;height:6px;border-radius:50%;background:var(--green-ink)}
+@media (max-width:1100px){
+.mtour .notes{position:static;width:100%;max-width:390px;margin-top:6px}}
+
 </style>

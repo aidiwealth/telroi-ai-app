@@ -37,7 +37,9 @@ export default defineEventHandler((event) => {
       "img-src 'self' data: https:",
       // WebRTC + API + websocket signaling for the dialer + booking/intercom widgets.
       "connect-src 'self' https: wss:",
-      "media-src 'self' blob:",
+      // The R2 bucket, for the opener video on the mobile walkthrough. Named
+      // rather than opened to https:, so this stays a list of places we chose.
+      "media-src 'self' blob: https://pub-f138f42d66b748108ebf7432c7314665.r2.dev",
       // The challenge itself renders in an iframe, so script-src alone would
       // have produced a second silent failure identical to the first.
       "frame-src 'self' https://cal.com https://app.cal.com https://challenges.cloudflare.com https://www.google.com",
