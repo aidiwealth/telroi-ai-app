@@ -95,7 +95,7 @@ const GROUPS = [
 const auth = useAuthStore();
 const menu = ref(false);
 const railOpen = ref(false);
-const current = ref('home');
+const current = ref('signin');
 const signedIn = computed(() => !!auth.user);
 const initials = computed(() => {
   const n = auth.user?.name || auth.user?.email || '';
@@ -120,7 +120,8 @@ onMounted(() => {
   // every tap, so per-element handlers would need rebinding each time.
   root.addEventListener('click', tour.onClick);
   const h = location.hash.slice(1);
-  pick(h && tour.views.includes(h) ? h : 'home');
+  // Signing in, because that is where somebody being shown the app starts.
+  pick(h && tour.views.includes(h) ? h : 'signin');
 });
 
 onBeforeUnmount(() => {
