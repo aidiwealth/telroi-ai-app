@@ -525,7 +525,7 @@ onMounted(async () => {
 
 <style scoped>
 .wal-bd { display: block; font-size: 11.5px; color: var(--ink-mute); margin-top: 2px; }
-.wal-cardfile { padding: 18px 20px; margin: 0 0 16px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.wal-cardfile { padding: 18px 18px; margin: 26px 26px 30px; border: 1px solid var(--rule); border-radius: var(--radius); }
 .wal-cardfile-h { font-size: 13px; font-weight: 600; color: var(--ink); }
 .wal-cardfile-p { font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin: 4px 0 10px; }
 .wal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin: 26px 0 20px; }
@@ -573,7 +573,9 @@ onMounted(async () => {
 .wal-fund-tabs { display: flex; border-bottom: 1px solid var(--rule); }
 .wal-fund-tab { flex: 1; padding: 13px; font-size: 13.5px; font-weight: 500; color: var(--ink-soft); border-bottom: 2px solid transparent; transition: all 0.12s; }
 .wal-fund-tab.on { color: var(--signal); border-bottom-color: var(--signal); }
-.wal-fund-body { padding: 22px 24px; }
+/* Tight vertically because the boxes inside carry their own margin now —
+   22px here as well left a double gap at the top and bottom. */
+.wal-fund-body { padding: 3px 24px; }
 .wal-fund-lede { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 18px; line-height: 1.5; }
 
 .wal-acct { border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }

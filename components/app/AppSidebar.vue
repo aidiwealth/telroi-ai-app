@@ -53,6 +53,10 @@
         <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2 2 0 0 1 6 4h5v15.5H6a2 2 0 0 0-2 1.5z"/><path d="M20 5.5A2 2 0 0 0 18 4h-5v15.5h5a2 2 0 0 1 2 1.5z"/><path d="M7.5 8h2M7.5 11h2M14.5 8h2M14.5 11h2"/></svg></span>
         <span v-if="!collapsed" class="sb-label">Documentation</span>
       </a>
+      <NuxtLink to="/guide" class="sb-link" title="Guided tour">
+        <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.7-.9 1.3v.4"/><circle cx="12" cy="16.6" r=".7" fill="currentColor" stroke="none"/></svg></span>
+        <span v-if="!collapsed" class="sb-label">Guided tour</span>
+      </NuxtLink>
       <NuxtLink to="/developers" class="sb-link" title="Developers">
         <span class="sb-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 9l-4 3 4 3"/><path d="M16 9l4 3-4 3"/><path d="M13 5l-2 14"/></svg></span>
         <span v-if="!collapsed" class="sb-label">Developers</span>
