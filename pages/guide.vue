@@ -231,10 +231,10 @@ function go(id: string) {
 .gd-body li::before { content: ""; position: absolute; left: 2px; top: .68em; width: 5px;
   height: 5px; border-radius: 50%; background: var(--signal); opacity: .5; }
 
-.gd-watch { border: 1px solid var(--rule); border-left: 3px solid var(--warn);
+.gd-watch { border: 1px solid var(--rule); border-left: 3px solid var(--signal);
   border-radius: var(--radius); padding: 14px 17px; margin-top: 16px; background: var(--paper); }
 .gd-watch-h { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
-  font-weight: 600; color: var(--warn); margin-bottom: 4px; }
+  font-weight: 600; color: var(--signal); margin-bottom: 4px; }
 .gd-watch p { margin: 0; font-size: 13px; line-height: 1.62; color: var(--ink-soft); }
 
 .gd-know { margin-top: 18px; }
