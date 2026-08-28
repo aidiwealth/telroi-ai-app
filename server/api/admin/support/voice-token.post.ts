@@ -10,13 +10,20 @@ export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
   const body = await readBody<any>(event).catch(() => ({}));
   const client = String(body?.client || 'browser');
+  // Which support number to call from. An operator on the road picks one the
+  // way the client dialler does; without it the provider resolves whichever it
+  // considers default, which is right for the console and arbitrary on a phone.
+  const from = String(body?.from || '').trim();
   const ws = await ensureSupportWorkspace();
   // Support agents always register to our own PBX, whatever numbers the support
   // workspace happens to own. Registration decides where a browser can be RUNG,
   // and ring_all dials PBX endpoints — a Telnyx registration can place calls but
   // never receive one from us. Callers still arrive over whichever carrier suits
   // them; the PBX is where the two meet.
-  const dial = await resolveLiveCallProvider({ tenantId: ws.tenantId, configuredProvider: 'telroi' });
+  const dial = await resolveLiveCallProvider({
+    tenantId: ws.tenantId, configuredProvider: 'telroi',
+    preferredFromNumber: from || null
+  });
 
   // Make sure this operator actually has an endpoint. The client token endpoint
   // does this and the support one didn't, so an operator could open the console,
