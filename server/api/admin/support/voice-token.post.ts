@@ -8,6 +8,8 @@ import { resolveLiveCallProvider } from '~/server/utils/live-call-provider';
 import { voiceTokenFor } from '~/server/utils/voice-token';
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
+  const body = await readBody<any>(event).catch(() => ({}));
+  const client = String(body?.client || 'browser');
   const ws = await ensureSupportWorkspace();
   // Support agents always register to our own PBX, whatever numbers the support
   // workspace happens to own. Registration decides where a browser can be RUNG,
@@ -26,7 +28,7 @@ export default defineEventHandler(async (event) => {
   let uid: string | null = null;
 
   try {
-    const { ensureUserWebrtcEndpoint } = await import('~/server/utils/provision-agent');
+    const { ensureUserEndpoint } = await import('~/server/utils/provision-agent');
     // The operator's users id, not their platform admin id. meta.userId is
     // named for a user and every consumer treats it as one — the department
     // cache, the membership check — so storing an admin id here is the fault
@@ -36,7 +38,10 @@ export default defineEventHandler(async (event) => {
     const { userIdForAdmin } = await import('~/server/utils/platform');
     uid = await userIdForAdmin(String((admin as any).id));
     if (!uid) throw apiError('no_user', 'Could not identify you as a user to attach a phone to.', 500);
-    await ensureUserWebrtcEndpoint(ws.tenantId, uid);
+    // The endpoint of the kind being asked for. Provisioning the browser's and
+    // then handing back a native token would leave the app registering to an
+    // endpoint that offers DTLS, which is the 488 again.
+    await ensureUserEndpoint(ws.tenantId, uid, client === 'native' ? 'native' : 'browser');
   } catch (e: any) {
     throw apiError('voice_not_configured', e?.message || 'Browser calling could not be set up. Try again.', 503);
   }
@@ -50,7 +55,11 @@ export default defineEventHandler(async (event) => {
     // endpoint that does not exist — so no operator has registered since, and a
     // department resolved its member correctly and rang nobody.
     const ident = `tenant_${ws.tenantId}_${uid}`;
-    const tok = await voiceTokenFor(dial.provider, ident);
+    // A native client needs its own endpoint: plain RTP over TLS rather than the
+    // browser's DTLS, or it refuses the offer with 488. This endpoint was
+    // written before that existed and asked for whatever the browser gets.
+    const tok = await voiceTokenFor(dial.provider, ident, dial.fromNumber,
+      client === 'native' ? 'native' : 'browser');
     return { ...tok, fromNumber: dial.fromNumber, providerReady: dial.ready };
   } catch (e: any) {
     throw apiError('voice_not_configured', e?.message || 'Voice provider not configured', 503);
