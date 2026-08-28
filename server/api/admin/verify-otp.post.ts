@@ -9,7 +9,14 @@ import { issueAdminSession } from '~/server/utils/session';
 import { apiError, rateLimit, clientIp } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 
-const Body = z.object({ email: z.string().email(), code: z.string().regex(/^\d{6}$/) });
+const Body = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/),
+  // The mobile app asks for a support-scoped session: longer-lived, because a
+  // phone is not a browser on a desk, and limited to /api/admin/support so the
+  // longer life is not a wider exposure.
+  client: z.enum(['console', 'mobile']).optional()
+});
 
 export default defineEventHandler(async (event) => {
   const parsed = Body.safeParse(await readBody(event));
@@ -24,6 +31,9 @@ export default defineEventHandler(async (event) => {
   const [admin] = await db.select().from(schema.platformAdmins).where(eq(schema.platformAdmins.email, email)).limit(1);
   if (!admin) throw apiError('forbidden', 'This account does not have operator access.', 403);
 
-  await issueAdminSession(event, { email: admin.email, role: admin.role });
+  await issueAdminSession(event, {
+    email: admin.email, role: admin.role,
+    scope: parsed.data.client === 'mobile' ? 'support' : 'full'
+  });
   return { ok: true, role: admin.role };
 });

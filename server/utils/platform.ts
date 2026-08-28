@@ -14,10 +14,33 @@ export async function requirePlatformAdmin(event: H3Event) {
   const [admin] = await db.select().from(schema.platformAdmins)
     .where(eq(schema.platformAdmins.email, s.email)).limit(1);
   if (!admin) throw apiError('forbidden', 'Platform admin access required', 403);
-  // Rolling idle timeout: reset the 30-min window on each authenticated request.
-  try { await refreshAdminSession(event, { email: admin.email, role: admin.role }); } catch { /* non-fatal */ }
+
+  // A support-scoped session — the mobile app's — reaches the support workspace
+  // and nothing else. Checked by path rather than declared per endpoint: there
+  // are dozens of console endpoints and forgetting one would be a hole, whereas
+  // a new endpoint under /api/admin/support is allowed by being where it is.
+  //
+  // It exists so the app can hold a week-long session. Without the limit that
+  // would be a lost phone with the run of the platform; with it, a lost phone
+  // is a support line.
+  if (s.scope === 'support') {
+    const path = event.path || '';
+    const allowed = path.startsWith('/api/admin/support')
+      || path.startsWith('/api/admin/verify-otp')
+      || path.startsWith('/api/admin/me');
+    if (!allowed) {
+      throw apiError('forbidden',
+        'This session can reach support functions only. Sign in on the console for the rest.', 403);
+    }
+  }
+  // Rolling idle window, reset on each authenticated request. The scope has to
+  // travel with it: re-issuing without one would default the session to full on
+  // its very next request, and the limit above would hold for exactly one call.
+  try {
+    await refreshAdminSession(event, { email: admin.email, role: admin.role, scope: s.scope });
+  } catch { /* non-fatal */ }
   // id included so callers can identify this admin (e.g. their own SIP endpoint).
-  return { id: admin.id, email: admin.email, role: admin.role };
+  return { id: admin.id, email: admin.email, role: admin.role, scope: s.scope };
 }
 
 // Guard for areas restricted to superadmins (App releases, Settings, Pricing).

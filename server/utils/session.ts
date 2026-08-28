@@ -6,6 +6,10 @@ import type { H3Event } from 'h3';
 const COOKIE = 'telroi_session';
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days (client sessions)
 const ADMIN_MAX_AGE = 60 * 60 * 8;  // 8h idle (admin) — refreshed on each request.
+// A phone in a pocket is not a browser on a desk: eight hours means signing in
+// most days. Longer is safe here only because a support-scoped session cannot
+// reach billing, clients or platform settings.
+const ADMIN_SUPPORT_MAX_AGE = 60 * 60 * 24 * 7;
                                     // Thirty minutes meant being signed out over
                                     // a coffee, and an operator reading rather
                                     // than clicking still tripped it. Shorter
@@ -166,27 +170,37 @@ export async function clearSession(event: H3Event) {
 // clobbering the other. ──
 const ADMIN_COOKIE = 'telroi_admin_session';
 
-export interface AdminSessionClaims { email: string; role: string; }
+export interface AdminSessionClaims {
+  email: string;
+  role: string;
+  /** 'support' sessions reach the support workspace and nothing else — see
+   *  requirePlatformAdmin. The mobile app asks for one, so a lost phone is a
+   *  support line rather than the platform. */
+  scope?: 'full' | 'support';
+}
 
 export async function issueAdminSession(event: H3Event, claims: AdminSessionClaims, existingSid?: string) {
   // refreshAdminSession runs on every authenticated request to hold the idle
   // window open, so it must reuse the session it already has — minting one per
   // request would write a row per click and leave thousands to revoke.
+  const age = claims.scope === 'support' ? ADMIN_SUPPORT_MAX_AGE : ADMIN_MAX_AGE;
   const sid = existingSid || await recordSession(event, {
-    adminEmail: claims.email, kind: 'admin', maxAgeSec: ADMIN_MAX_AGE
+    adminEmail: claims.email, kind: 'admin', maxAgeSec: age
   });
 
   const jwt = await new SignJWT({ ...claims, kind: 'admin', ...(sid ? { sid } : {}) })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime(`${ADMIN_MAX_AGE}s`)
+    .setExpirationTime(`${age}s`)
     .sign(secret());
   setCookie(event, ADMIN_COOKIE, jwt, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: ADMIN_MAX_AGE
+    // The cookie's own life, or a week-long session would still be evicted at
+    // eight hours and the app would look randomly signed out.
+    maxAge: age
   });
 }
 
@@ -211,7 +225,13 @@ export async function readAdminSession(event: H3Event): Promise<AdminSessionClai
     const { payload } = await jwtVerify(token, secret());
     if (payload.kind !== 'admin') return null;
     if (!(await sessionLive(payload.sid as string | undefined))) return null;
-    return { email: payload.email as string, role: payload.role as string };
+    return {
+      email: payload.email as string,
+      role: payload.role as string,
+      // Absent on sessions issued before scopes existed, and on the console's
+      // own — both mean full access, which is what they had.
+      scope: (payload.scope as 'full' | 'support') || 'full'
+    };
   } catch {
     return null;
   }
