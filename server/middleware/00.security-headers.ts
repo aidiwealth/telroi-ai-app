@@ -31,7 +31,9 @@ export default defineEventHandler((event) => {
       // the policy blocked the script silently, so the widget had never rendered
       // under either, and switching provider should not resurrect the same hour
       // of confusion.
-      "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com",
+      // widget.termii.com is the live chat. Named rather than opened to https:,
+      // so this stays a list of places we chose to trust with script execution.
+      "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://widget.termii.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https:",
@@ -42,7 +44,10 @@ export default defineEventHandler((event) => {
       "media-src 'self' blob: https://pub-f138f42d66b748108ebf7432c7314665.r2.dev",
       // The challenge itself renders in an iframe, so script-src alone would
       // have produced a second silent failure identical to the first.
-      "frame-src 'self' https://cal.com https://app.cal.com https://challenges.cloudflare.com https://www.google.com",
+      // Termii's chat renders its panel in an iframe. Added with the script
+      // rather than after: permitting one and not the other is what produced
+      // the captcha's silent failure, and there is no reason to repeat it.
+      "frame-src 'self' https://cal.com https://app.cal.com https://challenges.cloudflare.com https://www.google.com https://widget.termii.com",
       "frame-ancestors 'self'",
       "base-uri 'self'",
       "form-action 'self'",
