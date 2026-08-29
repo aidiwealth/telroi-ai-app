@@ -21,7 +21,13 @@ function page<T>(items: T[]): { items: T[]; info: TelroiPageInfo } {
 
 export class SandboxTelroiClient {
   tenantDomain = 'sandbox.local';
-  constructor(private tenantId: string) {}
+  constructor(private tenantId: string) {
+    // Say so. A stand-in that answers successfully with invented data is
+    // invisible from outside: no error, no signal, just a shape that looks
+    // right and is not. It cost hours twice in one day — an empty call log for
+    // a workspace with 258 calls, and a call id for a call that never rang.
+    console.log('[sandbox] serving simulated data for tenant', this.tenantId);
+  }
 
   private async members() {
     const db = useDb();

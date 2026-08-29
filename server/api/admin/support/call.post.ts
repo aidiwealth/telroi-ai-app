@@ -44,8 +44,12 @@ export default defineEventHandler(async (event) => {
   if (fromTelnum) {
     result = await placeCall({ tenantId: support.tenantId, fromTelnum, to: p.data.phone });
   } else {
-    const client = await telroiFor(support.tenantId);
-    result = await client.makeCall({ phone: p.data.phone });
+    // No from-number, and the support workspace is provision_state 'local' —
+    // so telroiFor would hand back the sandbox client, which returns a made-up
+    // call id and rings nobody. A live workspace deserves a refusal it can act
+    // on rather than a success that did not happen.
+    throw apiError('no_from_number',
+      'Choose which support number to call from.', 400);
   }
 
   await logEvent({
