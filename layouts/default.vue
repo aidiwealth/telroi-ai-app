@@ -31,6 +31,27 @@ import { CLIENT_TOUR_ID, clientTour } from '~/composables/tourSteps';
 const collapsed = ref(false);
 const mobileOpen = ref(false);
 const auth = useAuthStore();
+
+/* Live chat, on every signed-in page. Separate from the Live Call widget: that
+   is for talking, this is for typing, and a client who wants one rarely wants
+   the other.
+
+   Set synchronously rather than in onMounted — the script is queued below and
+   may load before a mounted hook runs, and a widget that reads its settings on
+   initialise would find nothing there. The name would be missing on some loads
+   and present on others, which reads as flakiness rather than a race. */
+if (import.meta.client && auth.user) {
+  (window as any).liveChatSettings = {
+    name: auth.user.name || auth.user.email,
+    email: auth.user.email
+  };
+}
+
+useHead({
+  script: auth.user
+    ? [{ src: 'https://widget.termii.com/01a04b2d-8706-71a7-ab66-273e131382ae.js', defer: true }]
+    : []
+});
 const route = useRoute();
 const router = useRouter();
 

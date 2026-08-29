@@ -104,11 +104,17 @@ useHead({
   // The same Live Call widget the marketing site offers visitors. Somebody
   // being walked through the product should be able to ask a question without
   // finding a contact page first.
-  script: [{
-    src: 'https://app.telroi.ai/widget/v1.js',
-    'data-telroi-key': 'wgt_ec9ae0fdd28f1a2a4a73b0a65dde9437',
-    async: true
-  }]
+  script: [
+    {
+      src: 'https://app.telroi.ai/widget/v1.js',
+      'data-telroi-key': 'wgt_ec9ae0fdd28f1a2a4a73b0a65dde9437',
+      async: true
+    },
+    // And chat, for somebody who would rather type than talk. The page is
+    // public, so a prospect arrives without a name to pass — the widget is
+    // told who they are only when there is somebody to name.
+    { src: 'https://widget.termii.com/01a04b2d-8706-71a7-ab66-273e131382ae.js', defer: true }
+  ]
 });
 
 const steps = computed(() => {
@@ -126,6 +132,15 @@ const next = computed(() => steps.value[idx.value + 1] || null);
    their dashboard gets a way back. The store is already populated for a signed-
    in visitor, and empty for everyone else, so nothing needs fetching. */
 const auth = useAuthStore();
+
+// Identity for the chat widget, where there is any. Set before the script is
+// queued rather than on mount, so it cannot load first and find nothing.
+if (import.meta.client && auth.user) {
+  (window as any).liveChatSettings = {
+    name: auth.user.name || auth.user.email,
+    email: auth.user.email
+  };
+}
 const menu = ref(false);
 const railOpen = ref(false);
 const signedIn = computed(() => !!auth.user);
