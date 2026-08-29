@@ -66,6 +66,49 @@ export async function getObject(key: string): Promise<{ body: Buffer; contentTyp
   return { body, contentType: guessType(key) };
 }
 
+/**
+ * A byte range, for streamed playback.
+ *
+ * getObject reads the whole file into memory, which is fine for a small
+ * download and wrong for audio: nothing plays until everything arrives, seeking
+ * means fetching from the start again, and AVPlayer refuses outright — iOS
+ * needs a 206 and gets a 200 with the lot.
+ *
+ * R2 handles ranges natively, so this passes the header through rather than
+ * reading and re-serving.
+ */
+export async function getObjectRange(key: string, range?: string): Promise<{
+  body: any; contentType: string; contentLength?: number;
+  contentRange?: string; acceptsRanges: boolean;
+}> {
+  const client = r2();
+  if (client) {
+    const cfg = useRuntimeConfig() as any;
+    const res = await client.send(new GetObjectCommand({
+      Bucket: cfg.r2Bucket, Key: key, ...(range ? { Range: range } : {})
+    }));
+    // Buffered rather than passed through as a stream. R2 serves only the range
+    // asked for, so a seek fetches a slice rather than the file — which is the
+    // part that matters — but handing an SDK stream to the response is a bet on
+    // how Nitro consumes it, and getting that wrong breaks playback everywhere
+    // rather than only on iOS.
+    const bytes = await (res.Body as any).transformToByteArray();
+    return {
+      body: Buffer.from(bytes),
+      contentType: res.ContentType || 'application/octet-stream',
+      contentLength: res.ContentLength,
+      contentRange: res.ContentRange,
+      acceptsRanges: true
+    };
+  }
+
+  // Local disk has no range support here; the whole file, as before. Development
+  // only, so a slow seek is nobody's problem.
+  const path = join(LOCAL_ROOT, key);
+  const body = await fs.readFile(path);
+  return { body, contentType: guessType(key), contentLength: body.length, acceptsRanges: false };
+}
+
 export async function deleteObject(key: string): Promise<void> {
   const client = r2();
   if (client) {
