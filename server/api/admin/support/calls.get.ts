@@ -12,14 +12,19 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { requirePlatformAdmin } from '~/server/utils/platform';
 import { ensureSupportWorkspace } from '~/server/utils/support';
-import { telroiFor } from '~/server/utils/tenant';
 import { useDb, schema } from '~/server/db';
 
 export default defineEventHandler(async (event) => {
   await requirePlatformAdmin(event);
   const ws = await ensureSupportWorkspace();
   const q = getQuery(event);
-  const client = await telroiFor(ws.tenantId);
+  // call_events directly rather than through telroiFor, which hands back the
+  // sandbox client for any tenant that is not provision_state 'provisioned'.
+  // The support workspace is 'local' — it runs on our own PBX rather than a
+  // provisioned remote one — so the simulation answered instead of the table,
+  // and 258 real calls came back as an empty list with no error to show for it.
+  const { AsteriskClient } = await import('~/server/utils/telroi/asterisk-client');
+  const client = AsteriskClient.forTenant({ id: ws.tenantId }) as any;
 
   const calls = await client.historyJson({
     period: q.period, type: q.type, limit: q.limit ?? 100,
