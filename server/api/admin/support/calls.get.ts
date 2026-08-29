@@ -26,10 +26,19 @@ export default defineEventHandler(async (event) => {
   const { AsteriskClient } = await import('~/server/utils/telroi/asterisk-client');
   const client = AsteriskClient.forTenant({ id: ws.tenantId }) as any;
 
-  const calls = await client.historyJson({
-    period: q.period, type: q.type, limit: q.limit ?? 100,
+  // Same cursor as the client list: an operator scrolling a support history on
+  // mobile data pays for every row that arrives, and a timestamp is stable where
+  // an offset shifts as calls come in.
+  const before = q.before ? new Date(String(q.before)) : null;
+  const wanted = Math.min(Math.max(Number(q.limit) || 100, 1), 1000);
+
+  const all = await client.historyJson({
+    period: q.period, type: q.type, limit: 1000,
     start: q.start, end: q.end, processMissed: true
   });
+  const calls = all
+    .filter((c: any) => !before || new Date(c.start).getTime() < before.getTime())
+    .slice(0, wanted);
 
   // Ratings and notes are ours rather than the PBX's, so they are overlaid by
   // call id — the same way the client list does it.
@@ -47,5 +56,8 @@ export default defineEventHandler(async (event) => {
     }
   } catch { /* a missing rating is not worth failing the list for */ }
 
-  return { calls };
+  const nextBefore = calls.length === wanted
+    ? calls[calls.length - 1]?.start ?? null
+    : null;
+  return { calls, nextBefore };
 });

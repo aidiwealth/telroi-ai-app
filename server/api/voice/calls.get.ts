@@ -127,12 +127,24 @@ export default defineEventHandler(async (event) => {
     // 228 — and on a busy workspace would receive a great deal more. Sliced
     // after sorting, so the newest hundred are the newest hundred overall
     // rather than whatever survived three separate caps.
+    // A cursor rather than an offset. Offsets shift under you: a call arriving
+    // while somebody scrolls pushes a row from page one onto page two, and they
+    // see it twice or not at all. A timestamp is stable — ask for what started
+    // before the oldest row you hold and the answer is the same whatever has
+    // arrived since.
+    const before = q.before ? new Date(String(q.before)) : null;
     const wanted = Math.min(Math.max(Number(q.limit) || 100, 1), 1000);
     const merged = [...otpCalls, ...localCalls, ...(calls as any[])]
       .sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime())
+      .filter((c: any) => !before || new Date(c.start).getTime() < before.getTime())
       .slice(0, wanted);
     await resolveAgentNames(merged);
-    return { calls: merged };
+    // Where to continue from, and null when there is nothing left — so the app
+    // knows it has reached the end rather than asking again and getting the
+    // same empty answer.
+    const full = merged.length === wanted;
+    const nextBefore = full ? merged[merged.length - 1]?.start ?? null : null;
+    return { calls: merged, nextBefore };
   } catch {
     await resolveAgentNames(calls as any[]);
     return { calls };
