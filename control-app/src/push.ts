@@ -136,11 +136,14 @@ export async function pushIncomingCall(p: IncomingPush): Promise<number> {
         // Enough to show the call before anything is fetched: the app has to
         // report it to the platform's calling framework straight away, and a
         // round trip first is time it does not have.
+        // 'from' is reserved by FCM and rejects the whole message. Named
+        // 'caller' instead — and 'to' renamed alongside it so the pair stay
+        // legible together rather than one carrying a scar the other does not.
         data: {
           type: 'incoming_call',
           callId: p.callId,
-          from: p.from || '',
-          to: p.to || ''
+          caller: p.from || '',
+          dialed: p.to || ''
         },
         android: { priority: 'HIGH', direct_boot_ok: true }
       }
