@@ -156,10 +156,15 @@ export async function pushIncomingCall(p: IncomingPush): Promise<number> {
 
       const j: any = await res.json().catch(() => null);
       const code = j?.error?.details?.[0]?.errorCode || j?.error?.status;
+      // Always, rather than only on failures we did not expect. Reporting the
+      // outcome alone made a rejected token and a malformed request look
+      // identical from here, and the second was deleting handsets one call at
+      // a time while looking like the first.
+      console.error('[push] send failed:', res.status, code || '', j?.error?.message || '');
       // A reinstalled app issues a new token and abandons the old one. Left in
       // place it would be pushed to for ever, and the delivery rate would rot
       // quietly with nothing to show why.
-      if (code === 'UNREGISTERED' || code === 'INVALID_ARGUMENT') {
+      if (code === 'UNREGISTERED') {
         await db.delete(schema.userDevices).where(eq(schema.userDevices.id, d.id))
           .catch(() => {});
         console.log('[push] dropped a dead token for tenant', p.tenantId);
