@@ -100,6 +100,18 @@ export const memberships = pgTable('memberships', {
 // delivered the moment the call was placed, so an unanswered number read the same
 // as one where somebody heard the code — and delivery rate is what a client
 // judges an OTP service by.
+// Handsets to wake when a call comes in. Only the columns the push sender
+// reads: it selects by tenant, platform and revocation, and deletes by id when
+// FCM says a token is dead.
+export const userDevices = pgTable('user_devices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  pushToken: text('push_token').notNull(),
+  platform: text('platform').notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true })
+});
+
 export const voiceOtps = pgTable('voice_otps', {
   id: uuid('id').primaryKey().defaultRandom(),
   status: text('status').notNull().default('pending'),

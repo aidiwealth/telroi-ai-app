@@ -117,7 +117,11 @@ export async function pushIncomingCall(p: IncomingPush): Promise<number> {
     if (p.userIds?.length) conds.push(inArray(schema.userDevices.userId, p.userIds));
     rows = await db.select().from(schema.userDevices).where(and(...conds));
   } catch (e: any) {
-    console.error('[push] could not read devices:', e?.message || e);
+    // A table missing from control-app/src/schema.ts reads as undefined and
+    // fails here, which looked exactly like having no devices to wake. Named
+    // so the next one is a minute rather than an afternoon.
+    console.error('[push] could not read user_devices — is it declared in control-app/src/schema.ts?',
+      e?.message || e);
     return 0;
   }
   if (!rows.length) return 0;
