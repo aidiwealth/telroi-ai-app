@@ -18,6 +18,7 @@ import Ari from 'ari-client';
 import { config } from './config.ts';
 import { startCache, lookupNumber, isBlacklisted, isAnonymousBlocked, agentGreeting, resolveEndpoint, resolveTenantEndpoints, resolveDepartmentEndpoints, resolveDepartmentByName, cacheReady, cacheStats } from './cache.ts';
 import { logCall } from './call-log.ts';
+import { pushIncomingCall } from './push.ts';
 import { installLogCapture } from './log-buffer.ts';
 import { closeDb } from './db.ts';
 import { bridgeToEndpoint, bridgeToDepartment, synthesizeMessage } from './bridge.ts';
@@ -445,6 +446,21 @@ async function main() {
             log(`  [esc ${chId}] no department matched "${deptName}" — ringing everyone`);
           }
         }
+
+        // Wake the phones first, and before filterLiveEndpoints — a backgrounded
+        // app is not registered, which is precisely what the push is for. Filter
+        // first and every phone that needs waking has already been excluded.
+        //
+        // Two seconds, then dial regardless. A cold app on a poor connection
+        // will not make it, and a caller held in silence is worse than a call
+        // that rings one device late.
+        try {
+          const woke = await pushIncomingCall({
+            tenantId: route.tenantId, callId: chId,
+            from: callerNum || '', to: dialedDid || ''
+          });
+          if (woke) await new Promise((r) => setTimeout(r, 2000));
+        } catch (e) { log(`  [esc ${chId}] push failed: ${(e as Error)?.message}`); }
 
         const freeEsc = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
         let endpoints = await freeEsc();
