@@ -220,6 +220,12 @@ export const tenants = pgTable('tenants', {
   // -> Digidite (deferred entirely), elsewhere -> carrier (Twilio/Telnyx, which
   // admin may provision early). 'local' | 'provisioning' | 'provisioned'.
   provisionState: text('provision_state').notNull().default('local'),
+  // Closed with its last member. Marked rather than dropped: numbers have to be
+  // released with the carrier and recordings pruned from storage, neither of
+  // which belongs in the seconds after somebody taps a button. A nightly sweep
+  // does the irreversible part after thirty days, which is also the window the
+  // privacy policy commits to.
+  closedAt: timestamp('closed_at', { withTimezone: true }),
   wentLiveAt: timestamp('went_live_at', { withTimezone: true }),
   // Public key for the Live Call embed widget (safe to expose in client-side JS;
   // scopes the widget to this tenant, read-only/config + session-create only).
