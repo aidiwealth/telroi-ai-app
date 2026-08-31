@@ -18,7 +18,9 @@ import { logEvent } from '~/server/utils/logs';
 // number declared for any of them cannot be provisioned until the indemnity has
 // been accepted — section 1.1 says so, and a carrier asking later will want the
 // acceptance rather than an assurance.
-const SENSITIVE = ['authentication', 'financial', 'health', 'emergency', 'government', 'outbound'];
+// From the one definition, rather than a second copy of the same keys. The two
+// lists could disagree and nothing would have said so.
+import { SENSITIVE_KEYS as SENSITIVE } from '~/server/utils/number-categories';
 
 const Body = z.object({
   inventoryId: z.string().uuid(),

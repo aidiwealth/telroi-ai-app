@@ -417,18 +417,26 @@ const buy = ref({ channels: 1, categories: [] as string[] });
 // The six from section 2 of the indemnity, plus the ordinary case. Keeping the
 // wording close to the document matters: a client ticking "Authentication" here
 // should recognise the same word when they read what they are signing.
-const USE_CATEGORIES = [
-  { key: 'general',        label: 'General business', hint: 'Ordinary calls to and from your business.', sensitive: false },
-  { key: 'authentication', label: 'Authentication',   hint: 'One-time passcodes, verification, transaction alerts.', sensitive: true },
-  { key: 'financial',      label: 'Financial services', hint: 'Banking, payments, lending, collections, insurance.', sensitive: true },
-  { key: 'health',         label: 'Health & sensitive data', hint: 'Medical, insurance, or special-category data.', sensitive: true },
-  { key: 'emergency',      label: 'Emergency & welfare', hint: 'Crisis, safety, welfare and helpline services.', sensitive: true },
-  { key: 'government',     label: 'Government & public sector', hint: 'Public authority, civic and electoral.', sensitive: true },
-  { key: 'outbound',       label: 'Scaled outbound',  hint: 'Campaigns at volume, or automated and AI dialling.', sensitive: true }
-];
+// Fetched rather than held. This list and the purchase endpoint's sensitive
+// keys were two copies of one rule, and a seventh category added to one and not
+// the other would have sold a sensitive number without the indemnity — with
+// neither side able to say it was wrong.
+const USE_CATEGORIES = ref<{ key: string; label: string; hint: string; sensitive: boolean }[]>([]);
+
+onMounted(async () => {
+  try {
+    const r = await api.get<any>('/api/numbers/categories');
+    USE_CATEGORIES.value = r?.categories || [];
+  } catch {
+    // Without them the buy form cannot ask what a number is for, and the
+    // purchase would default to general — quietly skipping the indemnity. So
+    // the step is blocked rather than guessed at.
+    USE_CATEGORIES.value = [];
+  }
+});
 
 const needsIndemnity = computed(() =>
-  buy.value.categories.some((k) => USE_CATEGORIES.find((c) => c.key === k)?.sensitive));
+  buy.value.categories.some((k) => USE_CATEGORIES.value.find((c) => c.key === k)?.sensitive));
 
 /** "This is an ordinary line" and "this is for OTPs" cannot both be true, so
  *  general is exclusive in both directions. */
