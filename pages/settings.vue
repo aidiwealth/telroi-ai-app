@@ -154,6 +154,92 @@
               </div>
             </div>
           </div>
+
+          <div class="set-divider"></div>
+
+          <!-- Last, and set apart. A destructive action does not belong in the
+               same list as a timezone: somebody changing their name should not
+               pass this on the way. -->
+          <h3 class="set-title set-danger-h">Delete your account</h3>
+          <p class="muted set-lede">
+            Your name and email are removed and your devices stop ringing. Calls and
+            notes stay with the workspace, since they are its record rather than yours.
+          </p>
+          <button class="btn btn-danger btn-sm" @click="openDelete">Delete my account</button>
+        </div>
+
+        <!-- What deleting would actually do, before being asked to confirm it.
+             A sole owner is closing a workspace that may hold numbers and money,
+             and finding that out afterwards would be too late. -->
+        <div v-if="delOpen" class="modal-overlay" @click.self="delOpen = false">
+          <div class="modal set-delmodal">
+            <button class="modal-x" @click="delOpen = false">&times;</button>
+            <h3 class="set-delmodal-h">Delete your account</h3>
+
+            <p v-if="!delPreview" class="muted">Checking what this affects&hellip;</p>
+
+            <template v-else-if="delPreview.outcome === 'transfer_first'">
+              <p class="set-delmodal-p">
+                You are an owner of <strong>{{ delPreview.workspaceName }}</strong>, and
+                {{ delPreview.otherMembers }} other {{ delPreview.otherMembers === 1 ? 'person' : 'people' }}
+                {{ delPreview.otherMembers === 1 ? 'is' : 'are' }} in it.
+              </p>
+              <p class="set-delmodal-p muted">
+                Make somebody else an owner first, or remove them. A workspace cannot be
+                left without one.
+              </p>
+              <div class="set-delmodal-act">
+                <button class="btn btn-ghost btn-sm" @click="delOpen = false">Close</button>
+                <button class="btn btn-signal btn-sm" @click="delOpen = false; tab = 'team'">Open members</button>
+              </div>
+            </template>
+
+            <template v-else-if="delPreview.outcome === 'closes_workspace'">
+              <p class="set-delmodal-p">
+                You are the only person in <strong>{{ delPreview.workspaceName }}</strong>,
+                so it closes with you.
+              </p>
+              <ul class="set-delmodal-list">
+                <li v-if="delPreview.numbers">
+                  {{ delPreview.numbers }} {{ delPreview.numbers === 1 ? 'number is' : 'numbers are' }}
+                  released and can be bought by somebody else
+                </li>
+                <li v-if="delPreview.balanceMinor > 0">
+                  <strong>{{ delMoney(delPreview.balanceMinor) }}</strong> is still in your wallet.
+                  Withdraw it first, or write to us before deleting.
+                </li>
+                <li>Recordings and call history are removed after thirty days</li>
+              </ul>
+              <p class="set-delmodal-p muted">
+                You can sign in for thirty days if you change your mind. After that it
+                cannot be undone.
+              </p>
+              <div class="field">
+                <label>Type <strong>{{ delPreview.workspaceName }}</strong> to confirm</label>
+                <input v-model="delTyped" class="input" :placeholder="delPreview.workspaceName" />
+              </div>
+              <div class="set-delmodal-act">
+                <button class="btn btn-ghost btn-sm" @click="delOpen = false">Cancel</button>
+                <button class="btn btn-danger btn-sm"
+                        :disabled="delBusy || delTyped.trim() !== delPreview.workspaceName.trim()"
+                        @click="doDelete">{{ delBusy ? 'Deleting…' : 'Delete and close' }}</button>
+              </div>
+            </template>
+
+            <template v-else>
+              <p class="set-delmodal-p">
+                Your name and email are removed and your devices stop ringing.
+                <strong>{{ delPreview.workspaceName }}</strong> and its call history stay
+                as they are.
+              </p>
+              <div class="set-delmodal-act">
+                <button class="btn btn-ghost btn-sm" @click="delOpen = false">Cancel</button>
+                <button class="btn btn-danger btn-sm" :disabled="delBusy" @click="doDelete">
+                  {{ delBusy ? 'Deleting…' : 'Delete my account' }}
+                </button>
+              </div>
+            </template>
+          </div>
         </div>
 
         <!-- Webhooks -->
@@ -328,6 +414,51 @@ const tabs = [
 const route = useRoute();
 const tab = ref((route.query.tab as string) || 'plan');
 const saving = ref(false);
+
+/* Deleting an account. The preview is fetched when the dialog opens rather than
+   held on the page: what it says depends on who else is in the workspace, and
+   that can change while somebody sits on this screen. */
+const delOpen = ref(false);
+const delBusy = ref(false);
+const delTyped = ref('');
+const delPreview = ref<any>(null);
+
+const delMoney = (minor: number) => {
+  const cur = delPreview.value?.currency || 'NGN';
+  const sym = cur === 'NGN' ? '\u20A6' : '$';
+  return sym + ((minor || 0) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
+};
+
+async function openDelete() {
+  delPreview.value = null;
+  delTyped.value = '';
+  delOpen.value = true;
+  try {
+    delPreview.value = await api.get<any>('/api/auth/account/preview');
+  } catch (e: any) {
+    delOpen.value = false;
+    alert(e?.message || 'Could not check what this would affect. Try again.');
+  }
+}
+
+async function doDelete() {
+  delBusy.value = true;
+  try {
+    // del rather than delete: the latter takes only a URL, so the confirmation
+    // would have been dropped silently and the server would have refused a
+    // request the page believed it had made properly.
+    await api.del<any>('/api/auth/account', {
+      confirmWorkspaceName: delTyped.value.trim() || undefined
+    });
+    // The session is already gone server-side, so there is nothing to refresh —
+    // a redirect that re-fetched the user would 401 and read as a failure at the
+    // moment somebody has just done something deliberate.
+    window.location.href = '/login';
+  } catch (e: any) {
+    delBusy.value = false;
+    alert(e?.message || 'Could not delete the account.');
+  }
+}
 const switching = ref(false);
 const planState = ref<any>(null);
 const comp = ref<any>(null);
@@ -547,6 +678,19 @@ async function saveWs() {
 </script>
 
 <style scoped>
+/* Deleting an account. Set apart deliberately: the same weight as saving a
+   timezone would be the wrong signal for the one thing here that cannot be
+   undone. */
+.set-danger-h { color: var(--danger); }
+.set-delmodal { max-width: 460px; width: 92vw; padding: 26px 28px 22px; }
+.set-delmodal-h { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+.set-delmodal-p { font-size: 14px; line-height: 1.6; margin: 0 0 12px; }
+.set-delmodal-list { margin: 0 0 14px; padding: 0; list-style: none; }
+.set-delmodal-list li { position: relative; padding-left: 17px; margin-bottom: 8px;
+  font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.set-delmodal-list li::before { content: ""; position: absolute; left: 2px; top: .62em;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--danger); opacity: .6; }
+.set-delmodal-act { display: flex; gap: 9px; justify-content: flex-end; margin-top: 18px; }
 /* The AI daily limit. The figure leads, the day's spend is a bar rather than a
    sentence, and the explanation is one line — nobody reads a paragraph to find
    a number. */

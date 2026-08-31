@@ -21,7 +21,14 @@ const Body = z.object({
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
-  const p = Body.safeParse(await readBody(event).catch(() => ({})));
+  // Query rather than body: a DELETE with a body is awkward for some clients,
+  // and a workspace name is not a secret. Body still accepted, so a caller that
+  // sends one is not refused for choosing the other way.
+  const q = getQuery(event);
+  const p = Body.safeParse({
+    ...(await readBody(event).catch(() => ({}))),
+    ...(q.confirmWorkspaceName ? { confirmWorkspaceName: String(q.confirmWorkspaceName) } : {})
+  });
   const standing = await workspaceStanding(s.tenantId, s.userId);
   const db = useDb();
 
