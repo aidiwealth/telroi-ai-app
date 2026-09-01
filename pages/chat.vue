@@ -43,8 +43,17 @@ function openPanel(attempt = 0) {
       // only ever chat. Hidden in CSS rather than removed, since the widget
       // manages its own DOM and rewrites it after opening.
       const st = document.createElement('style');
-      st.textContent = '#termii-toggle-app,[id*="toggle-app"]{display:none !important}';
+      // The real ids, read from the DOM rather than guessed from the bundle:
+      // live-chat-toggle is the launcher and live-chat-content is the panel.
+      st.textContent = '#live-chat-toggle{display:none !important}'
+        + '#live-chat-content{width:100% !important;height:100% !important;'
+        + 'max-height:100% !important;inset:0 !important;border-radius:0 !important}';
       document.head.appendChild(st);
+      // Say what happened. A widget that reports nothing is how the last two
+      // days went, and this one has already looked like three different faults.
+      console.log('[chat] opened; toggle:',
+        !!document.getElementById('live-chat-toggle'),
+        'content:', !!document.getElementById('live-chat-content'));
       note.value = '';
       return;
     }
