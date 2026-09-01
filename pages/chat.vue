@@ -36,8 +36,13 @@ const note = ref('Opening chat…');
  * calling once and trusting it. */
 function openPanel(attempt = 0) {
   const w = (window as any).LiveChatWidget;
+  // The elements, not the function. The function exists as soon as the script
+  // parses and returns silently until the widget has mounted — so waiting for
+  // it to be callable was waiting for the wrong thing, and the loop declared
+  // success on a call that did nothing.
+  const content = document.getElementById('live-chat-content');
   try {
-    if (w && typeof w.toggleVisibility === 'function') {
+    if (w && typeof w.toggleVisibility === 'function' && content) {
       w.toggleVisibility(true);
       // The launcher is redundant once the panel is open on a screen that is
       // only ever chat. Hidden in CSS rather than removed, since the widget
