@@ -31,6 +31,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // while keeping it from the two audiences it exists for — a prospect
   // evaluating us, and an admin showing them.
   if (to.path === '/guide' || to.path.startsWith('/guide')) return;
+
+  // The chat page, for the widget inside a WebView. It holds nothing: the app
+  // passes who the person is, and requiring a session would mean the WebView
+  // carrying our cookies for no more safety than we already have.
+  if (to.path === '/chat') return;
   // The mobile walkthrough, for the same reason: every screen in it is an
   // imaginary workspace, so there is nothing behind a login to protect.
   if (to.path === '/mobile-guide' || to.path.startsWith('/mobile-guide')) return;
