@@ -34,7 +34,12 @@ export default defineEventHandler((event) => {
       // widget.termii.com is the live chat. Named rather than opened to https:,
       // so this stays a list of places we chose to trust with script execution.
       "script-src 'self' 'unsafe-inline' https://sdk.twilio.com https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://challenges.cloudflare.com https://www.google.com https://www.gstatic.com https://widget.termii.com",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      // The chat widget loads its own stylesheet into the iframes it builds.
+      // Refused here, its initialisation stopped before either iframe existed —
+      // so the page waited for an element that was never going to appear, and
+      // reported nothing at all. Script and frame were permitted and style was
+      // not, which is the same half-permission that broke the captcha.
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://widget.termii.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https:",
       // WebRTC + API + websocket signaling for the dialer + booking/intercom widgets.
