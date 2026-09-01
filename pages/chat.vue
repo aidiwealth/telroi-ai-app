@@ -24,6 +24,37 @@ definePageMeta({ layout: false });
 
 const note = ref('Opening chat…');
 
+/* Open the panel once the widget has mounted.
+ *
+ * toggleVisibility sets the state rather than flipping it — it calls
+ * setVisible(e) internally — so calling it more than once is harmless. Which
+ * matters: the app sees onPageFinished more than once, and a true toggle would
+ * have closed the panel as often as it opened it.
+ *
+ * The script's onload fires before the widget has mounted its own apps, and the
+ * function returns silently until it has. So this retries briefly rather than
+ * calling once and trusting it. */
+function openPanel(attempt = 0) {
+  const w = (window as any).LiveChatWidget;
+  try {
+    if (w && typeof w.toggleVisibility === 'function') {
+      w.toggleVisibility(true);
+      // The launcher is redundant once the panel is open on a screen that is
+      // only ever chat. Hidden in CSS rather than removed, since the widget
+      // manages its own DOM and rewrites it after opening.
+      const st = document.createElement('style');
+      st.textContent = '#termii-toggle-app,[id*="toggle-app"]{display:none !important}';
+      document.head.appendChild(st);
+      note.value = '';
+      return;
+    }
+  } catch { /* fall through and retry */ }
+  // Roughly five seconds. Longer than a widget takes on a poor connection, and
+  // short enough that a person is not staring at a blank screen if it fails.
+  if (attempt < 25) setTimeout(() => openPanel(attempt + 1), 200);
+  else note.value = 'Chat is taking longer than usual to load.';
+}
+
 onMounted(() => {
   const q = new URLSearchParams(window.location.search);
   const name = (q.get('name') || '').trim();
@@ -39,10 +70,17 @@ onMounted(() => {
     ...(phone ? { phone } : {})
   };
 
+  // ?open=1 opens the panel and hides the launcher. A corner bubble is right
+  // for a website and wrong for a screen whose whole purpose is chat — and the
+  // page can do it where the app cannot, because it knows when the script
+  // finished rather than polling for a global to appear.
+  const wantOpen = q.get('open') === '1';
+
   const s = document.createElement('script');
   s.src = 'https://widget.termii.com/01a04b2d-8706-71a7-ab66-273e131382ae.js';
   s.async = true;
   s.onerror = () => { note.value = 'Chat could not load. Check your connection and try again.'; };
+  s.onload = () => { if (wantOpen) openPanel(); };
   document.head.appendChild(s);
 
   // The address is cleaned once the widget has what it needs. A name and email
