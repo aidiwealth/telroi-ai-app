@@ -69,6 +69,26 @@ export async function verifyToken(token: string): Promise<string> {
 export async function verifyOtp(email: string, code: string): Promise<string> {
   const db = useDb();
   const normalized = email.trim().toLowerCase();
+
+  // The app store reviewers. Both require a working sign-in and neither can
+  // read an inbox, so one address accepts a fixed code.
+  //
+  // In the environment rather than the database or a flag on a row: its absence
+  // is the off switch. A column somebody has to remember to clear after review
+  // is a backdoor that outlives the reason for it, and this one closes by
+  // deleting a variable.
+  //
+  // Scoped to the exact address, and to nothing else. Every other sign-in takes
+  // the path below unchanged.
+  const reviewEmail = (process.env.REVIEW_EMAIL || '').trim().toLowerCase();
+  const reviewOtp = (process.env.REVIEW_OTP || '').trim();
+  if (reviewEmail && reviewOtp && normalized === reviewEmail) {
+    if (code.trim() === reviewOtp) {
+      console.log('[auth] review account signed in');
+      return normalized;
+    }
+    throw createError({ statusCode: 400, message: 'That code is not correct.' });
+  }
   const [row] = await db
     .select()
     .from(schema.authTokens)
