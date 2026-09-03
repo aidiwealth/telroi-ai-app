@@ -2,7 +2,7 @@
 // Place a voice OTP: dial the destination and read the code to whoever answers.
 //
 // Simpler than originate.ts — there is no agent and no bridge. One leg out
-// through a carrier trunk, landing in the otp-play dialplan context, which
+// through a carrier trunk, landing in the otp-out dialplan context, which
 // answers, plays our recorded line and reads the digits with SayDigits. No
 // synthesis per call: the phrase is a file and the digits are Asterisk's own,
 // so a hundred thousand calls a day cost nothing beyond the carrier minutes.

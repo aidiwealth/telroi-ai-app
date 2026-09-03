@@ -10,6 +10,13 @@
           <input v-model="airtime" class="ad-input mono" disabled />
           <span class="ad-hint">Fixed at $0.0102/min (sub-cent, billed per call)</span>
         </div>
+        <!-- Charged per verification rather than per minute: a client sending
+             OTPs wants a figure they can multiply, and the call is always
+             about the same length. Per-region rates below override this. -->
+        <div class="ad-field"><label>Voice OTP ($/verification)</label>
+          <input v-model.number="otp" type="number" step="0.001" min="0" class="ad-input mono" />
+          <p class="ad-hint">One price whatever the destination, unless a region below sets its own. Charged when the call is placed, and refused beforehand if the wallet cannot cover it.</p>
+        </div>
         <div class="ad-field"><label>Number / DID ($/mo)</label>
           <input v-model.number="did" type="number" step="0.01" class="ad-input mono" />
         </div>
@@ -143,6 +150,8 @@ const saving = ref(false);
 const saved = ref(false);
 const airtime = ref('0.0102');
 const did = ref(1.70);
+// Dollars here, micro-dollars on the wire. $0.01 is the seeded default.
+const otp = ref(0.01);
 const channel = ref(2.00);
 const startup = ref(10);
 const growth = ref(15);
@@ -192,6 +201,8 @@ async function load() {
     const { pricing } = await adminApi.get<any>('/api/admin/pricing');
     if (pricing) {
       did.value = pricing.didMonthlyUsdMinor / 100;
+      // Micro-dollars on the wire, dollars on the screen.
+      otp.value = (pricing.voiceOtpUsdMicro ?? 10000) / 1000000;
       channel.value = pricing.channelMonthlyUsdMinor / 100;
       startup.value = pricing.planStartupUsdMinor / 100;
       growth.value = pricing.planGrowthUsdMinor / 100;
@@ -223,6 +234,7 @@ async function save() {
   try {
     await adminApi.post('/api/admin/pricing', {
       didMonthlyUsdMinor: Math.round(did.value * 100),
+      voiceOtpUsdMicro: Math.round(otp.value * 1000000),
       channelMonthlyUsdMinor: Math.round(channel.value * 100),
       planStartupUsdMinor: Math.round(startup.value * 100),
       planGrowthUsdMinor: Math.round(growth.value * 100),

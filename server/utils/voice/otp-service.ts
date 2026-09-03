@@ -107,7 +107,17 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
   if (!sandboxed) {
     const { getPricing, otpCostMinor } = await import('../pricing');
     const { getOrCreateWallet } = await import('../wallet');
-    const pricing = await getPricing(tenantId);
+    // The destination's region, not the client's: a Lagos business verifying a
+    // US number pays what that call costs us. detectRegion falls back to NG for
+    // anything it does not recognise, which is right for routing and wrong
+    // here — an unknown destination should not be priced at the cheapest rate
+    // we have. So an unrecognised prefix takes the global figure instead.
+    const { detectRegion } = await import('../regions');
+    const known = ['NG', 'US', 'GB', 'CA'];
+    const raw = detectRegion(toNumber);
+    const region = known.includes(raw) && /^\+?(234|1|44)/.test(toNumber.replace(/[^\d+]/g, ''))
+      ? raw : undefined;
+    const pricing = await getPricing(tenantId, region);
     const wallet = await getOrCreateWallet(tenantId);
     chargeMinor = otpCostMinor(wallet.currency as any, pricing.ngnPerUsd, pricing.voiceOtpUsdMicro);
     // Postpaid runs on credit down to its limit, so a bare balance check would

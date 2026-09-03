@@ -1357,6 +1357,30 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
 
 /* Per-tenant pricing overrides. Any null field falls back to the global
    singleton pricing row. Lets the operator give a specific client custom rates. */
+/**
+ * Per-region rates.
+ *
+ * Between the global figures on `pricing` and any per-tenant override: global,
+ * then region, then tenant, each falling back to the one above. A verification
+ * to Lagos and one to Chicago cost us differently and were priced the same.
+ *
+ * Null means "use the global figure", so a region can be listed for one rate
+ * without committing to the other before its carrier cost is known.
+ */
+export const regionRates = pgTable('region_rates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  region: text('region').notNull(),
+  label: text('label').notNull(),
+  // Micro-dollars, matching voice_otp_usd_micro rather than the nano the AI
+  // rates use: a verification costs cents, an AI turn thousandths of one.
+  voiceOtpUsdMicro: integer('voice_otp_usd_micro'),
+  voiceMinuteUsdMicro: integer('voice_minute_usd_micro'),
+  notes: text('notes'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  regionIdx: uniqueIndex('region_rates_region_idx').on(t.region)
+}));
+
 export const pricingOverrides = pgTable('pricing_overrides', {
   tenantId: uuid('tenant_id').primaryKey().references(() => tenants.id, { onDelete: 'cascade' }),
   voiceMinuteUsdMinor: integer('voice_minute_usd_minor'),          // legacy, unused for billing
