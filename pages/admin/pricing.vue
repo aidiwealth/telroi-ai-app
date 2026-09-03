@@ -206,7 +206,10 @@ const regions = ref<any[]>([]);
 
 async function loadRegions() {
   try {
-    const r = await api.get<any>('/api/admin/pricing/regions');
+    // adminApi, not api: this page is admin-session scoped and the other calls
+    // on it use that. Using the wrong one failed silently and left an empty
+    // table, which read as a screen with nothing to show rather than a fault.
+    const r = await adminApi.get<any>('/api/admin/pricing/regions');
     regions.value = (r?.regions || []).map((x: any) => ({
       ...x,
       // Empty string rather than 0 for an unset rate: the placeholder then
@@ -216,7 +219,10 @@ async function loadRegions() {
       _min: x.voiceMinuteUsdMicro == null ? '' : x.voiceMinuteUsdMicro / 1000000,
       _busy: false
     }));
-  } catch { regions.value = []; }
+  } catch (e) {
+    console.error('[pricing] could not load region rates:', e);
+    regions.value = [];
+  }
 }
 
 async function saveRegion(r: any) {
@@ -224,7 +230,7 @@ async function saveRegion(r: any) {
   try {
     // Null clears an override back to the global rate. Sending 0 instead would
     // price the region at nothing, which is a different and expensive thing.
-    await api.post<any>('/api/admin/pricing/regions', {
+    await adminApi.post<any>('/api/admin/pricing/regions', {
       region: r.region,
       voiceOtpUsdMicro: r._otp === '' || r._otp == null ? null : Math.round(Number(r._otp) * 1000000),
       voiceMinuteUsdMicro: r._min === '' || r._min == null ? null : Math.round(Number(r._min) * 1000000),
