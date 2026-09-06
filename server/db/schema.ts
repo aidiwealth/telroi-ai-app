@@ -1602,6 +1602,11 @@ export const userDevices = pgTable('user_devices', {
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   pushToken: text('push_token').notNull(),
   platform: text('platform').notNull(),          // android | ios
+  // APNs has separate sandbox and production hosts and a token carries no
+  // indication of which it belongs to. A TestFlight token sent to the
+  // production host fails with BadDeviceToken, which reads as a dead device
+  // rather than a wrong host — so the app says which build it is.
+  environment: text('environment').notNull().default('production'),
   model: text('model'),
   appVersion: text('app_version'),
   // Set rather than deleted when somebody is removed from a workspace, so the

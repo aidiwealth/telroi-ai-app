@@ -109,6 +109,10 @@ export const userDevices = pgTable('user_devices', {
   userId: uuid('user_id').notNull(),
   pushToken: text('push_token').notNull(),
   platform: text('platform').notNull(),
+  // Which APNs host a token belongs to. Declared here as well as in the main
+  // schema: a column used by the sender and missing from this file reads as
+  // undefined and fails inside a catch, which cost a day in August.
+  environment: text('environment').notNull().default('production'),
   revokedAt: timestamp('revoked_at', { withTimezone: true })
 });
 
