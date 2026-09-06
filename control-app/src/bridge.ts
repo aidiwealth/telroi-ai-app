@@ -74,6 +74,19 @@ async function playToChannel(client: Ari.Client, channel: Ari.Channel, media: st
   } catch { /* best-effort */ }
 }
 
+/**
+ * A Local channel into the ring-all context, so every device a person has
+ * registered rings rather than whichever contact PJSIP happened to resolve.
+ *
+ * Takes "PJSIP/tnt_abc123" and returns "Local/tnt_abc123@telroi-ring-all-contacts".
+ * Anything not in that shape is passed through untouched — carrier trunks and
+ * anything else that is not a user AOR should dial exactly as before.
+ */
+function localForAor(endpoint: string): string {
+  const m = /^PJSIP\/([a-z0-9_]+)$/i.exec(endpoint);
+  return m ? `Local/${m[1]}@telroi-ring-all-contacts` : endpoint;
+}
+
 export interface BridgeOptions {
   client: Ari.Client;
   caller: Ari.Channel;      // the inbound channel already in Stasis
@@ -195,7 +208,12 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<{ answered:
 
   try {
     await calleeChan.originate({
-      endpoint,
+      // Through the ring-all context rather than at the endpoint directly.
+      // Originating to PJSIP/<endpoint> resolves ONE contact — it does not fork
+      // — so somebody with a phone and a browser had one of them ring, and
+      // which one was PJSIP's choice rather than ours. A phone woken by push
+      // then sat there while the call went to a browser.
+      endpoint: localForAor(endpoint),
       app: 'telroi',                       // bring the callee into our Stasis app
       appArgs: 'dialed',                   // marker so we know it's an outbound leg
       callerId: opts.callerIdNum || 'Telroi',
@@ -327,7 +345,9 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
     callees.push(ch);
     channelEndpoint.set(ch.id, endpoint);
     try {
-      await ch.originate({ endpoint, app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
+      // Same reasoning as the escalation path above: fork across every contact
+      // on the AOR rather than letting PJSIP pick one.
+      await ch.originate({ endpoint: localForAor(endpoint), app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
       log(`dept originating to ${endpoint} (ring ${ringTimeout}s)`);
     } catch (err) {
       originateFailures++;
