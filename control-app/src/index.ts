@@ -86,6 +86,42 @@ async function inboundCapacity(tenantId: string, log: (m: string) => void): Prom
  *  Asked of Asterisk directly: ARI's endpoint object reports state and channel
  *  ids and carries no contact list, which an earlier version of this logged as
  *  an empty array and mistook for an answer. */
+/**
+ * Wake whoever is about to be rung, and wait for one of them to register.
+ *
+ * The push used to sit inside the escalation branch alone, so a call that
+ * routed straight to a team — which most inbound numbers do — bridged to a
+ * department without waking anybody. Apps open, the phone was already
+ * registered and rang; apps closed, nothing woke and nothing rang, and it read
+ * as a registration fault for a week.
+ *
+ * Every path that rings an agent calls this first.
+ */
+async function wakeAndWait(args: {
+  tenantId: string; users: string[]; callId: string;
+  from: string; to: string; log: (m: string) => void;
+}): Promise<void> {
+  const { tenantId, users, callId, from, to, log } = args;
+  if (!users.length) return;
+  try {
+    const woke = await pushIncomingCall({ tenantId, callId, from, to });
+    if (!woke) return;
+    // Wait for a device rather than a fixed interval: a cold iOS launch takes
+    // about 1.7s to start its stack, fetch a token, handshake and register, and
+    // a warm Android is ready in a fraction of that. Five seconds as a
+    // backstop, since the caller hears silence throughout.
+    const started = Date.now();
+    const before = await contactCount(users, log);
+    while (Date.now() - started < 5000) {
+      await new Promise((r) => setTimeout(r, 250));
+      if (await contactCount(users, log) > before) break;
+    }
+    log(`  [push] waited ${Date.now() - started}ms for a device on ${callId}`);
+  } catch (e) {
+    log(`  [push] wake failed: ${(e as Error)?.message}`);
+  }
+}
+
 async function contactCount(usernames: string[], log: (m: string) => void): Promise<number> {
   try {
     const { execFile } = await import('node:child_process');
@@ -587,6 +623,13 @@ async function main() {
           if (!cap.ai) {
             log(`     AI unavailable (${cap.aiReason}) — ringing agents instead`);
             const allUsers = resolveTenantEndpoints(route.tenantId);
+            // Before filtering, not after: a phone woken by push is not
+            // registered yet, so a list built first would exclude the very
+            // device the push exists to reach.
+            await wakeAndWait({
+              tenantId: route.tenantId, users: allUsers, callId: chId,
+              from: callerNum || '', to: dialedDid || '', log
+            });
             const liveUsers = await filterLiveEndpoints(client, allUsers, log);
             const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
             if (!endpoints.length) {
