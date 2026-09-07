@@ -311,6 +311,10 @@ async function main() {
       // below would do (route type, blacklist) has already been settled.
       if (widgetTenantId) {
         const allUsers = resolveTenantEndpoints(widgetTenantId);
+        await wakeAndWait({
+          tenantId: widgetTenantId, users: allUsers, callId: chId,
+          from: callerNum || '', to: 'Live Call', log
+        });
         const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
         const visitorName = await guestCallerName(String(callerNum || ''));
         let endpoints = await free();
@@ -680,6 +684,10 @@ async function main() {
               if (department) {
                 const members = resolveDepartmentByName(route.tenantId, department);
                 if (members.length) {
+                  await wakeAndWait({
+                    tenantId: route.tenantId, users: members, callId: chId,
+                    from: callerNum || '', to: dialedDid || '', log
+                  });
                   const live = await filterLiveEndpoints(client, members, log);
                   log(`  [ai ${chId}] transfer to department "${department}" - ${live.length} live of ${members.length}`);
                   if (live.length) {
@@ -848,6 +856,10 @@ async function main() {
         // for a single target it was never given.
         case 'ring_all': {
           const allUsers = resolveTenantEndpoints(route.tenantId);
+          await wakeAndWait({
+            tenantId: route.tenantId, users: allUsers, callId: chId,
+            from: callerNum || '', to: dialedDid || '', log
+          });
           const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
           let endpoints = await free();
           log(`     Ring-all route -> ${endpoints.length} available of ${allUsers.length} endpoint(s)`);
