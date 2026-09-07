@@ -1,7 +1,8 @@
 // server/db/schema.ts
 // Drizzle ORM schema for the Telroi dashboard (PostgreSQL).
 import {
-  pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex
+  pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex,
+  primaryKey
 } from 'drizzle-orm/pg-core';
 
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'member']);export const platformRoleEnum = pgEnum('platform_role', ['superadmin', 'staff']);
@@ -1596,6 +1597,20 @@ export const adminCopilotConversations = pgTable('admin_copilot_conversations', 
 /* Handsets that can be woken for a call. One row per install: reinstalling the
  * app issues a new FCM token, and the old row is swept the first time FCM says
  * it is permanently invalid. */
+/**
+ * When somebody last looked at their missed calls.
+ *
+ * Per user rather than per workspace: a count driven by colleagues' missed
+ * calls is one people learn to ignore, which is worse than not having it.
+ */
+export const missedSeen = pgTable('missed_seen', {
+  tenantId: uuid('tenant_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  pk: primaryKey({ columns: [t.tenantId, t.userId] })
+}));
+
 export const userDevices = pgTable('user_devices', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),

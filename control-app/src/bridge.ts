@@ -197,7 +197,10 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<{ answered:
       await bridge.addChannel({ channel: ch.id });
       wasAnswered = true;
       answeredAt = Date.now();
-      if (opts.onStatus) { try { opts.onStatus('answered'); } catch { /* never break the call */ } }
+      // Which endpoint answered. The department path has always reported it
+      // and this one did not, so a call answered here recorded no user — and an
+      // app cannot tell a call a colleague took from one nobody did.
+      if (opts.onStatus) { try { opts.onStatus('answered', { endpoint }); } catch { /* never break the call */ } }
       log(`bridged: ${caller.id} <-> ${ch.id}`);
     } catch (err) {
       log(`failed to bridge callee: ${(err as Error)?.message}`);
