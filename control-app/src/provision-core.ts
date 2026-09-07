@@ -60,9 +60,15 @@ function endpointConfig(username: string, password: string, tenantId: string, la
     ? `max_contacts=3
 remove_existing=yes
 `
+    // remove_unavailable was yes, which asks Asterisk to drop a contact it
+    // considers unreachable — but qualify is off on these AORs, so it never
+    // probes and has no evidence either way. A contact removed on no evidence
+    // is a call that definitely fails; a contact kept is a call that might
+    // connect. The asymmetry favours keeping it: an INVITE to a stale address
+    // costs nothing, a missing contact costs the call.
     : `max_contacts=5
 remove_existing=no
-remove_unavailable=yes
+remove_unavailable=no
 `;
   const mediaBlock = webrtc
     ? `webrtc=yes
