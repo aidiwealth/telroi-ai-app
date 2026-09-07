@@ -347,8 +347,19 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
     try {
       // Same reasoning as the escalation path above: fork across every contact
       // on the AOR rather than letting PJSIP pick one.
-      await ch.originate({ endpoint: localForAor(endpoint), app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
-      log(`dept originating to ${endpoint} (ring ${ringTimeout}s)`);
+      // Which contacts this will actually reach, before dialling rather than
+      // after. Contact selection has been the answer to three different-looking
+      // faults — a browser taking a phone's call, a phone that never rang, and
+      // one device ringing of two — and each time it had to be reasoned out
+      // from a live trace because nothing recorded it.
+      const target = localForAor(endpoint);
+      try {
+        const aor = endpoint.replace(/^PJSIP\//, '');
+        const cs = await client.endpoints.get({ tech: 'PJSIP', resource: aor });
+        log(`dept ${aor}: state=${cs?.state} contacts=${JSON.stringify((cs as any)?.contacts || [])}`);
+      } catch { /* the dial matters more than the note of it */ }
+      await ch.originate({ endpoint: target, app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
+      log(`dept originating to ${target} (ring ${ringTimeout}s)`);
     } catch (err) {
       originateFailures++;
       log(`dept originate to ${endpoint} failed: ${(err as Error)?.message}`);
