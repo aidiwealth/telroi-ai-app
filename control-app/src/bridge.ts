@@ -82,6 +82,10 @@ async function playToChannel(client: Ari.Client, channel: Ari.Channel, media: st
  * Anything not in that shape is passed through untouched — carrier trunks and
  * anything else that is not a user AOR should dial exactly as before.
  */
+function cs_state(aorOutput: string): string {
+  return aorOutput.includes('Contact:') ? 'has-contacts' : 'none';
+}
+
 function localForAor(endpoint: string): string {
   const m = /^PJSIP\/([a-z0-9_]+)$/i.exec(endpoint);
   return m ? `Local/${m[1]}@telroi-ring-all-contacts` : endpoint;
@@ -355,8 +359,17 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
       const target = localForAor(endpoint);
       try {
         const aor = endpoint.replace(/^PJSIP\//, '');
-        const cs = await client.endpoints.get({ tech: 'PJSIP', resource: aor });
-        log(`dept ${aor}: state=${cs?.state} contacts=${JSON.stringify((cs as any)?.contacts || [])}`);
+        // ARI's endpoint object does not carry the contact list — it reports
+        // state and channel ids and nothing about the AOR — so this asks
+        // Asterisk itself. The first version logged an empty array and looked
+        // like an answer, which is the shape of fault this logging exists to
+        // stop.
+        const { execFile } = await import('node:child_process');
+        const out = await new Promise<string>((res) => {
+          execFile('asterisk', ['-rx', `pjsip show aor ${aor}`], (_e, so) => res(so || ''));
+        });
+        const lines = out.split('\n').filter((l) => l.includes('Contact:'));
+        log(`dept ${aor}: state=${cs_state(out)} contacts=${lines.length} ${lines.map((l) => l.trim().split(/\s+/)[1] || '').join(' ')}`);
       } catch { /* the dial matters more than the note of it */ }
       await ch.originate({ endpoint: target, app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
       log(`dept originating to ${target} (ring ${ringTimeout}s)`);
