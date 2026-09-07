@@ -728,6 +728,15 @@ async function main() {
                 // wrong three times. This says plainly which tenant was asked for
                 // and what came back.
                 log(`  [ai ${chId}] ring_all for tenant ${route.tenantId} -> ${JSON.stringify(allUsers)}`);
+                // Wake them before asking who is live. This is the path an AI
+                // transfer takes when no department is named, which is the
+                // common case, and it had no push at all: eleven users listed,
+                // one live, nothing woken, sixteen milliseconds between the
+                // list and the bridge.
+                await wakeAndWait({
+                  tenantId: route.tenantId, users: allUsers, callId: chId,
+                  from: callerNum || '', to: dialedDid || '', log
+                });
                 const liveUsers = await filterLiveEndpoints(client, allUsers, log);
                 const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
                 log(`  [ai ${chId}] escalation mode=ring_all — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
