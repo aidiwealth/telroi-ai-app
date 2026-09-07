@@ -82,6 +82,24 @@ async function inboundCapacity(tenantId: string, log: (m: string) => void): Prom
 }
 
 
+/** How many contacts these users have registered, across all their devices.
+ *  Asked of Asterisk directly: ARI's endpoint object reports state and channel
+ *  ids and carries no contact list, which an earlier version of this logged as
+ *  an empty array and mistook for an answer. */
+async function contactCount(usernames: string[], log: (m: string) => void): Promise<number> {
+  try {
+    const { execFile } = await import('node:child_process');
+    const counts = await Promise.all(usernames.map((u) => new Promise<number>((res) => {
+      execFile('asterisk', ['-rx', `pjsip show aor ${u}`], (_e, so) =>
+        res(((so || '').match(/Contact:\s+\S+\/sip:/g) || []).length));
+    })));
+    return counts.reduce((a, b) => a + b, 0);
+  } catch (e) {
+    log(`  [push] contact count failed: ${(e as Error)?.message}`);
+    return 0;
+  }
+}
+
 async function filterLiveEndpoints(client: any, usernames: string[], log: (m: string) => void): Promise<string[]> {
   const checks = await Promise.all(usernames.map(async (u) => {
     try {
@@ -459,7 +477,28 @@ async function main() {
             tenantId: route.tenantId, callId: chId,
             from: callerNum || '', to: dialedDid || ''
           });
-          if (woke) await new Promise((r) => setTimeout(r, 2000));
+          // Wait for a device to actually register rather than for a fixed
+          // interval. Two seconds is generous for a warm Android and marginal
+          // for a cold iOS launch, which has to start its SIP stack, fetch a
+          // token over HTTPS, complete a TLS handshake and register — measured
+          // at 1.67s on a good connection, with nothing to spare on a poor one.
+          //
+          // Counting contacts rather than asking whether the endpoint is
+          // online: with a browser registered it is online from the first
+          // moment, and the loop would exit before any phone arrived.
+          //
+          // Five seconds as a backstop, since the caller hears silence
+          // throughout. Dialling late beats dialling into nothing; a caller who
+          // has already hung up beats neither.
+          if (woke) {
+            const started = Date.now();
+            const before = await contactCount(allUsers, log);
+            while (Date.now() - started < 5000) {
+              await new Promise((r) => setTimeout(r, 250));
+              if (await contactCount(allUsers, log) > before) break;
+            }
+            log(`  [esc ${chId}] waited ${Date.now() - started}ms after push`);
+          }
         } catch (e) { log(`  [esc ${chId}] push failed: ${(e as Error)?.message}`); }
 
         const freeEsc = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
