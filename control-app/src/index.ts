@@ -116,7 +116,12 @@ async function wakeAndWait(args: {
       await new Promise((r) => setTimeout(r, 250));
       if (await contactCount(users, log) > before) break;
     }
-    log(`  [push] waited ${Date.now() - started}ms for a device on ${callId}`);
+    const after = await contactCount(users, log);
+    // What we were waiting for, not just how long. The app registers in about
+    // 1.7s, so a five-second wait means we were waiting for something else — a
+    // colleague's phone, a browser, or a contact that was never coming. A
+    // longer backstop would make everyone wait longer for the same outcome.
+    log(`  [push] waited ${Date.now() - started}ms on ${callId} — contacts ${before} to ${after} across ${users.length} user(s)`);
   } catch (e) {
     log(`  [push] wake failed: ${(e as Error)?.message}`);
   }
