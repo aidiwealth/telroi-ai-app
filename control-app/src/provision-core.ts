@@ -57,8 +57,13 @@ function endpointConfig(username: string, password: string, tenantId: string, la
   // than a re-registration evicting the working contact. Which is what left a
   // registered phone unreachable while the browser rang.
   const aorPolicy = webrtc
+    // Not yes, even here. A person has one AOR and both their browser and their
+    // phone register to it, so evicting on registration means whichever arrived
+    // last is the only one that rings — which the comment above already names
+    // as the fault it was meant to prevent. Forty endpoints carried this, so
+    // anybody with the app and a browser open was losing one of them silently.
     ? `max_contacts=3
-remove_existing=yes
+remove_existing=no
 `
     // remove_unavailable was yes, which asks Asterisk to drop a contact it
     // considers unreachable — but qualify is off on these AORs, so it never
