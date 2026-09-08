@@ -988,6 +988,11 @@ async function main() {
   // Nigerian calls, which is most of them.
   import('./telnyx-trunk.ts').then(({ ensureTelnyxTrunk }) => ensureTelnyxTrunk())
     .catch((e) => log(`telnyx trunk: ${e?.message || e}`));
+  // Twilio the same way. Until now it was a browser-only path — the web dialler
+  // uses Twilio's own SDK and never touches this PBX — so a Twilio number could
+  // be called from a browser and not from a phone.
+  import('./twilio-trunk.ts').then(({ ensureTwilioTrunk }) => ensureTwilioTrunk())
+    .catch((e) => log(`twilio trunk: ${e?.message || e}`));
   log(`Listening on Stasis app "${config.ari.appName}". Dial 700 to test.`);
 
   const shutdown = async () => {

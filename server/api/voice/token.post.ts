@@ -45,7 +45,9 @@ export default defineEventHandler(async (event) => {
   }
   // Resolve the from-number's BOUND vendor (set by admin in inventory) to a PBX
   // dial prefix, so browser calls route out the correct Asterisk trunk WITHOUT
-  // the customer ever dealing with routes. ruach->81, kasooko->82, sotel->83.
+  // the customer ever dealing with routes. ruach->81, kasooko->82, sotel->83,
+  // twilio->84. Twilio was browser-only until now: the web dialler uses their
+  // own SDK and never touches our PBX, so a phone had nowhere to route one.
   let dialPrefix = '';
   try {
     const lookupNum = selectedFrom || dial.fromNumber;
@@ -57,7 +59,7 @@ export default defineEventHandler(async (event) => {
         .where(and(eq(schema.numberSubscriptions.tenantId, s.tenantId), eq(schema.numberSubscriptions.telnum, lookupNum)))
         .limit(1);
       const raw = sub?.provider || '';
-      dialPrefix = raw === 'ruach' ? '81' : raw === 'kasooko' ? '82' : raw === 'sotel' ? '83' : '';
+      dialPrefix = raw === 'ruach' ? '81' : raw === 'kasooko' ? '82' : raw === 'sotel' ? '83' : raw === 'twilio' ? '84' : '';
     }
   } catch { /* no prefix -> default routing */ }
 

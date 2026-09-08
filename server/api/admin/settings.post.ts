@@ -33,7 +33,10 @@ const Body = z.object({
   telnyxApiKey: z.string().optional(),
   telnyxConnectionId: z.string().optional(),
   // Browser-voice (WebRTC) credentials for in-app + widget calling.
-  twilioVoice: z.object({ apiKeySid: z.string(), apiKeySecret: z.string(), twimlAppSid: z.string(), callerId: z.string() }).partial().optional(),
+  // sipUsername/sipPassword/sipDomain are the Elastic SIP Trunking credentials,
+  // separate from the SDK ones above: the browser talks to Twilio's cloud
+  // directly, and a native app needs a trunk from our PBX instead.
+  twilioVoice: z.object({ apiKeySid: z.string(), apiKeySecret: z.string(), twimlAppSid: z.string(), callerId: z.string(), sipUsername: z.string(), sipPassword: z.string(), sipDomain: z.string() }).partial().optional(),
   telnyxVoice: z.object({ sipUsername: z.string(), sipPassword: z.string(), connectionId: z.string(), callerId: z.string() }).partial().optional(),
   digiditeVoice: z.object({ wsServer: z.string(), sipDomain: z.string(), sipUsername: z.string(), sipPassword: z.string(), callerId: z.string() }).partial().optional(),
   asteriskVoice: z.object({ sipGateway: z.string(), sipPort: z.number(), transport: z.enum(['udp', 'tcp', 'tls']), sipDomain: z.string(), authUser: z.string(), authPass: z.string(), callerId: z.string(), dids: z.array(z.string()), apiBaseUrl: z.string(), apiUsername: z.string(), apiPassword: z.string(), ariAppName: z.string() }).partial().optional(),
@@ -138,7 +141,12 @@ export default defineEventHandler(async (event) => {
   // Browser-voice creds: only store when all required fields for that provider
   // are present, so a partial save never half-configures voice.
   if (d.twilioVoice && d.twilioVoice.apiKeySid && d.twilioVoice.apiKeySecret && d.twilioVoice.twimlAppSid) {
-    patch.twilioVoiceCredsEnc = encrypt(JSON.stringify({ apiKeySid: d.twilioVoice.apiKeySid, apiKeySecret: d.twilioVoice.apiKeySecret, twimlAppSid: d.twilioVoice.twimlAppSid, callerId: d.twilioVoice.callerId || '' }));
+    patch.twilioVoiceCredsEnc = encrypt(JSON.stringify({
+      apiKeySid: d.twilioVoice.apiKeySid, apiKeySecret: d.twilioVoice.apiKeySecret,
+      twimlAppSid: d.twilioVoice.twimlAppSid, callerId: d.twilioVoice.callerId || '',
+      sipUsername: d.twilioVoice.sipUsername || '', sipPassword: d.twilioVoice.sipPassword || '',
+      sipDomain: d.twilioVoice.sipDomain || ''
+    }));
   }
   // Merge over the stored creds so a blank password keeps the existing one —
   // otherwise changing just a caller ID would either wipe the password or, if we

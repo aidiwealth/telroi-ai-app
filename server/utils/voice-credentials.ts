@@ -3,7 +3,17 @@
 import { decrypt } from './crypto';
 import { platformSettings } from './platform';
 
-export interface TwilioVoiceCreds { accountSid: string; apiKeySid: string; apiKeySecret: string; twimlAppSid: string; callerId: string; }
+// The SDK fields are for the browser dialler, which talks to Twilio's cloud
+// directly. The SIP ones are for the PBX trunk, which is a separate path: a
+// native app speaks SIP to our own PBX and has no way to reach Twilio's cloud,
+// so a Twilio number could be called from a browser and not from a phone.
+export interface TwilioVoiceCreds {
+  accountSid: string; apiKeySid: string; apiKeySecret: string;
+  twimlAppSid: string; callerId: string;
+  // Elastic SIP Trunking termination. Optional, since a workspace may use the
+  // browser path alone.
+  sipUsername?: string; sipPassword?: string; sipDomain?: string;
+}
 export interface TelnyxVoiceCreds { sipUsername: string; sipPassword: string; connectionId: string; callerId: string; }
 export interface DigiditeVoiceCreds { wsServer: string; sipDomain: string; sipUsername: string; sipPassword: string; callerId: string; }
 // Core Asterisk (global). SIP trunk + AMI/ARI REST API, IP-authenticated.
