@@ -80,9 +80,14 @@ export async function verifyOtp(email: string, code: string): Promise<string> {
   //
   // Scoped to the exact address, and to nothing else. Every other sign-in takes
   // the path below unchanged.
-  const reviewEmail = (process.env.REVIEW_EMAIL || '').trim().toLowerCase();
+  // A list rather than one address: the two stores need an account each. Apple
+  // tests in-app deletion, and a sole owner deleting themselves closes the
+  // workspace — which would take the other reviewer's account with it if they
+  // shared one, and Google's review would fail with nothing to explain why.
+  const reviewEmails = (process.env.REVIEW_EMAIL || '')
+    .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
   const reviewOtp = (process.env.REVIEW_OTP || '').trim();
-  if (reviewEmail && reviewOtp && normalized === reviewEmail) {
+  if (reviewEmails.length && reviewOtp && reviewEmails.includes(normalized)) {
     if (code.trim() === reviewOtp) {
       console.log('[auth] review account signed in');
       return normalized;
