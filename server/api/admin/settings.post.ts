@@ -138,14 +138,29 @@ export default defineEventHandler(async (event) => {
       connectionId: d.telnyxConnectionId || existing.connectionId || ''
     }));
   }
-  // Browser-voice creds: only store when all required fields for that provider
-  // are present, so a partial save never half-configures voice.
-  if (d.twilioVoice && d.twilioVoice.apiKeySid && d.twilioVoice.apiKeySecret && d.twilioVoice.twimlAppSid) {
+  // Merged rather than replaced, and keyed on any field being present rather
+  // than all three. The SDK credentials and the SIP trunk are separate paths
+  // with separate secrets, and requiring all of one to save any of the other
+  // meant the trunk fields were silently discarded — the API key secret shows
+  // blank once saved, so a person editing the trunk had no way to satisfy it.
+  if (d.twilioVoice && (d.twilioVoice.apiKeySid || d.twilioVoice.sipUsername || d.twilioVoice.sipDomain)) {
+    let prior: any = {};
+    try {
+      const { decrypt: dec } = await import('~/server/utils/crypto');
+      const [cur] = await db.select({ enc: schema.platformSettings.twilioVoiceCredsEnc })
+        .from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+      if (cur?.enc) prior = JSON.parse(dec(cur.enc));
+    } catch { /* first save, or unreadable — treat as empty */ }
     patch.twilioVoiceCredsEnc = encrypt(JSON.stringify({
-      apiKeySid: d.twilioVoice.apiKeySid, apiKeySecret: d.twilioVoice.apiKeySecret,
-      twimlAppSid: d.twilioVoice.twimlAppSid, callerId: d.twilioVoice.callerId || '',
-      sipUsername: d.twilioVoice.sipUsername || '', sipPassword: d.twilioVoice.sipPassword || '',
-      sipDomain: d.twilioVoice.sipDomain || ''
+      ...prior,
+      apiKeySid: d.twilioVoice.apiKeySid || prior.apiKeySid || '',
+      apiKeySecret: d.twilioVoice.apiKeySecret || prior.apiKeySecret || '',
+      twimlAppSid: d.twilioVoice.twimlAppSid || prior.twimlAppSid || '',
+      callerId: d.twilioVoice.callerId || prior.callerId || '',
+      sipUsername: d.twilioVoice.sipUsername || prior.sipUsername || '',
+      // Blank keeps the stored one, like every other password on this page.
+      sipPassword: d.twilioVoice.sipPassword || prior.sipPassword || '',
+      sipDomain: d.twilioVoice.sipDomain || prior.sipDomain || ''
     }));
   }
   // Merge over the stored creds so a blank password keeps the existing one —
