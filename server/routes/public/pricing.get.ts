@@ -66,6 +66,18 @@ export default defineEventHandler(async (event) => {
         ...pair(p.voiceMinuteUsdMinor),
         ...nanoPair(Math.round((Number(p.voiceMinuteUsdMicro) || 10200) * 1000))
       },
+      // A notification bills at the voice rate above, per second, with a
+      // one-minute minimum — the minimum matching what a carrier bills us for a
+      // short call, which is the same reason OTP is flat. The speech is charged
+      // separately and per character, since a long message costs more to say
+      // whatever the call's length, and it costs us whether or not anybody
+      // answered. Published together so a quoted rate is not half the price.
+      voiceNotification: {
+        ...nanoPair(Math.round((Number(p.voiceMinuteUsdMicro) || 10200) * 1000)),
+        minimumBillableSeconds: 60,
+        ttsPerCharacterNanoUsd: Number(p.aiTtsPerCharNano) || 0,
+        maxCharacters: 900
+      },
       channelMonthly: pair(p.channelMonthlyUsdMinor),
       numberMonthly: pair(p.didMonthlyUsdMinor),
       // Flat per call rather than per minute: a carrier bills a whole minute for

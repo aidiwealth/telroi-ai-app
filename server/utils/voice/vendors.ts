@@ -249,3 +249,61 @@ export async function transcribeSpeech(input: SttInput): Promise<SttResult> {
 export const OTP_VENDORS = ['telroi', 'twilio', 'telnyx', 'vonage', 'custom'] as const;
 export const TTS_VENDORS = ['telroi', 'elevenlabs', 'openai', 'google', 'azure', 'custom'] as const;
 export const STT_VENDORS = ['telroi', 'deepgram', 'openai', 'google', 'azure', 'custom'] as const;
+
+export interface PlaceNotifyCallInput {
+  toNumber: string;
+  notificationId: string;
+  text: string;
+  // The agent synthesises through the web app, which needs to know whose
+  // voice settings and whose bill it is.
+  tenantId: string;
+  callTimeoutSec?: number;
+}
+
+/**
+ * Place a notification call through our own PBX.
+ *
+ * One path rather than OTP's three. OTP speaks a code, and a code is short
+ * enough that each vendor can be told to read it in that vendor's own way — at
+ * the cost of three scripts that drift, which the comment above records having
+ * happened. A notification speaks the client's own words, so the text would
+ * have to be handed to whichever vendor placed the call and spoken by their
+ * engine, in their voice, with their pricing.
+ *
+ * So it goes out over our own carriers, where we synthesise it ourselves and
+ * the voice is the same one every time. That limits destinations to what those
+ * carriers reach, which is a smaller promise than OTP makes and an honest one.
+ */
+export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<PlaceOtpCallResult> {
+  const cfg = useRuntimeConfig() as any;
+  const base = (cfg.provisionAgentUrl || '').replace(/\/+$/, '');
+  const secret = cfg.provisionAgentSecret || '';
+  if (!base || !secret) {
+    return { ok: false, reason: 'The PBX provisioning agent is not configured, so notifications cannot be placed.' };
+  }
+  const ps = await loadVendorSettings().catch(() => null as any);
+  try {
+    const res = await fetch(`${base}/notify-call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({
+        notificationId: input.notificationId,
+        tenantId: input.tenantId,
+        to: input.toNumber,
+        text: input.text,
+        trunk: ps?.otpNgTrunk || 'ruach-endpoint',
+        host: ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng',
+        // Digits only, like the OTP path: the carrier's switch returned 500 on a
+        // caller id with a leading plus and accepted the same number without one.
+        callerId: String(ps?.otpNgCallerId || '').replace(/[^0-9]/g, ''),
+        callTimeoutSec: input.callTimeoutSec || 45
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!res.ok) return { ok: false, reason: `agent_http_${res.status}` };
+    const j: any = await res.json();
+    return j?.ok ? { ok: true, providerRef: j.callid || input.notificationId } : { ok: false, reason: j?.reason || 'agent_refused' };
+  } catch (e: any) {
+    return { ok: false, reason: e?.message || 'agent_unreachable' };
+  }
+}

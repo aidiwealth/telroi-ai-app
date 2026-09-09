@@ -1603,6 +1603,38 @@ export const adminCopilotConversations = pgTable('admin_copilot_conversations', 
  * Per user rather than per workspace: a count driven by colleagues' missed
  * calls is one people learn to ignore, which is worse than not having it.
  */
+/**
+ * Voice notifications: a call that speaks a message the client wrote.
+ *
+ * A row per notification, for the same reasons voiceOtps has one — rate
+ * limiting needs a history to count against, and an unsolicited call needs a
+ * record of who was called and what was said if anybody asks.
+ *
+ * The text is kept, unlike an OTP code. A code is secret and short-lived; a
+ * notification is a message the client chose to send, and a dispute about what
+ * somebody was told is answered by having it.
+ */
+export const voiceNotifications = pgTable('voice_notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  toNumber: text('to_number').notNull(),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('queued'),
+  reason: text('reason'),
+  callId: text('call_id'),
+  duration: integer('duration'),
+  // Charged on hangup, since duration is not known before the call.
+  chargeMinor: integer('charge_minor'),
+  // Charged at synthesis, since the vendor bills per character whatever the
+  // call's length — and a call nobody answers still cost us the speech.
+  ttsChars: integer('tts_chars'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  answeredAt: timestamp('answered_at', { withTimezone: true })
+}, (t) => ({
+  rateIdx: index('voice_notifications_rate_idx').on(t.tenantId, t.toNumber, t.createdAt),
+  callIdx: index('voice_notifications_call_idx').on(t.callId)
+}));
+
 export const missedSeen = pgTable('missed_seen', {
   tenantId: uuid('tenant_id').notNull(),
   userId: uuid('user_id').notNull(),

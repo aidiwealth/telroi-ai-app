@@ -78,6 +78,34 @@ export default defineEventHandler((event) => {
           }
         }
       },
+      '/v1/notifications': {
+        post: {
+          summary: 'Place a voice notification',
+          description: 'Calls `to` and speaks `message` aloud.\n\nDistinct from `/v1/otp`, which reads a code from recordings that already exist. A notification is synthesised from your own words, so it is billed differently: the speech is charged per character when the request is accepted, because it costs us whether or not anybody answers, and the call time is charged per second with a one-minute minimum — the minimum matching what a carrier bills us for a short call.\n\nRate limited more tightly than verification: one per minute and five per hour to the same number, and two hundred an hour across a workspace. A call nobody asked for is closer to outbound campaigning than to verification, and the same number-use rules apply.\n\nThe response returns once the call is placed, not once it is answered. Subscribe to `notification.completed` to learn how it ended.',
+          operationId: 'placeNotification',
+          tags: ['Voice'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['to', 'message'],
+                  properties: {
+                    to: { type: 'string', description: 'Destination in E.164, e.g. +2348012345678.' },
+                    message: { type: 'string', maxLength: 900, description: 'What to say. Up to 900 characters, about ninety seconds of speech.' }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            200: { description: 'The call has been placed.' },
+            402: { description: 'The workspace lacks the notifications feature, or the wallet cannot cover the call.' },
+            429: { description: 'Too many notifications to this number or from this workspace.' }
+          }
+        }
+      },
       '/v1/otp/verify': {
         post: {
           tags: ['Voice OTP'], summary: 'Verify an OTP code',

@@ -81,6 +81,27 @@ export function voiceCostMinor(
     : Math.max(1, Math.round(usdMinor * ngnPerUsd));
 }
 
+/** A voice notification: connected time at the voice rate, with a minimum of
+ *  one minute.
+ *
+ *  The minimum is not a markup. Carriers bill a whole minute for a fifteen
+ *  second call, which is the same reason OTP is charged flat — so billing a
+ *  twenty second notification for twenty seconds would lose money on every one.
+ *  Beyond a minute it is per second, as any call is.
+ *
+ *  The synthesis is charged separately and per character, because that is how
+ *  the vendor charges us and a long message costs more to speak than a short
+ *  one whatever its duration. */
+export function notifyCostMinor(
+  seconds: number,
+  currency: 'NGN' | 'USD',
+  ngnPerUsd: number,
+  microUsdPerMin: number = VOICE_MICRO_USD_PER_MIN
+): number {
+  const MIN_BILLABLE_SECONDS = 60;
+  return voiceCostMinor(Math.max(seconds, MIN_BILLABLE_SECONDS), currency, ngnPerUsd, microUsdPerMin);
+}
+
 /** What one OTP call costs the client, in their wallet's minor units. Flat per
  *  call rather than per minute: the carriers bill a whole minute for a fifteen
  *  second call, so charging by duration would lose money on every one. */
