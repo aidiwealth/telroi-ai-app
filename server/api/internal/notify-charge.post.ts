@@ -46,7 +46,17 @@ export default defineEventHandler(async (event) => {
   const charge = notifyCostMinor(seconds, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceMinuteUsdMicro);
 
   try {
-    await debit(row.tenantId, charge, `Voice notification to ${row.toNumber}`, `notify:${id}`);
+    // An object, not positional arguments — called the other way, amountMinor
+    // arrives undefined and the wallet refuses it as not a positive integer,
+    // which is what every notification's minute did until now.
+    await debit({
+      tenantId: row.tenantId,
+      amountMinor: charge,
+      reason: 'voice_notification',
+      // The notification id, so a hangup handler that fires twice charges once.
+      reference: `notify:${id}`,
+      meta: { to: row.toNumber, seconds }
+    });
     await db.update(schema.voiceNotifications).set({ chargeMinor: charge })
       .where(eq(schema.voiceNotifications.id, id));
   } catch (e: any) {
