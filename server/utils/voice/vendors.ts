@@ -39,6 +39,13 @@ async function loadVendorSettings(): Promise<VendorSettings> {
   const [s] = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
   const dec = (v?: string | null) => { if (!v) return null; try { return JSON.parse(decrypt(v)); } catch { return null; } };
   return {
+    // The Nigerian trunk and its host, which the OTP and notification paths
+    // both read. They were referenced and never returned, so every call fell
+    // through to the ruach default however the setting was changed — including
+    // after Ruach started refusing calls.
+    otpNgTrunk: s?.otpNgTrunk || null,
+    otpNgHost: s?.otpNgHost || null,
+    otpNgCallerId: s?.otpNgCallerId || null,
     otpVoiceVendor: s?.otpVoiceVendor || 'telroi',
     ttsVendor: s?.ttsVendor || 'telroi',
     sttVendor: s?.sttVendor || 'telroi',
