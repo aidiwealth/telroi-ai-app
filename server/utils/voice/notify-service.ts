@@ -12,7 +12,9 @@
 // which puts it closer to outbound campaigning than to verification, and the
 // same rate limits and number-use rules apply.
 import { useDb, schema } from '~/server/db';
-import { and, eq, sql } from 'drizzle-orm';
+// gte rather than a raw comparison: interpolating a Date into sql`` hands
+// the driver an object it cannot bind, which threw on the first request.
+import { and, eq, gte, sql } from 'drizzle-orm';
 import { placeNotifyCall } from './vendors';
 
 export interface NotifyResult {
@@ -58,7 +60,7 @@ async function checkRate(tenantId: string, toNumber: string): Promise<{ ok: bool
     .from(schema.voiceNotifications)
     .where(and(eq(schema.voiceNotifications.tenantId, tenantId),
                eq(schema.voiceNotifications.toNumber, toNumber),
-               sql`${schema.voiceNotifications.createdAt} > ${since(3600)}`));
+               gte(schema.voiceNotifications.createdAt, since(3600))));
   if (perNumber >= PER_HOUR) return { ok: false, retryAfter: 3600, reason: 'per_number_hourly' };
 
   // A workspace ceiling as well as a per-number one: five an hour to each of a
@@ -66,7 +68,7 @@ async function checkRate(tenantId: string, toNumber: string): Promise<{ ok: bool
   const [{ c: perTenant }] = await db.select({ c: sql<number>`count(*)::int` })
     .from(schema.voiceNotifications)
     .where(and(eq(schema.voiceNotifications.tenantId, tenantId),
-               sql`${schema.voiceNotifications.createdAt} > ${since(3600)}`));
+               gte(schema.voiceNotifications.createdAt, since(3600))));
   if (perTenant >= TENANT_PER_HOUR) return { ok: false, retryAfter: 3600, reason: 'workspace_hourly' };
 
   return { ok: true };
