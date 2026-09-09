@@ -85,7 +85,11 @@ export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: bo
       timeout,
       variables: {
         NOTIFY_ID: notificationId,
-        NOTIFY_MEDIA: `telroi-notify/${name}`,
+        // An absolute path without the extension. A bare name is resolved
+        // against Asterisk's own sounds directory, which is not where we stage
+        // — so it looked for a file that was never going to be there, returned
+        // immediately, and the call dropped a second after answering.
+        NOTIFY_MEDIA: `${NOTIFY_TMP}/${name}`,
         NOTIFY_DEST: dial,
         NOTIFY_TRUNK: trunk,
         NOTIFY_HOST: host,
