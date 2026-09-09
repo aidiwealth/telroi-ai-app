@@ -14,6 +14,7 @@
 import type Ari from 'ari-client';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { execSync } from 'node:child_process';
 
 const NOTIFY_TMP = process.env.NOTIFY_TMP_DIR || '/var/lib/asterisk/sounds/telroi-notify';
 
@@ -53,6 +54,16 @@ export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: bo
   try {
     await fs.mkdir(NOTIFY_TMP, { recursive: true });
     await fs.copyFile(media.replace(/^sound:/, '') + (media.endsWith('.wav') ? '' : '.wav'), target);
+    // Asterisk reads as the asterisk user, and this process does not run as it.
+    // A root-owned file plays as silence: Playback returns immediately, the
+    // dialplan hangs up, and the call drops a second after answering — which
+    // looks like a carrier fault and is not one.
+    try {
+      const uid = Number(execSync('id -u asterisk').toString().trim());
+      const gid = Number(execSync('id -g asterisk').toString().trim());
+      await fs.chown(target, uid, gid);
+      await fs.chmod(target, 0o644);
+    } catch { /* usually still readable; the call matters more than the mode */ }
   } catch (e: any) {
     log(`could not stage audio: ${e?.message || e}`);
     return { ok: false, reason: 'audio_staging_failed' };

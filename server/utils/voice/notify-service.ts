@@ -35,7 +35,7 @@ export const MAX_NOTIFY_CHARS = 900;
  *  wants it to arrive. A notification is not, so the same volume that is normal
  *  for one is a nuisance for the other — and an endpoint that speaks arbitrary
  *  text to arbitrary numbers is a telemarketing tool if it is not bounded. */
-const COOLDOWN_SECONDS = 60;   // to the same number
+const COOLDOWN_SECONDS = 20;   // to the same number
 const PER_HOUR = 5;            // to the same number
 const TENANT_PER_HOUR = 200;   // across the workspace
 
