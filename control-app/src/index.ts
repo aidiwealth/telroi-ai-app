@@ -141,6 +141,40 @@ async function contactCount(usernames: string[], log: (m: string) => void): Prom
   }
 }
 
+/**
+ * Everyone who should be rung, minus anyone already on a call.
+ *
+ * The difference from filterLiveEndpoints is that this does not ask whether an
+ * endpoint is registered. Registration is the racy part: a phone woken by push
+ * takes about 1.7s to come back, and a snapshot taken at 1.5s excluded it — so
+ * it rang from the push with no INVITE behind it, and answering did nothing
+ * while a colleague's browser held the real call. Every version of that fault
+ * has been a device arriving on the wrong side of one moment.
+ *
+ * So the moment is removed rather than moved. We originate a Local channel per
+ * user into telroi-ring-all-contacts, and PJSIP_DIAL_CONTACTS resolves whatever
+ * is registered when the channel actually enters the context — which is later,
+ * and which is what Asterisk provides that mechanism for. A user with nothing
+ * registered takes the context's nocontacts branch and ends immediately.
+ *
+ * Busy is still filtered: it is knowable and stable, and ringing somebody
+ * mid-conversation would interrupt them.
+ */
+async function filterBusyEndpoints(client: any, usernames: string[], log: (m: string) => void): Promise<string[]> {
+  const checks = await Promise.all(usernames.map(async (u) => {
+    try {
+      const ep = await client.endpoints.get({ tech: 'PJSIP', resource: u });
+      const busy = Array.isArray(ep?.channel_ids) && ep.channel_ids.length > 0;
+      if (busy) log(`  [ring] ${u} is on a call — skipping`);
+      return { u, keep: !busy };
+    } catch (e) {
+      log(`  [ring] ${u} busy check failed (${(e as Error)?.message}) — keeping`);
+      return { u, keep: true };
+    }
+  }));
+  return checks.filter((c) => c.keep).map((c) => c.u);
+}
+
 async function filterLiveEndpoints(client: any, usernames: string[], log: (m: string) => void): Promise<string[]> {
   const checks = await Promise.all(usernames.map(async (u) => {
     try {
@@ -546,9 +580,13 @@ async function main() {
           }
         } catch (e) { log(`  [esc ${chId}] push failed: ${(e as Error)?.message}`); }
 
-        const freeEsc = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
+        // Busy only: registration is resolved by the dialplan at dial time,
+        // not snapshotted here. A phone woken by push takes about 1.7s to come
+        // back and a snapshot at 1.5s excluded it, so it rang from the push
+        // with no INVITE behind it and answering did nothing.
+        const freeEsc = async () => (await filterBusyEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
         let endpoints = await freeEsc();
-        log(`  [esc ${chId}] ringing agents — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
+        log(`  [esc ${chId}] ringing agents — ${endpoints.length} available of ${allUsers.length} endpoint(s)`);
         // A carrier-routed ring-all call arrives here, so it needs holding too —
         // otherwise callers on those numbers are turned away the moment every
         // agent is mid-conversation, while callers on a trunk-routed number wait.
