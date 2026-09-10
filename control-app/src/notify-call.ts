@@ -32,6 +32,8 @@ export interface NotifyCallOptions {
   host?: string;
   callerId?: string;
   callTimeoutSec?: number;
+  carrier?: string;
+  sipEndpoint?: string;
 }
 
 export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: boolean; callid?: string; reason?: string }> {
@@ -93,7 +95,9 @@ export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: bo
         NOTIFY_DEST: dial,
         NOTIFY_TRUNK: trunk,
         NOTIFY_HOST: host,
-        NOTIFY_CID: opts.callerId || ''
+        NOTIFY_CID: opts.callerId || '',
+        NOTIFY_CARRIER: opts.carrier || '',
+        NOTIFY_ENDPOINT: opts.sipEndpoint || ''
       }
     });
   } catch (e: any) {

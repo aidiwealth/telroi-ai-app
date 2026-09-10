@@ -125,6 +125,14 @@ export async function sendVoiceNotification(
     if (!canSpend(t, wallet.balanceMinor, floor)) return { ok: false, error: 'insufficient_funds' };
   }
 
+  // Any of the workspace's own SIP endpoints will do: the dialplan looks up the
+  // tenant's DID for the carrier from it, and every endpoint in a workspace
+  // belongs to the same tenant.
+  const [ep] = await db.select({ u: schema.sipEndpoints.sipUsername })
+    .from(schema.sipEndpoints)
+    .where(eq(schema.sipEndpoints.tenantId, tenantId)).limit(1);
+  const sipEndpoint = ep?.u || '';
+
   const [row] = await db.insert(schema.voiceNotifications)
     .values({ tenantId, toNumber, body: text, status: 'queued', ttsChars: text.length })
     .returning();
@@ -133,7 +141,7 @@ export async function sendVoiceNotification(
   // against the endpoint without spending carrier minutes.
   const placed = sandboxed
     ? { ok: true as const, providerRef: `sbx_notify_${row.id}` }
-    : await placeNotifyCall({ toNumber, notificationId: row.id, text, tenantId });
+    : await placeNotifyCall({ toNumber, notificationId: row.id, text, tenantId, sipEndpoint });
 
   if (!placed.ok) {
     await db.update(schema.voiceNotifications)

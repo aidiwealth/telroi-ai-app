@@ -264,6 +264,9 @@ export interface PlaceNotifyCallInput {
   // The agent synthesises through the web app, which needs to know whose
   // voice settings and whose bill it is.
   tenantId: string;
+  // The tenant's SIP username, so the dialplan can resolve their own DID for
+  // the carrier carrying the call.
+  sipEndpoint?: string;
   callTimeoutSec?: number;
 }
 
@@ -289,6 +292,20 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
     return { ok: false, reason: 'The PBX provisioning agent is not configured, so notifications cannot be placed.' };
   }
   const ps = await loadVendorSettings().catch(() => null as any);
+
+  // Routed by destination, as OTP is. A Nigerian number goes out over our own
+  // carrier at our own rate; everything else over Telnyx, which reaches those
+  // countries. Unlike OTP the vendor never speaks — the audio is ours either
+  // way, so this chooses a trunk rather than a vendor with its own voice.
+  const dest = String(input.toNumber || '').replace(/[^0-9]/g, '');
+  const isNigeria = dest.startsWith('234') || dest.startsWith('0');
+  const trunk = isNigeria ? (ps?.otpNgTrunk || 'ruach-endpoint') : 'telnyx-out';
+  const host = isNigeria ? (ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng') : 'sip.telnyx.com';
+  // The caller id has to belong to the carrier carrying the call — a Ruach
+  // number on a Kasooko trunk is refused as blacklisted, which cost an hour.
+  const callerId = isNigeria ? ps?.otpNgCallerId : (ps?.telnyxCallerId || ps?.otpNgCallerId);
+  console.log(`[notify-route] to=${input.toNumber} nigeria=${isNigeria} trunk=${trunk}`);
+
   try {
     const res = await fetch(`${base}/notify-call`, {
       method: 'POST',
@@ -298,11 +315,16 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
         tenantId: input.tenantId,
         to: input.toNumber,
         text: input.text,
-        trunk: ps?.otpNgTrunk || 'ruach-endpoint',
-        host: ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng',
+        trunk,
+        host,
+        // So the dialplan can look up the tenant's own DID for whichever
+        // carrier is carrying this call, rather than presenting a number that
+        // belongs to a different one.
+        carrier: isNigeria ? (trunk.replace(/-endpoint$/, '')) : 'telnyx',
+        endpoint: input.sipEndpoint || '',
         // Digits only, like the OTP path: the carrier's switch returned 500 on a
         // caller id with a leading plus and accepted the same number without one.
-        callerId: String(ps?.otpNgCallerId || '').replace(/[^0-9]/g, ''),
+        callerId: String(callerId || '').replace(/[^0-9]/g, ''),
         callTimeoutSec: input.callTimeoutSec || 45
       }),
       signal: AbortSignal.timeout(15000)

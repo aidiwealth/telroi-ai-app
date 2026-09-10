@@ -235,6 +235,8 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
             client: ari, to, text, tenantId,
             notificationId: String(body.notificationId || ''),
             trunk, host: body.host ? String(body.host) : undefined,
+            carrier: body.carrier ? String(body.carrier) : undefined,
+            sipEndpoint: body.endpoint ? String(body.endpoint) : undefined,
             callerId: body.callerId ? String(body.callerId) : undefined,
             callTimeoutSec: Number(body.callTimeoutSec) || undefined
           });
