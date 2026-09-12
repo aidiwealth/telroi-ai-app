@@ -103,12 +103,34 @@ export const memberships = pgTable('memberships', {
 // Handsets to wake when a call comes in. Only the columns the push sender
 // reads: it selects by tenant, platform and revocation, and deletes by id when
 // FCM says a token is dead.
+/** Voice notifications. Declared here as well as in the web app's schema: a
+ *  table the control app writes to and does not declare resolves to undefined
+ *  and fails inside a catch, which is how a day went missing in August. */
+export const voiceNotifications = pgTable('voice_notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  toNumber: text('to_number').notNull(),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('queued'),
+  reason: text('reason'),
+  callId: text('call_id'),
+  duration: integer('duration'),
+  chargeMinor: integer('charge_minor'),
+  ttsChars: integer('tts_chars'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  answeredAt: timestamp('answered_at', { withTimezone: true })
+});
+
 export const userDevices = pgTable('user_devices', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull(),
   userId: uuid('user_id').notNull(),
   pushToken: text('push_token').notNull(),
   platform: text('platform').notNull(),
+  // Which APNs host a token belongs to. Declared here as well as in the main
+  // schema: a column used by the sender and missing from this file reads as
+  // undefined and fails inside a catch, which cost a day in August.
+  environment: text('environment').notNull().default('production'),
   revokedAt: timestamp('revoked_at', { withTimezone: true })
 });
 

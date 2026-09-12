@@ -39,6 +39,13 @@ async function loadVendorSettings(): Promise<VendorSettings> {
   const [s] = await db.select().from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
   const dec = (v?: string | null) => { if (!v) return null; try { return JSON.parse(decrypt(v)); } catch { return null; } };
   return {
+    // The Nigerian trunk and its host, which the OTP and notification paths
+    // both read. They were referenced and never returned, so every call fell
+    // through to the ruach default however the setting was changed — including
+    // after Ruach started refusing calls.
+    otpNgTrunk: s?.otpNgTrunk || null,
+    otpNgHost: s?.otpNgHost || null,
+    otpNgCallerId: s?.otpNgCallerId || null,
     otpVoiceVendor: s?.otpVoiceVendor || 'telroi',
     ttsVendor: s?.ttsVendor || 'telroi',
     sttVendor: s?.sttVendor || 'telroi',
@@ -249,3 +256,83 @@ export async function transcribeSpeech(input: SttInput): Promise<SttResult> {
 export const OTP_VENDORS = ['telroi', 'twilio', 'telnyx', 'vonage', 'custom'] as const;
 export const TTS_VENDORS = ['telroi', 'elevenlabs', 'openai', 'google', 'azure', 'custom'] as const;
 export const STT_VENDORS = ['telroi', 'deepgram', 'openai', 'google', 'azure', 'custom'] as const;
+
+export interface PlaceNotifyCallInput {
+  toNumber: string;
+  notificationId: string;
+  text: string;
+  // The agent synthesises through the web app, which needs to know whose
+  // voice settings and whose bill it is.
+  tenantId: string;
+  // The tenant's SIP username, so the dialplan can resolve their own DID for
+  // the carrier carrying the call.
+  sipEndpoint?: string;
+  callTimeoutSec?: number;
+}
+
+/**
+ * Place a notification call through our own PBX.
+ *
+ * One path rather than OTP's three. OTP speaks a code, and a code is short
+ * enough that each vendor can be told to read it in that vendor's own way — at
+ * the cost of three scripts that drift, which the comment above records having
+ * happened. A notification speaks the client's own words, so the text would
+ * have to be handed to whichever vendor placed the call and spoken by their
+ * engine, in their voice, with their pricing.
+ *
+ * So it goes out over our own carriers, where we synthesise it ourselves and
+ * the voice is the same one every time. That limits destinations to what those
+ * carriers reach, which is a smaller promise than OTP makes and an honest one.
+ */
+export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<PlaceOtpCallResult> {
+  const cfg = useRuntimeConfig() as any;
+  const base = (cfg.provisionAgentUrl || '').replace(/\/+$/, '');
+  const secret = cfg.provisionAgentSecret || '';
+  if (!base || !secret) {
+    return { ok: false, reason: 'The PBX provisioning agent is not configured, so notifications cannot be placed.' };
+  }
+  const ps = await loadVendorSettings().catch(() => null as any);
+
+  // Routed by destination, as OTP is. A Nigerian number goes out over our own
+  // carrier at our own rate; everything else over Telnyx, which reaches those
+  // countries. Unlike OTP the vendor never speaks — the audio is ours either
+  // way, so this chooses a trunk rather than a vendor with its own voice.
+  const dest = String(input.toNumber || '').replace(/[^0-9]/g, '');
+  const isNigeria = dest.startsWith('234') || dest.startsWith('0');
+  const trunk = isNigeria ? (ps?.otpNgTrunk || 'ruach-endpoint') : 'telnyx-out';
+  const host = isNigeria ? (ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng') : 'sip.telnyx.com';
+  // The caller id has to belong to the carrier carrying the call — a Ruach
+  // number on a Kasooko trunk is refused as blacklisted, which cost an hour.
+  const callerId = isNigeria ? ps?.otpNgCallerId : (ps?.telnyxCallerId || ps?.otpNgCallerId);
+  console.log(`[notify-route] to=${input.toNumber} nigeria=${isNigeria} trunk=${trunk}`);
+
+  try {
+    const res = await fetch(`${base}/notify-call`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({
+        notificationId: input.notificationId,
+        tenantId: input.tenantId,
+        to: input.toNumber,
+        text: input.text,
+        trunk,
+        host,
+        // So the dialplan can look up the tenant's own DID for whichever
+        // carrier is carrying this call, rather than presenting a number that
+        // belongs to a different one.
+        carrier: isNigeria ? (trunk.replace(/-endpoint$/, '')) : 'telnyx',
+        endpoint: input.sipEndpoint || '',
+        // Digits only, like the OTP path: the carrier's switch returned 500 on a
+        // caller id with a leading plus and accepted the same number without one.
+        callerId: String(callerId || '').replace(/[^0-9]/g, ''),
+        callTimeoutSec: input.callTimeoutSec || 45
+      }),
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!res.ok) return { ok: false, reason: `agent_http_${res.status}` };
+    const j: any = await res.json();
+    return j?.ok ? { ok: true, providerRef: j.callid || input.notificationId } : { ok: false, reason: j?.reason || 'agent_refused' };
+  } catch (e: any) {
+    return { ok: false, reason: e?.message || 'agent_unreachable' };
+  }
+}

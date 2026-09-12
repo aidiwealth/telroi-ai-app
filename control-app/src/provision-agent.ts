@@ -117,6 +117,27 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
         return send(res, 200, { ok: true });
       }
 
+      // GET /notify-done?id=&duration=&hangupcause=&start=
+      //
+      // Called by the dialplan's hangup handler, which runs however the channel
+      // dies — so an answered notification the recipient ends first is still
+      // recorded, which a priority after Playback would have missed.
+      if (req.method === 'GET' && (req.url || '').startsWith('/notify-done')) {
+        const u = new URL(req.url || '', 'http://localhost');
+        const id = u.searchParams.get('id') || '';
+        const duration = Number(u.searchParams.get('duration') || 0);
+        if (!id) return send(res, 400, { ok: false, error: 'id is required' });
+        try {
+          const { reportNotifyDone } = await import('./call-log.ts');
+          void reportNotifyDone({ id, duration, hangupcause: u.searchParams.get('hangupcause') || '' });
+        } catch (e: any) {
+          console.error('[notify-done]', e?.message || e);
+        }
+        // Answered immediately either way: the dialplan is holding a channel
+        // open waiting for this, and a slow reply delays a hangup.
+        return send(res, 200, { ok: true });
+      }
+
       if (!authOk(req)) return send(res, 401, { ok: false, error: 'unauthorized' });
 
       // POST /provision  { tenantId, label } -> { username, password, domain, ... }
@@ -192,6 +213,39 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
       // what happened when it was missing here, defaulting to Ruach while the
       // logs said Sotel.
       // Dials a number and reads a code to whoever answers. No agent, no bridge.
+      // POST /notify-call { to, text, notificationId, tenantId, trunk, host?,
+      //                       callerId?, callTimeoutSec? }
+      //
+      // Dials a number and speaks the client's own words. Unlike /otp-call the
+      // audio does not exist yet, so this synthesises before dialling — a call
+      // placed first would answer to silence while a vendor was waited on.
+      if (req.method === 'POST' && req.url === '/notify-call') {
+        if (!ari) return send(res, 503, { ok: false, error: 'ARI not connected' });
+        const body = await readJson(req);
+        const to = String(body.to || '').trim();
+        const text = String(body.text || '').trim();
+        const trunk = String(body.trunk || '').trim();
+        const tenantId = String(body.tenantId || '').trim();
+        if (!to || !text || !trunk || !tenantId) {
+          return send(res, 400, { ok: false, error: 'to, text, trunk and tenantId are required' });
+        }
+        try {
+          const { placeNotifyCall } = await import('./notify-call.ts');
+          const r = await placeNotifyCall({
+            client: ari, to, text, tenantId,
+            notificationId: String(body.notificationId || ''),
+            trunk, host: body.host ? String(body.host) : undefined,
+            carrier: body.carrier ? String(body.carrier) : undefined,
+            sipEndpoint: body.endpoint ? String(body.endpoint) : undefined,
+            callerId: body.callerId ? String(body.callerId) : undefined,
+            callTimeoutSec: Number(body.callTimeoutSec) || undefined
+          });
+          return send(res, r.ok ? 200 : 502, r);
+        } catch (e: any) {
+          return send(res, 500, { ok: false, reason: e?.message || 'notify_failed' });
+        }
+      }
+
       if (req.method === 'POST' && req.url === '/otp-call') {
         if (!ari) return send(res, 503, { ok: false, error: 'ARI not connected' });
         const body = await readJson(req);

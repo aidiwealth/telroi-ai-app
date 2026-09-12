@@ -74,6 +74,15 @@
             <div class="ad-field"><label>API Key SID</label><input v-model="twVoice.apiKeySid" class="ad-input mono" placeholder="SK…" /></div>
             <div class="ad-field"><label>API Key Secret {{ cfg.twilioVoiceSet ? '· set' : '' }}</label><input v-model="twVoice.apiKeySecret" type="password" class="ad-input mono" :placeholder="cfg.twilioVoiceSet ? '••••••••' : 'secret'" /></div>
             <div class="ad-field"><label>TwiML App SID</label><input v-model="twVoice.twimlAppSid" class="ad-input mono" placeholder="AP…" /></div>
+            <!-- Elastic SIP Trunking, separate from the SDK fields above. The
+                 browser dialler talks to Twilio's cloud directly and never
+                 touches our PBX, so a phone had nowhere to route a Twilio
+                 number. These are the trunk that lets it. -->
+            <div class="ad-field"><label>SIP username (trunk)</label><input v-model="twVoice.sipUsername" class="ad-input mono" placeholder="telroi_pbx" /></div>
+            <div class="ad-field"><label>SIP password (trunk)</label><input v-model="twVoice.sipPassword" type="password" class="ad-input mono" placeholder="••••••••" /></div>
+            <div class="ad-field"><label>Termination domain</label><input v-model="twVoice.sipDomain" class="ad-input mono" placeholder="telroi.pstn.twilio.com" />
+              <p class="ad-hint">The generic hostname routes to Twilio's nearest edge and survives one going down, where a pinned region does not.</p>
+            </div>
             <div class="ad-field"><label>Caller ID (Twilio number)</label>
               <select v-model="twVoice.callerId" class="ad-input">
                 <option value="">— Select a provisioned Twilio number —</option>
@@ -257,7 +266,7 @@ async function remove(c: Carrier) {
 const cfg = ref<any>({});
 const twSid = ref(''); const twToken = ref('');
 const tnKey = ref(''); const tnConn = ref('');
-const twVoice = reactive({ apiKeySid: '', apiKeySecret: '', twimlAppSid: '', callerId: '' });
+const twVoice = reactive({ apiKeySid: '', apiKeySecret: '', twimlAppSid: '', callerId: '', sipUsername: '', sipPassword: '', sipDomain: '' });
 const tnVoice = reactive({ sipUsername: '', sipPassword: '', connectionId: '', callerId: '' });
 
 // Provisioned numbers for the caller-ID pickers (selected from inventory, never typed).
@@ -279,7 +288,7 @@ async function loadCfg() {
     const tv = cfg.value?.telnyxVoice;
     if (tv) { tnVoice.sipUsername = tv.sipUsername || ''; tnVoice.connectionId = tv.connectionId || ''; tnVoice.callerId = tv.callerId || ''; }
     const wv = cfg.value?.twilioVoice;
-    if (wv) { twVoice.apiKeySid = wv.apiKeySid || ''; twVoice.twimlAppSid = wv.twimlAppSid || ''; twVoice.callerId = wv.callerId || ''; }
+    if (wv) { twVoice.apiKeySid = wv.apiKeySid || ''; twVoice.twimlAppSid = wv.twimlAppSid || ''; twVoice.callerId = wv.callerId || ''; twVoice.sipUsername = wv.sipUsername || ''; twVoice.sipDomain = wv.sipDomain || ''; }
   } catch { /* */ }
 }
 async function saveOther() {

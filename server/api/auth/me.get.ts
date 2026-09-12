@@ -1,7 +1,7 @@
 // GET /api/auth/me -> current session + tenant summary
 import { readSession } from '~/server/utils/session';
 import { useDb, schema } from '~/server/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 export default defineEventHandler(async (event) => {
   const s = await readSession(event);
@@ -24,5 +24,12 @@ export default defineEventHandler(async (event) => {
     const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
     if (t) tenant = { id: t.id, name: t.name, slug: t.slug, timezone: t.timezone, country: t.country, onboardingStep: t.onboardingStep, provisioned: !!t.telroiApiKeyEnc, sandbox: t.sandboxMode };
   }
-  return { user: { id: s.userId, email: s.email, role: s.role, name: u.name || null, copilotOnboarded: !!u.copilotOnboarded }, tenant };
+  // When this person last looked at their missed calls. The apps filter the
+  // call list themselves, so they count against this rather than us returning
+  // a number they would then have to reconcile with their own filtering.
+  const [seen] = await db.select().from(schema.missedSeen)
+    .where(and(eq(schema.missedSeen.tenantId, s.tenantId || ''),
+               eq(schema.missedSeen.userId, s.userId))).limit(1);
+
+  return { user: { id: s.userId, email: s.email, role: s.role, name: u.name || null, copilotOnboarded: !!u.copilotOnboarded, missedSeenAt: seen?.seenAt || null }, tenant };
 });

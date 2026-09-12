@@ -10,6 +10,13 @@
           <input v-model="airtime" class="ad-input mono" disabled />
           <span class="ad-hint">Fixed at $0.0102/min (sub-cent, billed per call)</span>
         </div>
+        <!-- Charged per verification rather than per minute: a client sending
+             OTPs wants a figure they can multiply, and the call is always
+             about the same length. Per-region rates below override this. -->
+        <div class="ad-field"><label>Voice OTP ($/verification)</label>
+          <input v-model.number="otp" type="number" step="0.001" min="0" class="ad-input mono" />
+          <p class="ad-hint">One price whatever the destination, unless a region below sets its own. Charged when the call is placed, and refused beforehand if the wallet cannot cover it.</p>
+        </div>
         <div class="ad-field"><label>Number / DID ($/mo)</label>
           <input v-model.number="did" type="number" step="0.01" class="ad-input mono" />
         </div>
@@ -57,6 +64,52 @@
       </div>
       <button class="btn btn-signal" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save rates' }}</button>
       <span v-if="saved" class="ad-saved">✓ Saved</span>
+    </div>
+
+    <!-- Between the global rates above and any per-client override: a
+         verification to Lagos and one to Chicago cost us differently and were
+         priced the same. Blank inherits, so the difference between "not set"
+         and "set to zero" stays visible. -->
+    <h2 class="ad-title bops-title">Rates by region</h2>
+    <p class="ad-sub">Where the call lands, not where the client is. Blank uses the global rate above.</p>
+    <div class="ad-panel">
+      <table class="ad-table rg-table">
+        <thead>
+          <tr>
+            <th>Region</th>
+            <th>Voice OTP ($/verification)</th>
+            <th>Airtime ($/min)</th>
+            <th>Where the figure came from</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="r in regions" :key="r.region">
+            <td><strong>{{ r.label }}</strong> <span class="ad-hint">{{ r.region }}</span></td>
+            <td>
+              <input v-model="r._otp" type="number" step="0.001" min="0"
+                     class="ad-input mono rg-input" :placeholder="String(otp)" />
+            </td>
+            <td>
+              <input v-model="r._min" type="number" step="0.0001" min="0"
+                     class="ad-input mono rg-input" :placeholder="String(airtime)" />
+            </td>
+            <td>
+              <input v-model="r.notes" class="ad-input rg-notes"
+                     placeholder="Which carrier invoice this came from" />
+            </td>
+            <td>
+              <button class="btn btn-ghost btn-sm" :disabled="r._busy" @click="saveRegion(r)">
+                {{ r._busy ? 'Saving…' : 'Save' }}
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="ad-hint rg-foot">
+        A rate with no note is one nobody dares change six months on. Worth saying
+        which invoice it came from.
+      </p>
     </div>
 
     <h2 class="ad-title bops-title">Managed AI pricing</h2>
@@ -143,6 +196,52 @@ const saving = ref(false);
 const saved = ref(false);
 const airtime = ref('0.0102');
 const did = ref(1.70);
+// Dollars here, micro-dollars on the wire. $0.01 is the seeded default.
+const otp = ref(0.01);
+
+/* Region rates. Held as dollars for the form and converted at the edges, the
+   same way the global figures are — micro-dollars on the wire because a
+   verification costs a fraction of a cent to us. */
+const regions = ref<any[]>([]);
+
+async function loadRegions() {
+  try {
+    // adminApi, not api: this page is admin-session scoped and the other calls
+    // on it use that. Using the wrong one failed silently and left an empty
+    // table, which read as a screen with nothing to show rather than a fault.
+    const r = await adminApi.get<any>('/api/admin/pricing/regions');
+    regions.value = (r?.regions || []).map((x: any) => ({
+      ...x,
+      // Empty string rather than 0 for an unset rate: the placeholder then
+      // shows the global figure being inherited, where a 0 would look like a
+      // deliberate free call.
+      _otp: x.voiceOtpUsdMicro == null ? '' : x.voiceOtpUsdMicro / 1000000,
+      _min: x.voiceMinuteUsdMicro == null ? '' : x.voiceMinuteUsdMicro / 1000000,
+      _busy: false
+    }));
+  } catch (e) {
+    console.error('[pricing] could not load region rates:', e);
+    regions.value = [];
+  }
+}
+
+async function saveRegion(r: any) {
+  r._busy = true;
+  try {
+    // Null clears an override back to the global rate. Sending 0 instead would
+    // price the region at nothing, which is a different and expensive thing.
+    await adminApi.post<any>('/api/admin/pricing/regions', {
+      region: r.region,
+      voiceOtpUsdMicro: r._otp === '' || r._otp == null ? null : Math.round(Number(r._otp) * 1000000),
+      voiceMinuteUsdMicro: r._min === '' || r._min == null ? null : Math.round(Number(r._min) * 1000000),
+      notes: r.notes || null
+    });
+  } catch (e: any) {
+    alert(e?.message || 'Could not save that region.');
+  } finally {
+    r._busy = false;
+  }
+}
 const channel = ref(2.00);
 const startup = ref(10);
 const growth = ref(15);
@@ -192,6 +291,9 @@ async function load() {
     const { pricing } = await adminApi.get<any>('/api/admin/pricing');
     if (pricing) {
       did.value = pricing.didMonthlyUsdMinor / 100;
+      // Micro-dollars on the wire, dollars on the screen.
+      otp.value = (pricing.voiceOtpUsdMicro ?? 10000) / 1000000;
+      await loadRegions();
       channel.value = pricing.channelMonthlyUsdMinor / 100;
       startup.value = pricing.planStartupUsdMinor / 100;
       growth.value = pricing.planGrowthUsdMinor / 100;
@@ -223,6 +325,7 @@ async function save() {
   try {
     await adminApi.post('/api/admin/pricing', {
       didMonthlyUsdMinor: Math.round(did.value * 100),
+      voiceOtpUsdMicro: Math.round(otp.value * 1000000),
       channelMonthlyUsdMinor: Math.round(channel.value * 100),
       planStartupUsdMinor: Math.round(startup.value * 100),
       planGrowthUsdMinor: Math.round(growth.value * 100),
@@ -257,6 +360,16 @@ onMounted(load);
 </script>
 
 <style scoped>
+/* Region rates. Narrow inputs so a rate reads as a figure rather than a form
+   field, and a wide notes column because provenance is the thing most likely to
+   be skipped and most useful later. */
+.rg-table { width: 100%; }
+.rg-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-mute); text-align: left; padding: 8px 10px; }
+.rg-table td { padding: 8px 10px; border-top: 1px solid var(--rule); vertical-align: middle; }
+.rg-input { width: 120px; }
+.rg-notes { width: 100%; min-width: 220px; font-size: 12.5px; }
+.rg-foot { margin: 12px 10px 0; }
 .ad-title { font-family: var(--font-display); font-size: 30px; color: var(--ink); letter-spacing: -0.02em; }
 .ad-sub { color: var(--ink-mute); font-size: 14px; margin: 4px 0 28px; }
 .ad-loading { color: var(--ink-mute); padding: 40px 0; }

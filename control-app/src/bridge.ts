@@ -74,6 +74,23 @@ async function playToChannel(client: Ari.Client, channel: Ari.Channel, media: st
   } catch { /* best-effort */ }
 }
 
+/**
+ * A Local channel into the ring-all context, so every device a person has
+ * registered rings rather than whichever contact PJSIP happened to resolve.
+ *
+ * Takes "PJSIP/tnt_abc123" and returns "Local/tnt_abc123@telroi-ring-all-contacts".
+ * Anything not in that shape is passed through untouched — carrier trunks and
+ * anything else that is not a user AOR should dial exactly as before.
+ */
+function cs_state(aorOutput: string): string {
+  return aorOutput.includes('Contact:') ? 'has-contacts' : 'none';
+}
+
+function localForAor(endpoint: string): string {
+  const m = /^PJSIP\/([a-z0-9_]+)$/i.exec(endpoint);
+  return m ? `Local/${m[1]}@telroi-ring-all-contacts` : endpoint;
+}
+
 export interface BridgeOptions {
   client: Ari.Client;
   caller: Ari.Channel;      // the inbound channel already in Stasis
@@ -180,7 +197,10 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<{ answered:
       await bridge.addChannel({ channel: ch.id });
       wasAnswered = true;
       answeredAt = Date.now();
-      if (opts.onStatus) { try { opts.onStatus('answered'); } catch { /* never break the call */ } }
+      // Which endpoint answered. The department path has always reported it
+      // and this one did not, so a call answered here recorded no user — and an
+      // app cannot tell a call a colleague took from one nobody did.
+      if (opts.onStatus) { try { opts.onStatus('answered', { endpoint }); } catch { /* never break the call */ } }
       log(`bridged: ${caller.id} <-> ${ch.id}`);
     } catch (err) {
       log(`failed to bridge callee: ${(err as Error)?.message}`);
@@ -195,7 +215,12 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<{ answered:
 
   try {
     await calleeChan.originate({
-      endpoint,
+      // Through the ring-all context rather than at the endpoint directly.
+      // Originating to PJSIP/<endpoint> resolves ONE contact — it does not fork
+      // — so somebody with a phone and a browser had one of them ring, and
+      // which one was PJSIP's choice rather than ours. A phone woken by push
+      // then sat there while the call went to a browser.
+      endpoint: localForAor(endpoint),
       app: 'telroi',                       // bring the callee into our Stasis app
       appArgs: 'dialed',                   // marker so we know it's an outbound leg
       callerId: opts.callerIdNum || 'Telroi',
@@ -327,8 +352,30 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
     callees.push(ch);
     channelEndpoint.set(ch.id, endpoint);
     try {
-      await ch.originate({ endpoint, app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
-      log(`dept originating to ${endpoint} (ring ${ringTimeout}s)`);
+      // Same reasoning as the escalation path above: fork across every contact
+      // on the AOR rather than letting PJSIP pick one.
+      // Which contacts this will actually reach, before dialling rather than
+      // after. Contact selection has been the answer to three different-looking
+      // faults — a browser taking a phone's call, a phone that never rang, and
+      // one device ringing of two — and each time it had to be reasoned out
+      // from a live trace because nothing recorded it.
+      const target = localForAor(endpoint);
+      try {
+        const aor = endpoint.replace(/^PJSIP\//, '');
+        // ARI's endpoint object does not carry the contact list — it reports
+        // state and channel ids and nothing about the AOR — so this asks
+        // Asterisk itself. The first version logged an empty array and looked
+        // like an answer, which is the shape of fault this logging exists to
+        // stop.
+        const { execFile } = await import('node:child_process');
+        const out = await new Promise<string>((res) => {
+          execFile('asterisk', ['-rx', `pjsip show aor ${aor}`], (_e, so) => res(so || ''));
+        });
+        const lines = out.split('\n').filter((l) => l.includes('Contact:'));
+        log(`dept ${aor}: state=${cs_state(out)} contacts=${lines.length} ${lines.map((l) => l.trim().split(/\s+/)[1] || '').join(' ')}`);
+      } catch { /* the dial matters more than the note of it */ }
+      await ch.originate({ endpoint: target, app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
+      log(`dept originating to ${target} (ring ${ringTimeout}s)`);
     } catch (err) {
       originateFailures++;
       log(`dept originate to ${endpoint} failed: ${(err as Error)?.message}`);

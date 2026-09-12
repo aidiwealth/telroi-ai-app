@@ -12,6 +12,7 @@
  */
 import { db, schema } from './db.ts';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { sendApns } from './apns.ts';
 
 const SA = process.env.FCM_SERVICE_ACCOUNT || '';
 
@@ -112,7 +113,9 @@ export async function pushIncomingCall(p: IncomingPush): Promise<number> {
     const conds: any[] = [
       eq(schema.userDevices.tenantId, p.tenantId),
       isNull(schema.userDevices.revokedAt),
-      eq(schema.userDevices.platform, 'android')
+      // Both platforms now. The sender is chosen per device below, since
+      // Apple and Google share nothing beyond the idea of a push.
+      inArray(schema.userDevices.platform, ['android', 'ios'])
     ];
     if (p.userIds?.length) conds.push(inArray(schema.userDevices.userId, p.userIds));
     rows = await db.select().from(schema.userDevices).where(and(...conds));
@@ -130,6 +133,27 @@ export async function pushIncomingCall(p: IncomingPush): Promise<number> {
   let sent = 0;
 
   await Promise.all(rows.map(async (d: any) => {
+    // iOS goes to Apple, with the same four fields. PushKit requires the app to
+    // report the call to CallKit almost immediately or the system kills it, so
+    // caller and dialed travel in the push rather than being looked up.
+    if (d.platform === 'ios') {
+      const r = await sendApns(d.pushToken, d.environment || 'production', {
+        type: 'incoming_call', callId: p.callId,
+        caller: p.from || '', dialed: p.to || ''
+      });
+      if (r.ok) { sent++; return; }
+      console.error('[push] apns failed:', r.status || '', r.reason || '');
+      // Only these two mean the handset is gone. Everything else is a bad
+      // moment rather than a dead device, and deleting on those would clear
+      // the table one call at a time.
+      if (r.reason === 'BadDeviceToken' || r.reason === 'Unregistered') {
+        await db.delete(schema.userDevices).where(eq(schema.userDevices.id, d.id))
+          .catch(() => {});
+        console.log('[push] dropped an iOS token Apple no longer knows');
+      }
+      return;
+    }
+
     const body = {
       message: {
         token: d.pushToken,

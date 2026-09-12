@@ -296,3 +296,42 @@ export async function reportOtpStatus(otpId: string, status: string, seconds: nu
     .set({ status, reason: `${status} after ${seconds}s` })
     .where(and(eq(schema.voiceOtps.id, otpId), ne(schema.voiceOtps.status, 'verified')));
 }
+
+/** A notification ended. Records the outcome and asks the web app to charge it.
+ *
+ *  The row is updated here and the money is moved there, because the pricing
+ *  lives with the wallet: region rates, currency conversion and the postpaid
+ *  credit check are all the web app's, and a second copy on the PBX is how two
+ *  numbers that should agree stop agreeing. */
+export async function reportNotifyDone(args: { id: string; duration: number; hangupcause?: string }): Promise<void> {
+  const { eq } = await import('drizzle-orm');
+  const answered = args.duration > 0;
+  try {
+    await db.update(schema.voiceNotifications)
+      .set({
+        status: answered ? 'delivered' : 'no-answer',
+        duration: args.duration,
+        reason: answered ? null : (args.hangupcause || 'no answer'),
+        answeredAt: answered ? new Date() : null
+      })
+      .where(eq(schema.voiceNotifications.id, args.id));
+  } catch (e: any) {
+    console.error('[notify-done] row not updated:', e?.message || e);
+  }
+
+  // Only an answered call is charged. An unanswered one still cost us the
+  // synthesis, which was charged when it was made — but no carrier minute was
+  // used, and billing for one would be charging for nothing.
+  if (!answered) return;
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/internal/notify-charge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-telroi-internal': INTERNAL_SECRET },
+      body: JSON.stringify({ id: args.id, seconds: args.duration }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!res.ok) console.error(`[notify-done] not charged: HTTP ${res.status}`);
+  } catch (e: any) {
+    console.error('[notify-done] not charged:', e?.message || e);
+  }
+}

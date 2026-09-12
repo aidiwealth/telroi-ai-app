@@ -82,6 +82,99 @@ async function inboundCapacity(tenantId: string, log: (m: string) => void): Prom
 }
 
 
+/** How many contacts these users have registered, across all their devices.
+ *  Asked of Asterisk directly: ARI's endpoint object reports state and channel
+ *  ids and carries no contact list, which an earlier version of this logged as
+ *  an empty array and mistook for an answer. */
+/**
+ * Wake whoever is about to be rung, and wait for one of them to register.
+ *
+ * The push used to sit inside the escalation branch alone, so a call that
+ * routed straight to a team — which most inbound numbers do — bridged to a
+ * department without waking anybody. Apps open, the phone was already
+ * registered and rang; apps closed, nothing woke and nothing rang, and it read
+ * as a registration fault for a week.
+ *
+ * Every path that rings an agent calls this first.
+ */
+async function wakeAndWait(args: {
+  tenantId: string; users: string[]; callId: string;
+  from: string; to: string; log: (m: string) => void;
+}): Promise<void> {
+  const { tenantId, users, callId, from, to, log } = args;
+  if (!users.length) return;
+  try {
+    const woke = await pushIncomingCall({ tenantId, callId, from, to });
+    if (!woke) return;
+    // Wait for a device rather than a fixed interval: a cold iOS launch takes
+    // about 1.7s to start its stack, fetch a token, handshake and register, and
+    // a warm Android is ready in a fraction of that. Five seconds as a
+    // backstop, since the caller hears silence throughout.
+    const started = Date.now();
+    const before = await contactCount(users, log);
+    while (Date.now() - started < 5000) {
+      await new Promise((r) => setTimeout(r, 250));
+      if (await contactCount(users, log) > before) break;
+    }
+    const after = await contactCount(users, log);
+    // What we were waiting for, not just how long. The app registers in about
+    // 1.7s, so a five-second wait means we were waiting for something else — a
+    // colleague's phone, a browser, or a contact that was never coming. A
+    // longer backstop would make everyone wait longer for the same outcome.
+    log(`  [push] waited ${Date.now() - started}ms on ${callId} — contacts ${before} to ${after} across ${users.length} user(s)`);
+  } catch (e) {
+    log(`  [push] wake failed: ${(e as Error)?.message}`);
+  }
+}
+
+async function contactCount(usernames: string[], log: (m: string) => void): Promise<number> {
+  try {
+    const { execFile } = await import('node:child_process');
+    const counts = await Promise.all(usernames.map((u) => new Promise<number>((res) => {
+      execFile('asterisk', ['-rx', `pjsip show aor ${u}`], (_e, so) =>
+        res(((so || '').match(/Contact:\s+\S+\/sip:/g) || []).length));
+    })));
+    return counts.reduce((a, b) => a + b, 0);
+  } catch (e) {
+    log(`  [push] contact count failed: ${(e as Error)?.message}`);
+    return 0;
+  }
+}
+
+/**
+ * Everyone who should be rung, minus anyone already on a call.
+ *
+ * The difference from filterLiveEndpoints is that this does not ask whether an
+ * endpoint is registered. Registration is the racy part: a phone woken by push
+ * takes about 1.7s to come back, and a snapshot taken at 1.5s excluded it — so
+ * it rang from the push with no INVITE behind it, and answering did nothing
+ * while a colleague's browser held the real call. Every version of that fault
+ * has been a device arriving on the wrong side of one moment.
+ *
+ * So the moment is removed rather than moved. We originate a Local channel per
+ * user into telroi-ring-all-contacts, and PJSIP_DIAL_CONTACTS resolves whatever
+ * is registered when the channel actually enters the context — which is later,
+ * and which is what Asterisk provides that mechanism for. A user with nothing
+ * registered takes the context's nocontacts branch and ends immediately.
+ *
+ * Busy is still filtered: it is knowable and stable, and ringing somebody
+ * mid-conversation would interrupt them.
+ */
+async function filterBusyEndpoints(client: any, usernames: string[], log: (m: string) => void): Promise<string[]> {
+  const checks = await Promise.all(usernames.map(async (u) => {
+    try {
+      const ep = await client.endpoints.get({ tech: 'PJSIP', resource: u });
+      const busy = Array.isArray(ep?.channel_ids) && ep.channel_ids.length > 0;
+      if (busy) log(`  [ring] ${u} is on a call — skipping`);
+      return { u, keep: !busy };
+    } catch (e) {
+      log(`  [ring] ${u} busy check failed (${(e as Error)?.message}) — keeping`);
+      return { u, keep: true };
+    }
+  }));
+  return checks.filter((c) => c.keep).map((c) => c.u);
+}
+
 async function filterLiveEndpoints(client: any, usernames: string[], log: (m: string) => void): Promise<string[]> {
   const checks = await Promise.all(usernames.map(async (u) => {
     try {
@@ -257,6 +350,10 @@ async function main() {
       // below would do (route type, blacklist) has already been settled.
       if (widgetTenantId) {
         const allUsers = resolveTenantEndpoints(widgetTenantId);
+        await wakeAndWait({
+          tenantId: widgetTenantId, users: allUsers, callId: chId,
+          from: callerNum || '', to: 'Live Call', log
+        });
         const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
         const visitorName = await guestCallerName(String(callerNum || ''));
         let endpoints = await free();
@@ -459,12 +556,37 @@ async function main() {
             tenantId: route.tenantId, callId: chId,
             from: callerNum || '', to: dialedDid || ''
           });
-          if (woke) await new Promise((r) => setTimeout(r, 2000));
+          // Wait for a device to actually register rather than for a fixed
+          // interval. Two seconds is generous for a warm Android and marginal
+          // for a cold iOS launch, which has to start its SIP stack, fetch a
+          // token over HTTPS, complete a TLS handshake and register — measured
+          // at 1.67s on a good connection, with nothing to spare on a poor one.
+          //
+          // Counting contacts rather than asking whether the endpoint is
+          // online: with a browser registered it is online from the first
+          // moment, and the loop would exit before any phone arrived.
+          //
+          // Five seconds as a backstop, since the caller hears silence
+          // throughout. Dialling late beats dialling into nothing; a caller who
+          // has already hung up beats neither.
+          if (woke) {
+            const started = Date.now();
+            const before = await contactCount(allUsers, log);
+            while (Date.now() - started < 5000) {
+              await new Promise((r) => setTimeout(r, 250));
+              if (await contactCount(allUsers, log) > before) break;
+            }
+            log(`  [esc ${chId}] waited ${Date.now() - started}ms after push`);
+          }
         } catch (e) { log(`  [esc ${chId}] push failed: ${(e as Error)?.message}`); }
 
-        const freeEsc = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
+        // Busy only: registration is resolved by the dialplan at dial time,
+        // not snapshotted here. A phone woken by push takes about 1.7s to come
+        // back and a snapshot at 1.5s excluded it, so it rang from the push
+        // with no INVITE behind it and answering did nothing.
+        const freeEsc = async () => (await filterBusyEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
         let endpoints = await freeEsc();
-        log(`  [esc ${chId}] ringing agents — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
+        log(`  [esc ${chId}] ringing agents — ${endpoints.length} available of ${allUsers.length} endpoint(s)`);
         // A carrier-routed ring-all call arrives here, so it needs holding too —
         // otherwise callers on those numbers are turned away the moment every
         // agent is mid-conversation, while callers on a trunk-routed number wait.
@@ -548,6 +670,13 @@ async function main() {
           if (!cap.ai) {
             log(`     AI unavailable (${cap.aiReason}) — ringing agents instead`);
             const allUsers = resolveTenantEndpoints(route.tenantId);
+            // Before filtering, not after: a phone woken by push is not
+            // registered yet, so a list built first would exclude the very
+            // device the push exists to reach.
+            await wakeAndWait({
+              tenantId: route.tenantId, users: allUsers, callId: chId,
+              from: callerNum || '', to: dialedDid || '', log
+            });
             const liveUsers = await filterLiveEndpoints(client, allUsers, log);
             const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
             if (!endpoints.length) {
@@ -598,6 +727,10 @@ async function main() {
               if (department) {
                 const members = resolveDepartmentByName(route.tenantId, department);
                 if (members.length) {
+                  await wakeAndWait({
+                    tenantId: route.tenantId, users: members, callId: chId,
+                    from: callerNum || '', to: dialedDid || '', log
+                  });
                   const live = await filterLiveEndpoints(client, members, log);
                   log(`  [ai ${chId}] transfer to department "${department}" - ${live.length} live of ${members.length}`);
                   if (live.length) {
@@ -646,6 +779,15 @@ async function main() {
                 // wrong three times. This says plainly which tenant was asked for
                 // and what came back.
                 log(`  [ai ${chId}] ring_all for tenant ${route.tenantId} -> ${JSON.stringify(allUsers)}`);
+                // Wake them before asking who is live. This is the path an AI
+                // transfer takes when no department is named, which is the
+                // common case, and it had no push at all: eleven users listed,
+                // one live, nothing woken, sixteen milliseconds between the
+                // list and the bridge.
+                await wakeAndWait({
+                  tenantId: route.tenantId, users: allUsers, callId: chId,
+                  from: callerNum || '', to: dialedDid || '', log
+                });
                 const liveUsers = await filterLiveEndpoints(client, allUsers, log);
                 const endpoints = liveUsers.map((u) => `PJSIP/${u}`);
                 log(`  [ai ${chId}] escalation mode=ring_all — ${endpoints.length} live of ${allUsers.length} endpoint(s)`);
@@ -757,6 +899,10 @@ async function main() {
         // for a single target it was never given.
         case 'ring_all': {
           const allUsers = resolveTenantEndpoints(route.tenantId);
+          await wakeAndWait({
+            tenantId: route.tenantId, users: allUsers, callId: chId,
+            from: callerNum || '', to: dialedDid || '', log
+          });
           const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
           let endpoints = await free();
           log(`     Ring-all route -> ${endpoints.length} available of ${allUsers.length} endpoint(s)`);
@@ -880,6 +1026,11 @@ async function main() {
   // Nigerian calls, which is most of them.
   import('./telnyx-trunk.ts').then(({ ensureTelnyxTrunk }) => ensureTelnyxTrunk())
     .catch((e) => log(`telnyx trunk: ${e?.message || e}`));
+  // Twilio the same way. Until now it was a browser-only path — the web dialler
+  // uses Twilio's own SDK and never touches this PBX — so a Twilio number could
+  // be called from a browser and not from a phone.
+  import('./twilio-trunk.ts').then(({ ensureTwilioTrunk }) => ensureTwilioTrunk())
+    .catch((e) => log(`twilio trunk: ${e?.message || e}`));
   log(`Listening on Stasis app "${config.ari.appName}". Dial 700 to test.`);
 
   const shutdown = async () => {

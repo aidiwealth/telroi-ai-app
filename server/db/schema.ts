@@ -1,7 +1,8 @@
 // server/db/schema.ts
 // Drizzle ORM schema for the Telroi dashboard (PostgreSQL).
 import {
-  pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex, check
+  pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex,
+  check, primaryKey
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -1372,6 +1373,30 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
 
 /* Per-tenant pricing overrides. Any null field falls back to the global
    singleton pricing row. Lets the operator give a specific client custom rates. */
+/**
+ * Per-region rates.
+ *
+ * Between the global figures on `pricing` and any per-tenant override: global,
+ * then region, then tenant, each falling back to the one above. A verification
+ * to Lagos and one to Chicago cost us differently and were priced the same.
+ *
+ * Null means "use the global figure", so a region can be listed for one rate
+ * without committing to the other before its carrier cost is known.
+ */
+export const regionRates = pgTable('region_rates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  region: text('region').notNull(),
+  label: text('label').notNull(),
+  // Micro-dollars, matching voice_otp_usd_micro rather than the nano the AI
+  // rates use: a verification costs cents, an AI turn thousandths of one.
+  voiceOtpUsdMicro: integer('voice_otp_usd_micro'),
+  voiceMinuteUsdMicro: integer('voice_minute_usd_micro'),
+  notes: text('notes'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  regionIdx: uniqueIndex('region_rates_region_idx').on(t.region)
+}));
+
 export const pricingOverrides = pgTable('pricing_overrides', {
   tenantId: uuid('tenant_id').primaryKey().references(() => tenants.id, { onDelete: 'cascade' }),
   voiceMinuteUsdMinor: integer('voice_minute_usd_minor'),          // legacy, unused for billing
@@ -1676,12 +1701,63 @@ export const adminCopilotConversations = pgTable('admin_copilot_conversations', 
 /* Handsets that can be woken for a call. One row per install: reinstalling the
  * app issues a new FCM token, and the old row is swept the first time FCM says
  * it is permanently invalid. */
+/**
+ * When somebody last looked at their missed calls.
+ *
+ * Per user rather than per workspace: a count driven by colleagues' missed
+ * calls is one people learn to ignore, which is worse than not having it.
+ */
+/**
+ * Voice notifications: a call that speaks a message the client wrote.
+ *
+ * A row per notification, for the same reasons voiceOtps has one — rate
+ * limiting needs a history to count against, and an unsolicited call needs a
+ * record of who was called and what was said if anybody asks.
+ *
+ * The text is kept, unlike an OTP code. A code is secret and short-lived; a
+ * notification is a message the client chose to send, and a dispute about what
+ * somebody was told is answered by having it.
+ */
+export const voiceNotifications = pgTable('voice_notifications', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull(),
+  toNumber: text('to_number').notNull(),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('queued'),
+  reason: text('reason'),
+  callId: text('call_id'),
+  duration: integer('duration'),
+  // Charged on hangup, since duration is not known before the call.
+  chargeMinor: integer('charge_minor'),
+  // Charged at synthesis, since the vendor bills per character whatever the
+  // call's length — and a call nobody answers still cost us the speech.
+  ttsChars: integer('tts_chars'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  answeredAt: timestamp('answered_at', { withTimezone: true })
+}, (t) => ({
+  rateIdx: index('voice_notifications_rate_idx').on(t.tenantId, t.toNumber, t.createdAt),
+  callIdx: index('voice_notifications_call_idx').on(t.callId)
+}));
+
+export const missedSeen = pgTable('missed_seen', {
+  tenantId: uuid('tenant_id').notNull(),
+  userId: uuid('user_id').notNull(),
+  seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  pk: primaryKey({ columns: [t.tenantId, t.userId] })
+}));
+
 export const userDevices = pgTable('user_devices', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   pushToken: text('push_token').notNull(),
   platform: text('platform').notNull(),          // android | ios
+  // APNs has separate sandbox and production hosts and a token carries no
+  // indication of which it belongs to. A TestFlight token sent to the
+  // production host fails with BadDeviceToken, which reads as a dead device
+  // rather than a wrong host — so the app says which build it is.
+  environment: text('environment').notNull().default('production'),
   model: text('model'),
   appVersion: text('app_version'),
   // Set rather than deleted when somebody is removed from a workspace, so the

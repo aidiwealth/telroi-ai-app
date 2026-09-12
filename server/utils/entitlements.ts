@@ -19,6 +19,10 @@ export const DEFAULT_FEATURES: { key: string; label: string; startup: boolean; g
   { key: 'multilang', label: 'Multi-language AI support', startup: true, growth: true, custom: true },
   // Telroi One suite — growth & custom only
   { key: 'crm', label: 'Telroi CRM — contacts, deals, call logs', startup: false, growth: true, custom: true },
+  // Its own key rather than folded into api access. Unsolicited calling is the
+  // one feature that may need switching off for a single workspace at short
+  // notice, and a shared key would mean removing their API entirely to do it.
+  { key: 'notifications', label: 'Voice notifications — spoken messages by API', startup: false, growth: true, custom: true },
   { key: 'live_call', label: 'Live Call — website & app call widget', startup: false, growth: true, custom: true },
   { key: 'apps', label: 'Apps & Integrations', startup: false, growth: true, custom: true },
   { key: 'dialer', label: 'Desktop dialer (Mac & Windows)', startup: false, growth: true, custom: true },

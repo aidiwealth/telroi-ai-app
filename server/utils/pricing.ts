@@ -7,15 +7,41 @@ import { useDb, schema } from '../db';
 
 const VOICE_MICRO_USD_PER_MIN = 10200; // $0.0102 = 10,200 micro-USD
 
-export async function getPricing(tenantId?: string) {
+/**
+ * Rates, layered: global, then region, then tenant.
+ *
+ * A region is where the call lands rather than where the client is — a Lagos
+ * business verifying a US number pays what that call costs us, not what a
+ * Nigerian one would.
+ *
+ * The region is optional and every existing caller omits it, so nothing that
+ * does not ask for one behaves differently.
+ */
+export async function getPricing(tenantId?: string, region?: string) {
   const db = useDb();
   const [p] = await db.select().from(schema.pricing).where(eq(schema.pricing.id, 'singleton')).limit(1);
-  const base = p || {
+  let base: any = p || {
     voiceMinuteUsdMinor: 1, voiceMinuteUsdMicro: VOICE_MICRO_USD_PER_MIN,
     voiceOtpUsdMicro: 10000,
     channelMonthlyUsdMinor: 200, didMonthlyUsdMinor: 170,
     planStartupUsdMinor: 1000, planGrowthUsdMinor: 1500, ngnPerUsd: 1600
   } as any;
+  // A region's rates sit over the global ones. Null columns fall through, so a
+  // region can be listed for one rate before its other carrier cost is known.
+  if (region) {
+    try {
+      const [rr] = await db.select().from(schema.regionRates)
+        .where(eq(schema.regionRates.region, region)).limit(1);
+      if (rr) {
+        base = {
+          ...base,
+          voiceOtpUsdMicro: rr.voiceOtpUsdMicro ?? base.voiceOtpUsdMicro,
+          voiceMinuteUsdMicro: rr.voiceMinuteUsdMicro ?? base.voiceMinuteUsdMicro
+        } as any;
+      }
+    } catch { /* no region row is the same as no override */ }
+  }
+
   if (!tenantId) return base;
   // Layer any per-tenant override on top (null fields fall back to global).
   const [ov] = await db.select().from(schema.pricingOverrides).where(eq(schema.pricingOverrides.tenantId, tenantId)).limit(1);
@@ -53,6 +79,27 @@ export function voiceCostMinor(
   return currency === 'USD'
     ? Math.max(1, Math.round(usdMinor))
     : Math.max(1, Math.round(usdMinor * ngnPerUsd));
+}
+
+/** A voice notification: connected time at the voice rate, with a minimum of
+ *  one minute.
+ *
+ *  The minimum is not a markup. Carriers bill a whole minute for a fifteen
+ *  second call, which is the same reason OTP is charged flat — so billing a
+ *  twenty second notification for twenty seconds would lose money on every one.
+ *  Beyond a minute it is per second, as any call is.
+ *
+ *  The synthesis is charged separately and per character, because that is how
+ *  the vendor charges us and a long message costs more to speak than a short
+ *  one whatever its duration. */
+export function notifyCostMinor(
+  seconds: number,
+  currency: 'NGN' | 'USD',
+  ngnPerUsd: number,
+  microUsdPerMin: number = VOICE_MICRO_USD_PER_MIN
+): number {
+  const MIN_BILLABLE_SECONDS = 60;
+  return voiceCostMinor(Math.max(seconds, MIN_BILLABLE_SECONDS), currency, ngnPerUsd, microUsdPerMin);
 }
 
 /** What one OTP call costs the client, in their wallet's minor units. Flat per

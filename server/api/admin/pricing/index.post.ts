@@ -8,6 +8,9 @@ const Body = z.object({
   voiceMinuteUsdMicro: z.number().int().positive().optional(),  // micro-USD/min, e.g. 10200 = $0.0102
   channelMonthlyUsdMinor: z.number().int().positive().optional(),
   didMonthlyUsdMinor: z.number().int().positive().optional(),
+  // Micro-dollars, since a verification costs a fraction of a cent to us and
+  // rounding to cents would price every one of them the same.
+  voiceOtpUsdMicro: z.number().int().positive().optional(),
   planStartupUsdMinor: z.number().int().positive().optional(),
   // Annual as a price, not a discount: "$150 a year" is quotable and a
   // percentage is not, and the saving is derived for display.

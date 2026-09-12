@@ -57,6 +57,13 @@
       "when": 1789162673340,
       "tag": "0007_pale_azazel",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789188273604,
+      "tag": "0008_naive_unicorn",
+      "breakpoints": true
     }
   ]
 }

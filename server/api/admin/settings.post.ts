@@ -33,7 +33,10 @@ const Body = z.object({
   telnyxApiKey: z.string().optional(),
   telnyxConnectionId: z.string().optional(),
   // Browser-voice (WebRTC) credentials for in-app + widget calling.
-  twilioVoice: z.object({ apiKeySid: z.string(), apiKeySecret: z.string(), twimlAppSid: z.string(), callerId: z.string() }).partial().optional(),
+  // sipUsername/sipPassword/sipDomain are the Elastic SIP Trunking credentials,
+  // separate from the SDK ones above: the browser talks to Twilio's cloud
+  // directly, and a native app needs a trunk from our PBX instead.
+  twilioVoice: z.object({ apiKeySid: z.string(), apiKeySecret: z.string(), twimlAppSid: z.string(), callerId: z.string(), sipUsername: z.string(), sipPassword: z.string(), sipDomain: z.string() }).partial().optional(),
   telnyxVoice: z.object({ sipUsername: z.string(), sipPassword: z.string(), connectionId: z.string(), callerId: z.string() }).partial().optional(),
   digiditeVoice: z.object({ wsServer: z.string(), sipDomain: z.string(), sipUsername: z.string(), sipPassword: z.string(), callerId: z.string() }).partial().optional(),
   asteriskVoice: z.object({ sipGateway: z.string(), sipPort: z.number(), transport: z.enum(['udp', 'tcp', 'tls']), sipDomain: z.string(), authUser: z.string(), authPass: z.string(), callerId: z.string(), dids: z.array(z.string()), apiBaseUrl: z.string(), apiUsername: z.string(), apiPassword: z.string(), ariAppName: z.string() }).partial().optional(),
@@ -135,10 +138,30 @@ export default defineEventHandler(async (event) => {
       connectionId: d.telnyxConnectionId || existing.connectionId || ''
     }));
   }
-  // Browser-voice creds: only store when all required fields for that provider
-  // are present, so a partial save never half-configures voice.
-  if (d.twilioVoice && d.twilioVoice.apiKeySid && d.twilioVoice.apiKeySecret && d.twilioVoice.twimlAppSid) {
-    patch.twilioVoiceCredsEnc = encrypt(JSON.stringify({ apiKeySid: d.twilioVoice.apiKeySid, apiKeySecret: d.twilioVoice.apiKeySecret, twimlAppSid: d.twilioVoice.twimlAppSid, callerId: d.twilioVoice.callerId || '' }));
+  // Merged rather than replaced, and keyed on any field being present rather
+  // than all three. The SDK credentials and the SIP trunk are separate paths
+  // with separate secrets, and requiring all of one to save any of the other
+  // meant the trunk fields were silently discarded — the API key secret shows
+  // blank once saved, so a person editing the trunk had no way to satisfy it.
+  if (d.twilioVoice && (d.twilioVoice.apiKeySid || d.twilioVoice.sipUsername || d.twilioVoice.sipDomain)) {
+    let prior: any = {};
+    try {
+      const { decrypt: dec } = await import('~/server/utils/crypto');
+      const [cur] = await db.select({ enc: schema.platformSettings.twilioVoiceCredsEnc })
+        .from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+      if (cur?.enc) prior = JSON.parse(dec(cur.enc));
+    } catch { /* first save, or unreadable — treat as empty */ }
+    patch.twilioVoiceCredsEnc = encrypt(JSON.stringify({
+      ...prior,
+      apiKeySid: d.twilioVoice.apiKeySid || prior.apiKeySid || '',
+      apiKeySecret: d.twilioVoice.apiKeySecret || prior.apiKeySecret || '',
+      twimlAppSid: d.twilioVoice.twimlAppSid || prior.twimlAppSid || '',
+      callerId: d.twilioVoice.callerId || prior.callerId || '',
+      sipUsername: d.twilioVoice.sipUsername || prior.sipUsername || '',
+      // Blank keeps the stored one, like every other password on this page.
+      sipPassword: d.twilioVoice.sipPassword || prior.sipPassword || '',
+      sipDomain: d.twilioVoice.sipDomain || prior.sipDomain || ''
+    }));
   }
   // Merge over the stored creds so a blank password keeps the existing one —
   // otherwise changing just a caller ID would either wipe the password or, if we
