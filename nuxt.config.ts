@@ -132,7 +132,15 @@ export default defineNuxtConfig({
   ],
 
   nitro: {
-    preset: 'node-server'
+    preset: 'node-server',
+    // Keep parsers external and let Nitro copy them into the server output.
+    // Package-name matchers take precedence over source-directory inline rules.
+    externals: {
+      external: ['xlsx', 'papaparse']
+    },
+    // CommonJS resolution otherwise loads this external package early, after
+    // Nitro's browser-global replacement has corrupted its worker-source string.
+    commonJS: { exclude: [/[/\\]node_modules[/\\]papaparse[/\\]/] }
   },
 
   typescript: {
