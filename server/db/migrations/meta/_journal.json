@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788672293093,
+      "tag": "0000_unknown_celestials",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788673145965,
+      "tag": "0001_flowery_nightcrawler",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788733241364,
+      "tag": "0002_skinny_orphan",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788735413991,
+      "tag": "0003_wandering_spiral",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788735499081,
+      "tag": "0004_broken_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788737165996,
+      "tag": "0005_ancient_doctor_spectrum",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789094944287,
+      "tag": "0006_auto_topup_dispatch",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789162673340,
+      "tag": "0007_pale_azazel",
+      "breakpoints": true
+    }
+  ]
+}

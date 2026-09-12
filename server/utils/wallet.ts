@@ -9,14 +9,14 @@ import { eq, and } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 import { apiError } from './api';
+import { cancelUnsentAutoTopups, crossedAutoTopupThreshold, enqueueAutoTopupAttemptWithDb, providerSupportsWalletCurrency } from './auto-topup-attempts';
 
 // Records the currency + the USD<->NGN rate in effect at transaction time, so
 // the admin accounting view can convert any entry to USD using the rate that
 // applied when it happened. USD entries carry rate 1.
-async function fxStamp(currency: string): Promise<{ currency: string; ngnPerUsd: number }> {
+async function fxStamp(currency: string, db: any = useDb()): Promise<{ currency: string; ngnPerUsd: number }> {
   if (currency !== 'NGN') return { currency, ngnPerUsd: 1 };
   try {
-    const db = useDb();
     const [p] = await db.select({ r: schema.pricing.ngnPerUsd }).from(schema.pricing).where(eq(schema.pricing.id, 'singleton')).limit(1);
     return { currency, ngnPerUsd: p?.r ?? 1600 };
   } catch { return { currency, ngnPerUsd: 1600 }; }
@@ -42,6 +42,7 @@ export async function getOrCreateWallet(tenantId: string, currency?: 'NGN' | 'US
     resolved = currencyForCountry(tenant.country);
   }
   const [created] = await db.insert(schema.wallets).values({ tenantId, currency: resolved }).returning();
+  if (!created) throw apiError('wallet_create_failed', 'Could not create a wallet for this workspace.', 500);
   return created;
 }
 
@@ -70,14 +71,12 @@ export function canSpend(tenant: { postpaid?: boolean | null; creditLimitMinor?:
   return (balanceMinor - amountMinor) >= floor;
 }
 
-/** Atomically debit a wallet. Stops at zero, or at the credit limit for postpaid. */
-export async function debit(args: DebitArgs) {
-  if (!Number.isInteger(args.amountMinor) || args.amountMinor <= 0) {
-    throw apiError('invalid_amount', 'Debit amount must be a positive integer (minor units)');
-  }
-  const db = useDb();
-
-  return await db.transaction(async (tx) => {
+/** Debit inside a caller-owned transaction. Recurring billing uses this so its
+ * billing anchor and the wallet movement still commit together. */
+export async function debitInTransaction(tx: any, args: DebitArgs) {
+    if (!Number.isInteger(args.amountMinor) || args.amountMinor <= 0) {
+      throw apiError('invalid_amount', 'Debit amount must be a positive integer (minor units)');
+    }
     // Lock the wallet row for the duration of the transaction.
     const [wallet] = await tx.select().from(schema.wallets)
       .where(eq(schema.wallets.tenantId, args.tenantId)).for('update').limit(1);
@@ -96,8 +95,10 @@ export async function debit(args: DebitArgs) {
     const [tenant] = await tx.select({
       postpaid: schema.tenants.postpaid,
       creditLimitMinor: schema.tenants.creditLimitMinor,
-      billingSuspendedAt: schema.tenants.billingSuspendedAt
+      billingSuspendedAt: schema.tenants.billingSuspendedAt,
+      sandboxMode: schema.tenants.sandboxMode
     }).from(schema.tenants).where(eq(schema.tenants.id, args.tenantId)).limit(1);
+    if (!tenant) throw apiError('tenant_not_found', 'Workspace not found.', 404);
 
     if (!canSpend(tenant, wallet.balanceMinor, args.amountMinor)) {
       throw apiError('insufficient_funds', tenant?.postpaid
@@ -109,24 +110,76 @@ export async function debit(args: DebitArgs) {
     await tx.update(schema.wallets).set({ balanceMinor: after, updatedAt: new Date() }).where(eq(schema.wallets.id, wallet.id));
     // Stamp the currency and the FX rate in effect now, so the accounting team
     // can convert this entry to USD later using the HISTORICAL rate (not today's).
-    const fxMeta = await fxStamp(wallet.currency);
+    const fxMeta = await fxStamp(wallet.currency, tx);
     const [row] = await tx.insert(schema.ledger).values({
       walletId: wallet.id, tenantId: args.tenantId, kind: 'debit',
       amountMinor: args.amountMinor, balanceAfterMinor: after,
       reason: args.reason, reference: args.reference, meta: { ...fxMeta, ...(args.meta ?? {}) }
     }).returning();
+    if (!row) throw new Error('Wallet debit ledger entry was not created.');
 
-    return { balanceMinor: after, ledgerId: row.id, idempotent: false };
-  });
+    let autoTopupAttemptId: string | null = null;
+    // The queue insert is in this same transaction as the debit. A process
+    // crash can therefore leave neither record or both records, never a spent
+    // wallet with a silently missing top-up attempt.
+    if (!tenant?.postpaid && !tenant?.sandboxMode) {
+      const [settings] = await tx.select().from(schema.autoTopupSettings)
+        .where(and(
+          eq(schema.autoTopupSettings.tenantId, args.tenantId),
+          eq(schema.autoTopupSettings.enabled, true)
+        )).limit(1);
+      if (
+        settings?.paymentMethodId &&
+        settings.topupAmountMinor > settings.thresholdMinor &&
+        crossedAutoTopupThreshold(wallet.balanceMinor, after, settings.thresholdMinor)
+      ) {
+        const [card] = await tx.select().from(schema.paymentMethods)
+          .where(and(
+            eq(schema.paymentMethods.id, settings.paymentMethodId),
+            eq(schema.paymentMethods.tenantId, args.tenantId)
+          )).limit(1);
+        if (
+          card?.reusable && card.tokenEnc &&
+          (card.provider === 'stripe' || card.provider === 'paystack') &&
+          providerSupportsWalletCurrency(card.provider, wallet.currency)
+        ) {
+          const queued = await enqueueAutoTopupAttemptWithDb(tx, {
+            tenantId: args.tenantId,
+            triggerLedgerId: row.id,
+            paymentMethodId: card.id,
+            amountMinor: settings.topupAmountMinor,
+            currency: wallet.currency,
+            balanceAtTriggerMinor: after,
+            provider: card.provider
+          });
+          autoTopupAttemptId = queued.attempt.id;
+        }
+      }
+    }
+
+    return { balanceMinor: after, ledgerId: row.id, idempotent: false, autoTopupAttemptId };
+}
+
+/** Atomically debit a wallet. Stops at zero, or at the credit limit for postpaid. */
+export async function debitWithDb(db: any, args: DebitArgs) {
+  if (!Number.isInteger(args.amountMinor) || args.amountMinor <= 0) {
+    throw apiError('invalid_amount', 'Debit amount must be a positive integer (minor units)');
+  }
+  return db.transaction((tx: any) => debitInTransaction(tx, args));
+}
+
+export async function debit(args: DebitArgs) {
+  return debitWithDb(useDb(), args);
 }
 
 /** Credit a wallet (top-up). Idempotent by reference — webhook-safe. */
-export async function credit(tenantId: string, amountMinor: number, reason: string, reference: string, meta: Record<string, unknown> = {}) {
+export async function creditInTransaction(
+  tx: Parameters<Parameters<ReturnType<typeof useDb>['transaction']>[0]>[0],
+  tenantId: string, amountMinor: number, reason: string, reference: string, meta: Record<string, unknown> = {}
+) {
   if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
     throw apiError('invalid_amount', 'Credit amount must be a positive integer (minor units)');
   }
-  const db = useDb();
-  return await db.transaction(async (tx) => {
     const [wallet] = await tx.select().from(schema.wallets)
       .where(eq(schema.wallets.tenantId, tenantId)).for('update').limit(1);
     if (!wallet) throw apiError('no_wallet', 'No wallet for this workspace', 404);
@@ -134,11 +187,25 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
     // Idempotency: a webhook retry with the same reference must not double-credit.
     const [dupe] = await tx.select().from(schema.ledger)
       .where(and(eq(schema.ledger.reference, reference), eq(schema.ledger.kind, 'credit'))).limit(1);
-    if (dupe) return { balanceMinor: wallet.balanceMinor, idempotent: true };
+    if (dupe) {
+      if (dupe.walletId !== wallet.id || dupe.tenantId !== tenantId || dupe.amountMinor !== amountMinor) {
+        throw new Error('Wallet credit reference identity mismatch');
+      }
+      return { balanceMinor: wallet.balanceMinor, idempotent: true };
+    }
 
     const after = wallet.balanceMinor + amountMinor;
     await tx.update(schema.wallets).set({ balanceMinor: after, updatedAt: new Date() }).where(eq(schema.wallets.id, wallet.id));
-    const fxMeta = await fxStamp(wallet.currency);
+    // A manual/provider credit that restores the threshold makes queued work
+    // unnecessary. Cancel it while holding the same wallet lock used by the
+    // worker, so a stale validation cannot race past this recovery.
+    const [settings] = await tx.select({ thresholdMinor: schema.autoTopupSettings.thresholdMinor })
+      .from(schema.autoTopupSettings)
+      .where(eq(schema.autoTopupSettings.tenantId, tenantId)).limit(1);
+    if (settings && after >= settings.thresholdMinor) {
+      await cancelUnsentAutoTopups(tx, tenantId, 'balance_recovered');
+    }
+    const fxMeta = await fxStamp(wallet.currency, tx);
     await tx.insert(schema.ledger).values({
       walletId: wallet.id, tenantId, kind: 'credit',
       amountMinor, balanceAfterMinor: after, reason, reference, meta: { ...fxMeta, ...meta },
@@ -148,7 +215,11 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
       sandbox: meta.simulated === true
     });
     return { balanceMinor: after, idempotent: false };
-  }).then(async (r) => {
+}
+
+/** Public credit wrapper retains the existing post-commit notifications. */
+export async function credit(tenantId: string, amountMinor: number, reason: string, reference: string, meta: Record<string, unknown> = {}) {
+  return useDb().transaction(tx => creditInTransaction(tx, tenantId, amountMinor, reason, reference, meta)).then(async (r) => {
     // A real top-up/credit counts as account activity (suppresses follow-ups).
     if (!(r as any).idempotent) {
       try { const { touchActivity } = await import('./activity'); await touchActivity(tenantId); } catch { /* */ }
@@ -303,6 +374,7 @@ export async function sandboxLedgerEntry(opts: {
       meta: { ...(opts.meta || {}), simulated: true },
       sandbox: true
     }).returning();
+    if (!row) return { ok: false, reason: 'ledger_write_failed' };
     return { ok: true, ledgerId: row.id };
   } catch (e: any) {
     return { ok: false, reason: e?.message };
@@ -319,7 +391,7 @@ export async function canAfford(tenantId: string, amountMinor: number): Promise<
     postpaid: schema.tenants.postpaid,
     creditLimitMinor: schema.tenants.creditLimitMinor
   }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
-  return canSpend(t, w.balanceMinor, amountMinor);
+  return canSpend(t ?? null, w.balanceMinor, amountMinor);
 }
 
 /**
@@ -343,12 +415,18 @@ export async function chargeCardToWallet(opts: {
   const [pm] = await db.select().from(schema.paymentMethods)
     .where(eq(schema.paymentMethods.tenantId, opts.tenantId)).limit(1);
   if (!pm) return { ok: false, reason: 'no_card_on_file' };
+  const { paymentMethodToken } = await import('./payment-methods');
+  const token = paymentMethodToken(pm);
+  if (!token) return { ok: false, reason: 'card_token_unavailable' };
+  // New rows must be explicitly reusable. Legacy plaintext rows remain usable
+  // only during the encrypted-token migration window.
+  if (!pm.reusable && pm.tokenEnc) return { ok: false, reason: 'card_not_reusable' };
 
   const reference = `chg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   let providerResult: { ok: boolean; reason?: string };
   try {
-    providerResult = await chargeViaProvider(opts.tenantId, pm.provider, pm.token, opts.amountMinor, opts.currency, reference);
+    providerResult = await chargeViaProvider(opts.tenantId, pm, token, opts.amountMinor, opts.currency, reference);
   } catch (e: any) {
     await logEvent({ tenantId: opts.tenantId, kind: 'system', action: 'card.charge_failed', level: 'error', summary: `${opts.reason}: ${e?.message || 'charge error'}`, ref: reference });
     return { ok: false, reason: 'charge_error' };
@@ -375,29 +453,40 @@ export async function chargeCardToWallet(opts: {
  *  mode — reading the config key directly would let a renewal in test mode
  *  reach a real card.
  */
-async function chargeViaProvider(tenantId: string, provider: string, token: string, amountMinor: number, currency: string, reference: string): Promise<{ ok: boolean; reason?: string }> {
+async function chargeViaProvider(
+  tenantId: string,
+  paymentMethod: { provider: string; billingEmail?: string | null; providerCustomerId?: string | null },
+  token: string,
+  amountMinor: number,
+  currency: string,
+  reference: string
+): Promise<{ ok: boolean; reason?: string }> {
   const { paymentCreds } = await import('./platform');
   const { paystack, stripe } = await import('./payments');
   const pay: any = await paymentCreds(tenantId).catch(() => null);
 
-  if (provider === 'paystack') {
+  if (paymentMethod.provider === 'paystack') {
     if (!pay?.paystack) return { ok: false, reason: 'provider_unconfigured' };
-    // Paystack wants the cardholder's email on every charge. The owner's is the
-    // one the authorization was taken against.
-    const db = useDb();
-    const { eq, and } = await import('drizzle-orm');
-    const [owner] = await db.select({ email: schema.users.email })
-      .from(schema.memberships)
-      .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
-      .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.role, 'owner')))
-      .limit(1);
-    if (!owner?.email) return { ok: false, reason: 'no_owner_email' };
-    return await paystack.chargeAuthorization(pay.paystack, token, owner.email, amountMinor, reference);
+    // Paystack requires the email used for the original authorization. Fall
+    // back to the owner only for legacy rows created before it was persisted.
+    let billingEmail = paymentMethod.billingEmail || null;
+    if (!billingEmail) {
+      const db = useDb();
+      const { eq, and } = await import('drizzle-orm');
+      const [owner] = await db.select({ email: schema.users.email })
+        .from(schema.memberships)
+        .innerJoin(schema.users, eq(schema.users.id, schema.memberships.userId))
+        .where(and(eq(schema.memberships.tenantId, tenantId), eq(schema.memberships.role, 'owner')))
+        .limit(1);
+      billingEmail = owner?.email || null;
+    }
+    if (!billingEmail) return { ok: false, reason: 'no_billing_email' };
+    return await paystack.chargeAuthorization(pay.paystack, token, billingEmail, amountMinor, reference);
   }
 
-  if (provider === 'stripe') {
+  if (paymentMethod.provider === 'stripe') {
     if (!pay?.stripe) return { ok: false, reason: 'provider_unconfigured' };
-    return await stripe.chargeSaved(pay.stripe, token, null, amountMinor, reference);
+    return await stripe.chargeSaved(pay.stripe, token, paymentMethod.providerCustomerId || null, amountMinor, reference);
   }
 
   return { ok: false, reason: 'provider_unconfigured' };

@@ -487,7 +487,28 @@ export async function sendPaymentReceivedEmail(to: string, opts: {
   await sendVia({ to, subject, html, text });
 }
 
-// ── Added to the operator team. Distinct from a client invite: an operator
+// Automatic payment failed. Describe the customer impact rather than exposing
+// a provider's internal decline code.
+export async function sendAutoTopupFailedEmail(to: string, opts: {
+  workspace: string; amount: string; balance: string;
+}) {
+  const appBase = (useRuntimeConfig().public as any).appBaseUrl || 'https://app.telroi.ai';
+  const subject = `Your automatic top-up didn’t go through — ${opts.workspace}`;
+  const text = `We weren’t able to add ${opts.amount} to your ${opts.workspace} wallet this time.\n\n`
+    + `No funds were added, and we won’t retry this payment automatically. `
+    + `Your current balance is ${opts.balance}.\n\n`
+    + `If you need more funds now, you can top up manually at ${appBase}/wallet.`;
+  const html = shell(`
+    ${h1('Your automatic top-up didn’t go through')}
+    ${para(`We weren’t able to add <strong>${opts.amount}</strong> to your <strong>${opts.workspace}</strong> wallet this time.`)}
+    ${para(`No funds were added, and we won’t retry this payment automatically. Your current balance is <strong>${opts.balance}</strong>.`)}
+    ${para('If you need more funds now, you can top up manually in just a moment.')}
+    ${button('Top up manually →', `${appBase}/wallet`)}
+  `, { preheader: `Your ${opts.workspace} wallet still needs a top-up` });
+  await sendVia({ to, subject, html, text });
+}
+
+// Added to the operator team. Distinct from a client invite: an operator
 // already works here, so "you've been invited to Telroi" reads oddly. What they
 // need is that it happened, what it lets them do, and where to sign in.
 export async function sendOperatorAddedEmail(to: string, opts: { role: string; addedBy: string }) {

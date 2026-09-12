@@ -6,7 +6,14 @@
 // run or forget about.
 const WEBAPP_URL = process.env.WEBAPP_URL || 'https://app.telroi.ai';
 const CRON_SECRET = process.env.CRON_SECRET || '';
-const EVERY_MS = Number(process.env.CRON_INTERVAL_MS || 3600000); // hourly
+function intervalMs(raw: string | undefined, fallback: number, minimum: number) {
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= minimum ? value : fallback;
+}
+const GRACE_EVERY_MS = intervalMs(process.env.CRON_INTERVAL_MS, 3_600_000, 60_000); // hourly
+const AUTO_TOPUP_EVERY_MS = intervalMs(process.env.AUTO_TOPUP_CRON_INTERVAL_MS, 60_000, 10_000); // every minute
+
+let autoTopupRunning = false;
 
 function log(...args: unknown[]) {
   console.log(new Date().toISOString(), '[scheduler]', ...args);
@@ -28,13 +35,43 @@ async function runGraceJob() {
   }
 }
 
+async function runAutoTopupJob() {
+  if (!CRON_SECRET || autoTopupRunning) return;
+  autoTopupRunning = true;
+  try {
+    const res = await fetch(`${WEBAPP_URL}/api/cron/auto-topup`, {
+      method: 'POST',
+      headers: { 'x-cron-secret': CRON_SECRET },
+      // Do not let one stalled request overlap every later one-minute tick.
+      signal: AbortSignal.timeout(55_000)
+    });
+    if (!res.ok) { log(`auto-topup: HTTP ${res.status}`); return; }
+    const body = await res.json() as any;
+    const result = body?.execution || {};
+    const reportable = ['dispatched', 'recovered', 'succeeded', 'failed',
+      'uncertain', 'needs_review', 'errors']
+      .some(key => Number(result[key] || 0) > 0);
+    // Stay quiet when there is no work; this runs every minute in production.
+    if (reportable) log('auto-topup:', result);
+  } catch (e) {
+    log('auto-topup failed:', (e as Error).message);
+  } finally {
+    autoTopupRunning = false;
+  }
+}
+
 export function startScheduler() {
   if (!CRON_SECRET) {
-    log('CRON_SECRET not set — grace-expiry job disabled (released numbers will not return to the pool)');
+    log('CRON_SECRET not set — scheduled jobs disabled');
     return;
   }
   // Run shortly after boot so a restart catches anything missed while down.
-  setTimeout(() => { void runGraceJob(); }, 30_000);
-  setInterval(() => { void runGraceJob(); }, EVERY_MS);
-  log(`grace-expiry job every ${Math.round(EVERY_MS / 60000)}min`);
+  setTimeout(() => {
+    void runGraceJob();
+    void runAutoTopupJob();
+  }, 30_000);
+  setInterval(() => { void runGraceJob(); }, GRACE_EVERY_MS);
+  setInterval(() => { void runAutoTopupJob(); }, AUTO_TOPUP_EVERY_MS);
+  log(`grace-expiry job every ${Math.round(GRACE_EVERY_MS / 60000)}min`);
+  log(`auto-topup job every ${Math.round(AUTO_TOPUP_EVERY_MS / 1000)}s`);
 }

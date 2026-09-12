@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
       .from(schema.paymentMethods).where(eq(schema.paymentMethods.tenantId, s.tenantId)).limit(1);
     if (!card) {
       throw apiError('card_required',
-        'Add a payment method before going live. Top up your wallet from the Wallet page — the card you pay with is kept for your plan renewal, so there is no separate form.',
+        'Add a payment method before going live. Top up your wallet and select “Save card” on the Wallet page.',
         402);
     }
   }

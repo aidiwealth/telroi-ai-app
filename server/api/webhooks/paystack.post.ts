@@ -5,6 +5,8 @@ import { useDb, schema } from '~/server/db';
 import { paystack } from '~/server/utils/payments';
 import { paymentCreds } from '~/server/utils/platform';
 import { credit } from '~/server/utils/wallet';
+import { canSavePaymentMethod, paystackReusableCard, saveVerifiedPaymentMethod } from '~/server/utils/payment-methods';
+import { reconcileAutoTopupWebhook } from '~/server/utils/auto-topup-executor';
 
 export default defineEventHandler(async (event) => {
   const raw = await readRawBody(event) || '';
@@ -31,11 +33,56 @@ export default defineEventHandler(async (event) => {
   }
 
   const reference = body.data?.reference;
+  const autoTopup = await reconcileAutoTopupWebhook('paystack', body.data);
+  if (autoTopup) {
+    await finishWebhook(logId, { outcome: 'accepted', signatureOk: true, eventType: body.event,
+      detail: `auto top-up ${autoTopup.status}` });
+    return { ok: true, ...autoTopup };
+  }
   const db = useDb();
   const [payment] = await db.select().from(schema.payments).where(eq(schema.payments.reference, reference)).limit(1);
-  if (!payment || payment.status === 'succeeded') {
+  if (!payment) {
     await finishWebhook(logId, { outcome: 'ignored', signatureOk: true, eventType: body.event,
-      tenantId: payment?.tenantId, detail: payment ? 'already credited' : `no payment found for ${reference}` });
+      detail: `no payment found for ${reference}` });
+    return { ok: true, idempotent: true };
+  }
+  const paidAmount = Number(body.data?.amount);
+  const paidCurrency = String(body.data?.currency || '').toUpperCase();
+  if (payment.provider !== 'paystack' || paidAmount !== payment.amountMinor || paidCurrency !== payment.currency) {
+    await finishWebhook(logId, { outcome: 'rejected', signatureOk: true, eventType: body.event,
+      tenantId: payment.tenantId, detail: 'payment provider, amount, or currency did not match' });
+    throw createError({ statusCode: 400, message: 'Payment details do not match' });
+  }
+
+  // A reusable authorization is saved only when this exact payment records the
+  // owner's choice. Successful bank and transfer payments are still credited.
+  if (canSavePaymentMethod(payment)) {
+    try {
+      const auth = paystackReusableCard(body.data?.authorization);
+      const billingEmail = body.data?.customer?.email;
+      // This release supports saved cards only. Direct-debit mandates need their
+      // own activation/revocation lifecycle and must not be mislabeled as cards.
+      if (auth && typeof billingEmail === 'string' && billingEmail) {
+        await saveVerifiedPaymentMethod({
+          tenantId: payment.tenantId, provider: 'paystack', token: auth.authorization_code,
+          sourcePaymentReference: payment.reference, sourcePaymentCreatedAt: payment.createdAt,
+          billingEmail, providerSignature: auth.signature || null,
+          brand: auth.card_type || auth.brand || null, last4: auth.last4 || null,
+          expMonth: auth.exp_month ? Number(auth.exp_month) : null,
+          expYear: auth.exp_year ? Number(auth.exp_year) : null
+        });
+      }
+    } catch (e: any) {
+      // A card-save failure must not fail or hide the payment that already moved.
+      console.error('[paystack] reusable card save failed:', e?.message);
+    }
+  }
+
+  // A duplicate webhook should retry card persistence above, but never credit
+  // the already-settled payment a second time.
+  if (payment.status === 'succeeded') {
+    await finishWebhook(logId, { outcome: 'ignored', signatureOk: true, eventType: body.event,
+      tenantId: payment.tenantId, detail: 'already credited' });
     return { ok: true, idempotent: true };
   }
 
@@ -43,26 +90,12 @@ export default defineEventHandler(async (event) => {
   await credit(payment.tenantId, payment.amountMinor, 'topup', reference, { provider: 'paystack' });
   await finishWebhook(logId, { outcome: 'accepted', signatureOk: true, eventType: body.event,
     tenantId: payment.tenantId, detail: `credited ${(payment.amountMinor / 100).toLocaleString()}` });
-  await db.update(schema.payments).set({ status: 'succeeded', creditedAt: new Date(), raw: body })
+  const storedBody = structuredClone(body);
+  if (storedBody.data?.authorization?.authorization_code) {
+    storedBody.data.authorization.authorization_code = '[redacted]';
+  }
+  await db.update(schema.payments).set({ status: 'succeeded', creditedAt: new Date(), raw: storedBody })
     .where(eq(schema.payments.id, payment.id));
-
-  // Paystack hands back a reusable authorization on every successful charge, and
-  // we were throwing it away — so "add a payment method" was a setup step nobody
-  // could ever complete, and auto-top-up had nothing to charge. Taking it here
-  // means a client's first top-up leaves a card on file as a by-product, with no
-  // separate form and no card number ever reaching us.
-  try {
-    const auth = body.data?.authorization;
-    if (auth?.authorization_code && auth?.reusable !== false) {
-      await db.delete(schema.paymentMethods).where(eq(schema.paymentMethods.tenantId, payment.tenantId));
-      await db.insert(schema.paymentMethods).values({
-        tenantId: payment.tenantId, provider: 'paystack', token: auth.authorization_code,
-        brand: auth.card_type || auth.brand || null, last4: auth.last4 || null,
-        expMonth: auth.exp_month ? Number(auth.exp_month) : null,
-        expYear: auth.exp_year ? Number(auth.exp_year) : null, isDefault: true
-      });
-    }
-  } catch { /* a card we couldn't keep shouldn't fail the payment that worked */ }
 
   return { ok: true };
 });

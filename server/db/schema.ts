@@ -1,8 +1,9 @@
 // server/db/schema.ts
 // Drizzle ORM schema for the Telroi dashboard (PostgreSQL).
 import {
-  pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex
+  pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex, check
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'member']);export const platformRoleEnum = pgEnum('platform_role', ['superadmin', 'staff']);
 export const providerKindEnum = pgEnum('provider_kind', ['telroi', 'twilio', 'telnyx']);
@@ -1107,11 +1108,25 @@ export const payments = pgTable('payments', {
   amountMinor: integer('amount_minor').notNull(),
   currency: currencyEnum('currency').notNull(),
   status: paymentStatusEnum('status').notNull().default('pending'),
+  // Saving a charge-capable method is opt-in. Keep the consent evidence on the
+  // payment whose verified webhook is allowed to persist that method.
+  savePaymentMethodRequested: boolean('save_payment_method_requested').notNull().default(false),
+  savePaymentMethodConsentVersion: text('save_payment_method_consent_version'),
+  savePaymentMethodConsentedAt: timestamp('save_payment_method_consented_at', { withTimezone: true }),
+  savePaymentMethodConsentedByUserId: uuid('save_payment_method_consented_by_user_id')
+    .references(() => users.id, { onDelete: 'set null' }),
+  savePaymentMethodConsentedByEmail: text('save_payment_method_consented_by_email'),
   creditedAt: timestamp('credited_at', { withTimezone: true }),
   raw: jsonb('raw').$type<Record<string, unknown>>().default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
-  refIdx: uniqueIndex('payments_ref_idx').on(t.reference)
+  refIdx: uniqueIndex('payments_ref_idx').on(t.reference),
+  saveMethodConsentCheck: check('payments_save_method_consent_check', sql`
+    not ${t.savePaymentMethodRequested} or
+    (${t.savePaymentMethodConsentVersion} is not null and
+     ${t.savePaymentMethodConsentedAt} is not null and
+     ${t.savePaymentMethodConsentedByEmail} is not null)
+  `)
 }));
 
 /* Configurable pricing (minor units in USD; NGN derived by fx). Single row. */
@@ -1374,23 +1389,112 @@ export const pricingOverrides = pgTable('pricing_overrides', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 });
 
-/* Saved card-on-file (provider-agnostic). We NEVER store raw card data — only
-   the provider's token/reference plus display-safe metadata (brand, last4).
-   Tokenization happens client-side via the provider SDK (Stripe Elements /
-   Paystack). A card is collected at signup; charged $0 until the trial ends. */
+/* Saved card-on-file (provider-agnostic). We NEVER store raw card data. A
+   signature-verified payment webhook supplies a reusable provider reference,
+   which is encrypted here alongside display-safe metadata (brand, last4). */
 export const paymentMethods = pgTable('payment_methods', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   provider: text('provider').notNull(),          // stripe | paystack
-  token: text('token').notNull(),                // provider payment-method / authorization token
+  // Deprecated plaintext compatibility column. New writes use tokenEnc; this
+  // remains nullable until existing rows have been backfilled and deployed.
+  token: text('token'),
+  tokenEnc: text('token_enc'),                   // encrypted payment-method / authorization token
+  providerCustomerId: text('provider_customer_id'), // Stripe Customer id
+  billingEmail: text('billing_email'),           // email used to create a Paystack authorization
+  providerSignature: text('provider_signature'), // Paystack instrument signature
+  sourcePaymentReference: text('source_payment_reference'),
+  sourcePaymentCreatedAt: timestamp('source_payment_created_at', { withTimezone: true }),
+  reusable: boolean('reusable').notNull().default(false),
   brand: text('brand'),                          // e.g. visa, mastercard
   last4: text('last4'),
   expMonth: integer('exp_month'),
   expYear: integer('exp_year'),
   isDefault: boolean('is_default').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
-  tenantIdx: index('payment_methods_tenant_idx').on(t.tenantId)
+  // The product currently supports exactly one card-on-file per workspace.
+  // This also makes webhook upserts atomic instead of delete-then-insert.
+  tenantIdx: uniqueIndex('payment_methods_tenant_idx').on(t.tenantId)
+}));
+
+/* A workspace owner's auto top-up preference. Amounts use the wallet's minor
+   unit (cents for USD, kobo for NGN), just like every other wallet amount. The
+   selected payment method is explicit so this remains correct if the product
+   later allows several saved cards. There is only one configuration per
+   workspace. */
+export const autoTopupSettings = pgTable('auto_topup_settings', {
+  tenantId: uuid('tenant_id').primaryKey().references(() => tenants.id, { onDelete: 'cascade' }),
+  paymentMethodId: uuid('payment_method_id').references(() => paymentMethods.id, { onDelete: 'set null' }),
+  enabled: boolean('enabled').notNull().default(false),
+  thresholdMinor: integer('threshold_minor').notNull(),
+  topupAmountMinor: integer('topup_amount_minor').notNull(),
+  consentVersion: text('consent_version'),
+  consentedAt: timestamp('consented_at', { withTimezone: true }),
+  consentedByUserId: uuid('consented_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  // Preserve who accepted even if that user is later deleted.
+  consentedByEmail: text('consented_by_email'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  paymentMethodIdx: index('auto_topup_payment_method_idx').on(t.paymentMethodId),
+  enabledConsentCheck: check('auto_topup_enabled_consent_check', sql`
+    not ${t.enabled} or (${t.consentVersion} is not null and ${t.consentedAt} is not null and ${t.consentedByEmail} is not null)
+  `)
+}));
+
+/* Durable work queue and audit trail for automatic charges. The row is written
+   before a payment provider is called. A unique trigger ledger entry plus a
+   stable idempotency key means concurrent workers can agree that one low-wallet
+   event represents one intended charge. Provider responses must be summarized;
+   never put card tokens or full response payloads in failureMessage. */
+export const autoTopupAttempts = pgTable('auto_topup_attempts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  triggerLedgerId: uuid('trigger_ledger_id').notNull().references(() => ledger.id, { onDelete: 'cascade' }),
+  paymentMethodId: uuid('payment_method_id').references(() => paymentMethods.id, { onDelete: 'set null' }),
+  paymentId: uuid('payment_id').references(() => payments.id, { onDelete: 'set null' }),
+  idempotencyKey: text('idempotency_key').notNull(),
+  amountMinor: integer('amount_minor').notNull(),
+  currency: currencyEnum('currency').notNull(),
+  balanceAtTriggerMinor: integer('balance_at_trigger_minor').notNull(),
+  provider: text('provider').notNull(),
+  providerReference: text('provider_reference'),
+  status: text('status').$type<'pending' | 'processing' | 'ready' | 'dispatching' | 'uncertain' | 'needs_review' | 'succeeded' | 'failed' | 'cancelled'>()
+    .notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  retryable: boolean('retryable').notNull().default(true),
+  failureCode: text('failure_code'),
+  failureMessage: text('failure_message'),
+  cancellationReason: text('cancellation_reason'),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).defaultNow(),
+  claimToken: text('claim_token'),
+  claimedAt: timestamp('claimed_at', { withTimezone: true }),
+  leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+  validatedAt: timestamp('validated_at', { withTimezone: true }),
+  // Pin the credential context used for the one permitted dispatch. Rotation
+  // or a test/live switch must never reconcile against a different account.
+  paymentMode: text('payment_mode').$type<'test' | 'live'>(),
+  credentialFingerprint: text('credential_fingerprint'),
+  dispatchedAt: timestamp('dispatched_at', { withTimezone: true }),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
+  succeededAt: timestamp('succeeded_at', { withTimezone: true }),
+  failedAt: timestamp('failed_at', { withTimezone: true }),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  idempotencyIdx: uniqueIndex('auto_topup_attempts_idempotency_idx').on(t.idempotencyKey),
+  triggerIdx: uniqueIndex('auto_topup_attempts_trigger_idx').on(t.triggerLedgerId),
+  paymentIdx: uniqueIndex('auto_topup_attempts_payment_idx').on(t.paymentId),
+  // A workspace may have years of historical attempts but only one that can
+  // still lead to a charge. This is the last line of defence against two rapid
+  // threshold crossings producing two future payments.
+  activeTenantIdx: uniqueIndex('auto_topup_attempts_active_tenant_idx').on(t.tenantId)
+    .where(sql`${t.status} in ('pending', 'processing', 'ready', 'dispatching', 'uncertain', 'needs_review')`),
+  dueIdx: index('auto_topup_attempts_due_idx').on(t.status, t.nextAttemptAt),
+  tenantCreatedIdx: index('auto_topup_attempts_tenant_created_idx').on(t.tenantId, t.createdAt)
 }));
 
 /* Lightweight, auto-expiring activity log. Two kinds: 'call' (call lifecycle)

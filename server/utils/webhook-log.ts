@@ -11,6 +11,14 @@ import { eq } from 'drizzle-orm';
 
 const EXCERPT = 600;
 
+// Provider payloads may contain charge-capable authorization codes. Keep the
+// diagnostic shape of the webhook without copying those credentials into a
+// second plaintext store.
+function safeExcerpt(raw: string): string {
+  return raw.slice(0, EXCERPT)
+    .replace(/("(?:authorization_code|client_secret|access_token|refresh_token|token)"\s*:\s*")[^"]*/gi, '$1[redacted]');
+}
+
 export async function recordWebhook(input: {
   provider: string; raw?: string | null; eventType?: string | null;
 }): Promise<string | null> {
@@ -18,7 +26,7 @@ export async function recordWebhook(input: {
     const [row] = await useDb().insert(schema.webhookEvents).values({
       provider: input.provider,
       eventType: input.eventType || null,
-      bodyExcerpt: input.raw ? input.raw.slice(0, EXCERPT) : null
+      bodyExcerpt: input.raw ? safeExcerpt(input.raw) : null
     }).returning({ id: schema.webhookEvents.id });
     return row?.id || null;
   } catch (e: any) {
