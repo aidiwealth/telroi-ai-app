@@ -18,12 +18,40 @@ cp .env.example .env        # then fill in the values
 node -e "console.log('JWT_SECRET=' + require('crypto').randomBytes(48).toString('base64'))"
 node -e "console.log('ENCRYPTION_KEY=' + require('crypto').randomBytes(32).toString('base64'))"
 
-npm run db:generate         # create the migration from the schema
-npm run db:migrate          # apply it
+npm run db:migrate          # apply the committed migrations
 npm run db:seed             # optional: demo workspace (owner@acme.test)
 
 npm run dev                 # http://localhost:3000
 ```
+
+### Database upgrades
+
+Run `npm run db:migrate` from a checkout with dependencies installed and
+`DATABASE_URL` explicitly pointing at the intended database. The web runtime
+container does not include the migration tooling. Do not generate new migrations
+as a deployment step; `db:generate` is for developers changing the schema.
+
+For an older installation with tables but **no Drizzle migration history**:
+
+1. Back up the database and rehearse the upgrade on a disposable copy. Stop web
+   and control-app processes during the actual upgrade.
+2. Review schema drift and run `npm run db:migrate -- --baseline-existing`.
+   This checks baseline columns, types, required nullability and enum values,
+   records only migration 0000 as already present, then runs the later migrations.
+   It does not certify every existing index, default or foreign key; those should
+   match the original schema. Missing baseline fields or partially applied
+   feature schemas stop the command and require explicit investigation.
+3. If a later migration fails, correct the reported problem and retry plain
+   `npm run db:migrate`. The baseline remains recorded; later migrations roll back
+   together. Duplicate saved cards stop the upgrade without deleting any records.
+4. Deploy/restart both applications after migration succeeds. The web app uses
+   `NUXT_AUTO_TOPUP_EXECUTION_ENABLED=true` at runtime; the control app must be
+   running with a matching cron secret. Existing plaintext cards are preserved
+   but are not automatically marked reusable or opted into automatic charges.
+
+Fresh databases and databases with migration history use plain `npm run db:migrate`.
+Changing an older `AUTO_TOPUP_EXECUTION_ENABLED` environment variable is no longer
+sufficient: replace it with `NUXT_AUTO_TOPUP_EXECUTION_ENABLED` and restart the app.
 
 ### Run without live Telroi credentials
 

@@ -139,7 +139,7 @@ DATABASE_URL=<same as main app — local/fast on NYC>
 
 The control app calls the web app's auto-top-up worker every minute and the
 number grace-expiry worker hourly. Auto top-up charging also requires
-`AUTO_TOPUP_EXECUTION_ENABLED=true` on the web app; keep it false until the
+`NUXT_AUTO_TOPUP_EXECUTION_ENABLED=true` on the web app; keep it false until the
 database migration, provider webhooks, and this scheduler are deployed.
 
 ### Prerequisites for this cross-box setup
