@@ -144,7 +144,7 @@ export function autoTopupCancellationReason(
   if (state.tenant.sandboxMode) return 'sandbox_workspace';
   if (state.tenant.postpaid) return 'postpaid_workspace';
   if (
-    !Number.isInteger(state.settings.thresholdMinor) || state.settings.thresholdMinor < 0 ||
+    !Number.isInteger(state.settings.thresholdMinor) || state.settings.thresholdMinor <= 0 ||
     !Number.isInteger(state.settings.topupAmountMinor) ||
     state.settings.topupAmountMinor <= state.settings.thresholdMinor
   ) return 'configuration_changed';

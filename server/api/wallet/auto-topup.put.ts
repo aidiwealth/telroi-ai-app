@@ -14,7 +14,7 @@ const MAX_DATABASE_INTEGER = 2_147_483_647;
 const Body = z.object({
   enabled: z.boolean(),
   consentAccepted: z.boolean().optional(),
-  thresholdMinor: z.number().int().min(0).max(MAX_DATABASE_INTEGER),
+  thresholdMinor: z.number().int().positive().max(MAX_DATABASE_INTEGER),
   topupAmountMinor: z.number().int().positive().max(MAX_DATABASE_INTEGER)
 }).strict();
 
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) {
     throw apiError(
       'invalid',
-      'enabled, thresholdMinor, and topupAmountMinor are required in minor currency units; consentAccepted must be a boolean when supplied.'
+      'enabled must be a boolean; thresholdMinor and topupAmountMinor must be positive whole numbers in minor currency units; consentAccepted must be a boolean when supplied.'
     );
   }
 

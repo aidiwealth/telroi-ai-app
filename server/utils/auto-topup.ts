@@ -27,8 +27,8 @@ export function validateAutoTopupAmounts(
   minimumTopupMinor: number,
   maximumTopupMinor = MAX_DATABASE_INTEGER
 ): { code: string; message: string } | null {
-  if (amounts.thresholdMinor < 0 || amounts.thresholdMinor > 2_147_483_647 || !Number.isInteger(amounts.thresholdMinor)) {
-    return { code: 'invalid_threshold', message: 'The threshold must be a non-negative whole number.' };
+  if (amounts.thresholdMinor <= 0 || amounts.thresholdMinor > 2_147_483_647 || !Number.isInteger(amounts.thresholdMinor)) {
+    return { code: 'invalid_threshold', message: 'The threshold must be greater than zero and use whole cents or kobo.' };
   }
   if (!Number.isSafeInteger(amounts.topupAmountMinor) || amounts.topupAmountMinor <= 0 || amounts.topupAmountMinor > 2_147_483_647) {
     return { code: 'invalid_refill', message: 'The refill amount must be a positive whole number within the supported range.' };

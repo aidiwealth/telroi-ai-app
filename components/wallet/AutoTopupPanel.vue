@@ -186,7 +186,7 @@ const amountError = computed(() => {
   if (!state.value) return '';
   const threshold = toMinor(thresholdMajor.value);
   const refill = toMinor(refillMajor.value);
-  if (threshold === null) return 'Enter a valid threshold with no more than two decimal places.';
+  if (threshold === null || threshold <= 0) return 'Enter a threshold greater than zero with no more than two decimal places.';
   if (refill === null || refill <= 0) return 'Enter a positive refill amount with no more than two decimal places.';
   if (refill < state.value.minimumTopupMinor) return `The smallest refill is ${formatMoney(state.value.minimumTopupMinor)}.`;
   if (refill > state.value.maximumTopupMinor) return `The largest refill is ${formatMoney(state.value.maximumTopupMinor)}.`;
