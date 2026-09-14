@@ -22,8 +22,9 @@ services:
       - { key: JWT_SECRET, type: SECRET }
       - { key: ENCRYPTION_KEY, type: SECRET }
       - { key: CRON_SECRET, type: SECRET }
-      # Enable only after the database migration, provider webhooks, and control-app scheduler are deployed.
-      - { key: AUTO_TOPUP_EXECUTION_ENABLED, value: "false" }
+      # Customer consent still gates every charge. Apply database migrations
+      # before deploying this production configuration.
+      - { key: AUTO_TOPUP_EXECUTION_ENABLED, value: "true" }
       - { key: EMAIL_PROVIDER, value: resend }
       - { key: RESEND_API_KEY, type: SECRET }
       - { key: EMAIL_FROM, value: "Telroi <hello@telroi.ai>" }
