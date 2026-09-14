@@ -18,9 +18,6 @@ export default defineNuxtConfig({
     databaseUrl: process.env.DATABASE_URL || '',
     jwtSecret: process.env.JWT_SECRET || 'dev-insecure-secret-change-me',
     cronSecret: process.env.CRON_SECRET || '',
-    // Roll out only after the auto-top-up schema and provider webhooks are deployed.
-    // Overridden at server startup by NUXT_AUTO_TOPUP_EXECUTION_ENABLED.
-    autoTopupExecutionEnabled: false,
     encryptionKey: process.env.ENCRYPTION_KEY || '', // 32-byte base64
     provisionAgentUrl: process.env.PROVISION_AGENT_URL || '',
     provisionAgentSecret: process.env.PROVISION_AGENT_SECRET || '',

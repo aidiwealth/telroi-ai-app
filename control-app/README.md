@@ -138,9 +138,8 @@ DATABASE_URL=<same as main app — local/fast on NYC>
 ```
 
 The control app calls the web app's auto-top-up worker every minute and the
-number grace-expiry worker hourly. Auto top-up charging also requires
-`NUXT_AUTO_TOPUP_EXECUTION_ENABLED=true` on the web app; keep it false until the
-database migration, provider webhooks, and this scheduler are deployed.
+number grace-expiry worker hourly. Deploy the database migration and provider
+webhooks before starting this scheduler against the updated web app.
 
 ### Prerequisites for this cross-box setup
 1. **Firewall:** the London PBX firewall must allow inbound TCP **8089** from the

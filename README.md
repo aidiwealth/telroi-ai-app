@@ -44,14 +44,12 @@ For an older installation with tables but **no Drizzle migration history**:
 3. If a later migration fails, correct the reported problem and retry plain
    `npm run db:migrate`. The baseline remains recorded; later migrations roll back
    together. Duplicate saved cards stop the upgrade without deleting any records.
-4. Deploy/restart both applications after migration succeeds. The web app uses
-   `NUXT_AUTO_TOPUP_EXECUTION_ENABLED=true` at runtime; the control app must be
-   running with a matching cron secret. Existing plaintext cards are preserved
-   but are not automatically marked reusable or opted into automatic charges.
+4. Deploy/restart both applications after migration succeeds. The control app
+   must be running with a matching cron secret. Existing plaintext cards are
+   preserved but are not automatically marked reusable or opted into automatic
+   charges.
 
 Fresh databases and databases with migration history use plain `npm run db:migrate`.
-Changing an older `AUTO_TOPUP_EXECUTION_ENABLED` environment variable is no longer
-sufficient: replace it with `NUXT_AUTO_TOPUP_EXECUTION_ENABLED` and restart the app.
 
 ### Run without live Telroi credentials
 

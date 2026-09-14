@@ -12,6 +12,6 @@ export default defineEventHandler(async (event) => {
     await requirePlatformAdmin(event);
   }
 
-  const execution = await executeAutoTopups({ enabled: useRuntimeConfig().autoTopupExecutionEnabled === true });
+  const execution = await executeAutoTopups();
   return { ok: true, execution };
 });

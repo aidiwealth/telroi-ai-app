@@ -421,7 +421,7 @@ async function recordResult(id: string, claimToken: string, result: ProviderResu
  * at the deadline. HTTP requests have their own timeout. No request is detached.
  */
 export async function executeAutoTopups(
-  options: { enabled: boolean; batchSize?: number; concurrency?: number; timeBudgetMs?: number }, db = useDb()
+  options: { batchSize?: number; concurrency?: number; timeBudgetMs?: number } = {}, db = useDb()
 ) {
   const limit = (value: number | undefined, fallback: number, max: number) =>
     Number.isFinite(value) ? Math.max(1, Math.min(max, Math.trunc(value!))) : fallback;
@@ -460,7 +460,7 @@ export async function executeAutoTopups(
       console.error('[auto-topup] reconciliation failed', attempt?.id);
     }
   }, Math.min(deadline, Date.now() + 20_000));
-  if (!options.enabled || Date.now() >= deadline) return counts;
+  if (Date.now() >= deadline) return counts;
   const rows = await db.select({ id: schema.autoTopupAttempts.id, tenantId: schema.autoTopupAttempts.tenantId,
     provider: schema.autoTopupAttempts.provider }).from(schema.autoTopupAttempts).where(dueUnsentAutoTopups())
     .orderBy(asc(schema.autoTopupAttempts.nextAttemptAt), asc(schema.autoTopupAttempts.id)).limit(batch);
