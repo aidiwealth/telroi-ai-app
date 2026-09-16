@@ -96,7 +96,9 @@ export default defineEventHandler(async (event) => {
     // seven turns, so far less speech than an unhurried estimate would suggest.
     ai: {
       note: 'Charged from your wallet when using Telroi-provided AI. Bring your own provider keys and you pay them directly instead.',
-      markupPct: Number(p.aiMarkupPct) || 0,
+      // Not published. What a client pays is the unit rates and the indicative
+      // minute below; how those are composed is ours, and a markup of zero told
+      // anybody who asked that we sell managed AI at cost.
       units: {
         sttPerSecond: nanoPair(p.aiSttPerSecNano),
         ttsPerCharacter: nanoPair(p.aiTtsPerCharNano),
