@@ -27,9 +27,16 @@ export default defineEventHandler(async (event) => {
   // When this person last looked at their missed calls. The apps filter the
   // call list themselves, so they count against this rather than us returning
   // a number they would then have to reconcile with their own filtering.
-  const [seen] = await db.select().from(schema.missedSeen)
-    .where(and(eq(schema.missedSeen.tenantId, s.tenantId || ''),
-               eq(schema.missedSeen.userId, s.userId))).limit(1);
+  // Only when there is a tenant. A new user has none until onboarding creates
+  // one, and an empty string is not a uuid — Postgres threw, me returned 500,
+  // and the auth guard read that as logged-out and sent them back to the login
+  // page moments after their code was accepted.
+  let seen: any = null;
+  if (s.tenantId) {
+    [seen] = await db.select().from(schema.missedSeen)
+      .where(and(eq(schema.missedSeen.tenantId, s.tenantId),
+                 eq(schema.missedSeen.userId, s.userId))).limit(1);
+  }
 
   return { user: { id: s.userId, email: s.email, role: s.role, name: u.name || null, copilotOnboarded: !!u.copilotOnboarded, missedSeenAt: seen?.seenAt || null }, tenant };
 });
