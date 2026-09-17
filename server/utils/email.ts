@@ -103,7 +103,10 @@ const BRAND = {
   ink: '#0A0A0B', inkSoft: '#5b5b62', inkMute: '#8b8b93',
   paper: '#ffffff', paper2: '#f7f6f3', rule: '#e7e5e0',
   signal: '#1a4b72', signal2: '#123857', signalSoft: '#e7eef4',
-  logo: 'https://pub-f138f42d66b748108ebf7432c7314665.r2.dev/telroi-ll.png'
+  // On our own domain rather than an R2 public bucket. An image URL that does
+  // not match the sending domain reads as suspicious to some receivers, Gmail
+  // in particular, and a logo is the one image in every email we send.
+  logo: 'https://telroi.ai/telroi-ll.png'
 };
 
 function socialIcons(social?: { x?: string; linkedin?: string; instagram?: string; facebook?: string }) {
