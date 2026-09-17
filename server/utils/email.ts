@@ -559,3 +559,23 @@ export async function sendOpsWentLiveEmail(to: string, d: {
   `, { preheader: `${d.name} went live` });
   await sendVia({ to, subject, html, text });
 }
+
+/** One-off: the signups that were bounced back to the login page.
+ *
+ *  A fault in /api/auth/me meant a brand-new user — who has no workspace until
+ *  onboarding creates one — got a 500 rather than their account, and the guard
+ *  read that as being logged out. Thirteen people entered a valid code and were
+ *  sent back to sign in, over six days, with nothing to tell them why. */
+export async function sendSignupApologyEmail(to: string) {
+  const subject = 'Your Telroi account — please try again';
+  const text = `You tried to create a Telroi account in the last few days and were sent back to the sign-in page after entering your code.\n\nThat was a fault on our side, not anything you did, and it is now fixed.\n\nPlease sign in again at https://app.telroi.ai and you will be able to finish setting up.\n\nSorry for the wasted trip.`;
+  const html = shell(`
+    ${h1('Please try again')}
+    ${para('You tried to create a Telroi account in the last few days and were sent back to the sign-in page after entering your code.')}
+    ${para('That was a fault on our side, not anything you did, and it is now fixed.')}
+    ${button('Sign in to Telroi →', 'https://app.telroi.ai')}
+    ${divider()}
+    <p style="color:${BRAND.inkMute};font-size:12.5px;line-height:1.5;margin:0;">Sorry for the wasted trip. If anything else goes wrong, reply to this email and a person will read it.</p>
+  `, { preheader: 'The sign-up fault is fixed — please try again.' });
+  await sendVia({ to, subject, html, text });
+}
