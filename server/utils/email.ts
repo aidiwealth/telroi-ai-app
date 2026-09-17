@@ -79,7 +79,15 @@ async function sendViaImpl(args: SendArgs) {
   if (cfg.resendApiKey && cfg.emailProvider !== 'console') {
     const { Resend } = await import('resend');
     const resend = new Resend(cfg.resendApiKey);
-    const __r = await resend.emails.send({ from: cfg.emailFrom, to: args.to, subject: args.subject, html: args.html, text: args.text });
+    // A reply-to on the main domain, because the sending subdomain has no
+    // mailbox and never will. Resend flags a no-reply sender for good reason:
+    // an inbox that cannot answer is one that reports spam instead, and our own
+    // emails invite a reply.
+    const __r = await resend.emails.send({
+      from: cfg.emailFrom, to: args.to, subject: args.subject,
+      html: args.html, text: args.text,
+      replyTo: cfg.emailReplyTo || 'techteam@telroi.ai'
+    });
     if ((__r as any)?.error) console.error("[email/resend] rejected", { to: args.to, from: cfg.emailFrom, error: (__r as any).error });
     else console.log("[email/resend] accepted", { to: args.to, id: (__r as any)?.data?.id });
     return;

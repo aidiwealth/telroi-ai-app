@@ -35,6 +35,10 @@ export default defineNuxtConfig({
     emailProvider: process.env.EMAIL_PROVIDER || 'resend', // resend (default) | console | termii
     resendApiKey: process.env.RESEND_API_KEY || '',
     emailFrom: process.env.EMAIL_FROM || 'Telroi <hello@telroi.ai>',
+    // Where replies go. The sending subdomain has no mailbox and never will, so
+    // this is on the main domain — Resend flags a no-reply sender because an
+    // inbox that cannot answer reports spam instead.
+    emailReplyTo: process.env.EMAIL_REPLY_TO || 'techteam@telroi.ai',
     // Termii email-OTP (delivery channel for sign-in / verification codes)
     termiiApiKey: process.env.TERMII_API_KEY || '',
     termiiEmailConfigId: process.env.TERMII_EMAIL_CONFIG_ID || '',
