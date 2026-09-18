@@ -79,7 +79,7 @@ export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCa
   const dest = String(input.toNumber || '').replace(/[^0-9]/g, '');
   const isNigeria = dest.startsWith('234') || dest.startsWith('0');
   const vendor = isNigeria ? 'telroi' : (v.otpIntlVendor || v.otpVoiceVendor);
-  console.log(`[otp-route] to=${input.toNumber} dest=${dest} nigeria=${isNigeria} vendor=${vendor}`);
+  console.log(`[otp-route] to=${input.toNumber} dest=${dest} nigeria=${isNigeria} vendor=${vendor} notice=${input.securityNotice !== false}`);
   // The same script the other two paths use. Nigeria plays recorded audio and
   // Telnyx speaks at call.answered, so this is Twilio's copy — and it had drifted
   // to older wording, which nobody would notice until a vendor switch changed
