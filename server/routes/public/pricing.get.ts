@@ -40,6 +40,13 @@ export default defineEventHandler(async (event) => {
     // tax remitted to FIRS — published here rather than discovered at the
     // wallet, where a client seeing less credit than they paid reads it as a
     // shortfall rather than a tax they already knew about.
+    // Worth stating here rather than discovered as a 402. Voice calls leave on
+    // the workspace's own number, so there has to be one — and a developer
+    // planning an integration should know that before they build it.
+    requirements: {
+      voiceOtp: 'Requires at least one purchased phone number. Calls go out on your own number.',
+      voiceNotification: 'Requires at least one purchased phone number. Calls go out on your own number.'
+    },
     vat: {
       rate: 0.075,
       inclusive: true,
