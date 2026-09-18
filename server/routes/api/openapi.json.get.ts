@@ -63,6 +63,7 @@ export default defineEventHandler((event) => {
               to: { type: 'string', description: 'Destination number in E.164 format.', example: '+2348012345678' },
               code_length: { type: 'integer', minimum: 4, maximum: 10, description: 'Requested code length (clamped to the operator maximum).', example: 6 },
               language: { type: 'string', description: 'BCP-47 language for the spoken prompt.', example: 'en-US' },
+              security_notice: { type: 'boolean', default: true, description: 'Whether the call ends with "Do not share this code with anyone." On unless you turn it off: it is what stops somebody reading their code to a caller pretending to be their bank. Turning it off saves about two seconds.', example: true },
               code: { type: 'string', pattern: '^[0-9]{4,10}$', description: 'Your own code, if you generate them. We read it out and record the call; verifying it stays with you. When set, `code_length` is ignored and no `expires_at` is returned — how long it stays valid is your decision.', example: '483920' }
             }
           }, examples: {
