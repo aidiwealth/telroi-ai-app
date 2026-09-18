@@ -144,7 +144,10 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
   const [row] = await db.insert(schema.voiceOtps).values({
     tenantId, toNumber, codeHash: sha256(code), codeLength: ownCode ? ownCode.length : len,
     clientSupplied: !!ownCode,
-    status: 'calling', maxAttempts: p.maxAttempts, expiresAt
+    status: 'calling', maxAttempts: p.maxAttempts, expiresAt,
+    // Stored, not just passed on: Telnyx speaks when it answers, long after
+    // this request has returned, so the preference has to outlive it.
+    securityNotice: opts.securityNotice !== false
   }).returning({ id: schema.voiceOtps.id });
 
   // Stored against the row before dialling: a carrier that speaks the code over

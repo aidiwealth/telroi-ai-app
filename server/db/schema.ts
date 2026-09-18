@@ -941,6 +941,10 @@ export const apiKeys = pgTable('api_keys', {
    This is intentionally separate from general calling — it cannot be used to
    place arbitrary calls, only to deliver+verify an OTP. */
 export const voiceOtps = pgTable('voice_otps', {
+  // Whether the call ends with "do not share this code". Stored rather than
+  // passed through, because Telnyx speaks when it answers — after our request
+  // has returned — so the preference has to outlive the call that set it.
+  securityNotice: boolean('security_notice').notNull().default(true),
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   toNumber: text('to_number').notNull(),          // E.164 destination

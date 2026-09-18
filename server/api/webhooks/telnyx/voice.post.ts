@@ -106,11 +106,16 @@ export default defineEventHandler(async (event) => {
         const { useDb, schema } = await import('~/server/db');
         const { eq } = await import('drizzle-orm');
         const db = useDb();
-        const [row] = await db.select({ code: schema.voiceOtps.pendingCode })
+        const [row] = await db.select({
+          code: schema.voiceOtps.pendingCode,
+          // Named explicitly, or it arrives undefined and reads as true — which
+          // is the whole fault this change exists to fix.
+          securityNotice: schema.voiceOtps.securityNotice
+        })
           .from(schema.voiceOtps).where(eq(schema.voiceOtps.id, otpId)).limit(1);
         if (row?.code) {
           const cc = await import('~/server/utils/telnyx-cc');
-          await cc.telnyxSpeakCode(callId, row.code, 2);
+          await cc.telnyxSpeakCode(callId, row.code, 2, row.securityNotice !== false);
           // Cleared as soon as it's spoken: it has no further use here, and a
           // live code sitting in a column is a code that can leak.
           await db.update(schema.voiceOtps).set({ pendingCode: null })
