@@ -84,7 +84,11 @@ export default defineEventHandler((event) => {
           summary: 'Place a voice notification',
           description: 'Calls `to` and speaks `message` aloud.\n\nDistinct from `/v1/otp`, which reads a code from recordings that already exist. A notification is synthesised from your own words, so it is billed differently: the speech is charged per character when the request is accepted, because it costs us whether or not anybody answers, and the call time is charged per second with a one-minute minimum — the minimum matching what a carrier bills us for a short call.\n\nRate limited more tightly than verification: one per minute and five per hour to the same number, and two hundred an hour across a workspace. A call nobody asked for is closer to outbound campaigning than to verification, and the same number-use rules apply.\n\nThe response returns once the call is placed, not once it is answered. Subscribe to `notification.completed` to learn how it ended.',
           operationId: 'placeNotification',
-          tags: ['Voice'],
+          // Its own group rather than under Voice with OTP. They share a
+          // carrier and nothing else: one reads a code from recordings that
+          // already exist, the other speaks whatever a client wrote, and they
+          // are billed and rate limited differently.
+          tags: ['Notifications'],
           requestBody: {
             required: true,
             content: {
