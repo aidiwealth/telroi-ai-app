@@ -392,7 +392,14 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
         headers: { 'x-api-key': llm.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: llm.model, max_tokens: maxTokens || 300, system: sys, messages: history.map((m) => ({ role: m.role, content: m.content })) })
       });
-      if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
+      if (!res.ok) {
+        // The body says what they objected to — a bad key, a model name that
+        // does not exist, a rate limit. Without it a failure here is silence:
+        // the copilot answers "Sorry, I could not respond" and nothing anywhere
+        // says why.
+        console.error(`[ai-brain] anthropic ${res.status} (model ${llm.model}): ${(await res.text().catch(() => '')).slice(0, 300)}`);
+        return { text: null, inputTokens: 0, outputTokens: 0 };
+      }
       const d: any = await res.json();
       const text = Array.isArray(d.content) ? d.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(' ') : '';
       return { text: (text || '').trim() || null, inputTokens: d.usage?.input_tokens || 0, outputTokens: d.usage?.output_tokens || 0 };
