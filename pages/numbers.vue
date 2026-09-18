@@ -220,6 +220,9 @@
 
         <div class="card-pad">
           <p v-if="!available.length" class="muted buy-empty">No numbers are available right now. Check back soon.</p>
+          <!-- Stock exists, just not where they are looking. Without this a
+               country with nothing in it shows an empty list and no reason. -->
+          <p v-else-if="!availableInRegion.length" class="muted buy-empty">No numbers available in that country right now. Try another, or check back soon.</p>
 
           <!-- Verification first, and before anything else is shown: a client
                who cannot buy should not be walked through choosing. -->
@@ -248,8 +251,17 @@
 
             <!-- 1 · the number -->
             <template v-if="step === 0">
+              <!-- Country first. Shown only when there is more than one, so a
+                   client with a single country is not asked to choose it. -->
+              <div v-if="buyRegions.length > 1" class="buy-region">
+                <label class="buy-region-label">Country</label>
+                <select v-model="buyRegion" class="input buy-region-select">
+                  <option value="">All countries</option>
+                  <option v-for="r in buyRegions" :key="r.code" :value="r.code">{{ r.label }}</option>
+                </select>
+              </div>
               <div class="buy-list">
-                <button v-for="a in available" :key="a.id" class="buy-pick" :class="{ on: picked?.id === a.id }" @click="picked = a">
+                <button v-for="a in availableInRegion" :key="a.id" class="buy-pick" :class="{ on: picked?.id === a.id }" @click="picked = a">
                   <span class="buy-pick-num mono">{{ a.telnum }}</span>
                   <span class="buy-pick-meta"><span class="buy-flag">{{ a.regionLabel }}</span></span>
                 </button>
@@ -411,6 +423,20 @@ const escalationTargets = ref<Array<{ id: string; label: string }>>([]);
 const showBuy = ref(false);
 const buying = ref(false);
 const available = ref<any[]>([]);
+
+// Country first, then the numbers in it. With inventory loaded across several
+// countries a client was handed hundreds of numbers at once, most of them in
+// places they will never call from — and the one they wanted was somewhere in
+// the middle of it.
+const buyRegion = ref<string>('');
+const buyRegions = computed(() => {
+  const seen = new Map<string, string>();
+  for (const a of available.value) if (a.region) seen.set(a.region, a.regionLabel || a.region);
+  return [...seen.entries()].map(([code, label]) => ({ code, label })).sort((a, b) => a.label.localeCompare(b.label));
+});
+const availableInRegion = computed(() =>
+  buyRegion.value ? available.value.filter((a) => a.region === buyRegion.value) : available.value
+);
 const picked = ref<any>(null);
 const buy = ref({ channels: 1, categories: [] as string[] });
 
@@ -736,6 +762,9 @@ onMounted(async () => {
 .buy-airtime { font-size: 12px; }
 .buy-note { font-size: 12px; margin-top: 10px; text-align: center; }
 .buy-empty { text-align: center; padding: 20px 0; font-size: 13.5px; }
+.buy-region { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.buy-region-label { font-size: 13px; color: var(--ink-mute); }
+.buy-region-select { flex: 1; max-width: 240px; }
 .buy-pick-label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 10px; }
 .buy-list { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; margin-bottom: 18px; }
 .buy-pick { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--rule); border-radius: var(--radius); text-align: left; transition: all 0.12s; }
