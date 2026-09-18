@@ -339,7 +339,11 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
     });
     if (!res.ok) return { ok: false, reason: `agent_http_${res.status}` };
     const j: any = await res.json();
-    return j?.ok ? { ok: true, providerRef: j.callid || input.notificationId } : { ok: false, reason: j?.reason || 'agent_refused' };
+    // The measured duration comes back so the unit count can be resolved from
+    // the real audio rather than an estimate of it.
+    return j?.ok
+      ? { ok: true, providerRef: j.callid || input.notificationId, durationSeconds: Number(j.durationSeconds) || 0 }
+      : { ok: false, reason: j?.reason || 'agent_refused' };
   } catch (e: any) {
     return { ok: false, reason: e?.message || 'agent_unreachable' };
   }

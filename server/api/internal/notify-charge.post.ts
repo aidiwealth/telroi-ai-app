@@ -43,7 +43,17 @@ export default defineEventHandler(async (event) => {
 
   const pricing = await getPricing(row.tenantId, region);
   const wallet = await getOrCreateWallet(row.tenantId);
-  const charge = notifyCostMinor(seconds, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceMinuteUsdMicro);
+  // Characters and the measured duration, billed on whichever gives more units.
+  // The audio was measured before dialling, so this is the true figure rather
+  // than an estimate — and it is persisted, so a customer querying a two-unit
+  // charge can be shown why.
+  // The audio length, not the connected seconds. A unit is 160 characters or
+  // 30 seconds of audio, and the audio is what we measured before dialling —
+  // a recipient who answers late or a carrier that rounds a partial second
+  // should not change what a message costs. Falls back to the connected time
+  // only if the measurement failed.
+  const audio = Number(row.audioSeconds) || seconds;
+  const charge = notifyCostMinor(row.body.length, audio, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceNotifyUnitUsdMicro);
 
   try {
     // An object, not positional arguments — called the other way, amountMinor

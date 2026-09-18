@@ -115,6 +115,10 @@ export const voiceNotifications = pgTable('voice_notifications', {
   reason: text('reason'),
   callId: text('call_id'),
   duration: integer('duration'),
+  // How long the synthesised audio runs, measured before dialling. Distinct
+  // from duration, which is how long the call lasted — the unit count turns on
+  // the audio, since that is what we knew before committing any carriage.
+  audioSeconds: numeric('audio_seconds'),
   chargeMinor: integer('charge_minor'),
   ttsChars: integer('tts_chars'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

@@ -2,7 +2,7 @@
 // Drizzle ORM schema for the Telroi dashboard (PostgreSQL).
 import {
   pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex,
-  primaryKey
+  primaryKey, numeric
 } from 'drizzle-orm/pg-core';
 
 export const roleEnum = pgEnum('role', ['owner', 'admin', 'member']);export const platformRoleEnum = pgEnum('platform_role', ['superadmin', 'staff']);
@@ -1128,6 +1128,12 @@ export const pricing = pgTable('pricing', {
   // the carriers bill a full minute, so charging by duration would lose money on
   // every one. Micro like the airtime rate, since that's what billing reads.
   voiceOtpUsdMicro: integer('voice_otp_usd_micro').notNull().default(10000),   // $0.01 ≈ ₦16
+  // Per notification UNIT, not per minute: a unit is 160 characters or 30
+  // seconds of audio, whichever comes first. Sold this way because SMS segments
+  // are how this market already thinks about messaging, and because characters
+  // and seconds diverge badly on numerals — a unit billed on whichever is
+  // greater cannot be gamed from either side.
+  voiceNotifyUnitUsdMicro: integer('voice_notify_unit_usd_micro').notNull().default(7500),
   voiceMinuteUsdMinor: integer('voice_minute_usd_minor').notNull().default(1),  // display only — do NOT bill from this
   voiceMinuteUsdMicro: integer('voice_minute_usd_micro').notNull().default(10200),  // $0.0102
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor').notNull().default(200), // $2.00
@@ -1379,6 +1385,7 @@ export const regionRates = pgTable('region_rates', {
   // Micro-dollars, matching voice_otp_usd_micro rather than the nano the AI
   // rates use: a verification costs cents, an AI turn thousandths of one.
   voiceOtpUsdMicro: integer('voice_otp_usd_micro'),
+  voiceNotifyUnitUsdMicro: integer('voice_notify_unit_usd_micro'),
   voiceMinuteUsdMicro: integer('voice_minute_usd_micro'),
   notes: text('notes'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -1627,6 +1634,10 @@ export const voiceNotifications = pgTable('voice_notifications', {
   reason: text('reason'),
   callId: text('call_id'),
   duration: integer('duration'),
+  // How long the synthesised audio runs, measured before dialling. Distinct
+  // from duration, which is how long the call lasted — the unit count turns on
+  // the audio, since that is what we knew before committing any carriage.
+  audioSeconds: numeric('audio_seconds'),
   // Charged on hangup, since duration is not known before the call.
   chargeMinor: integer('charge_minor'),
   // Charged at synthesis, since the vendor bills per character whatever the

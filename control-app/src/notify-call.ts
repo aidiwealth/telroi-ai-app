@@ -36,7 +36,7 @@ export interface NotifyCallOptions {
   sipEndpoint?: string;
 }
 
-export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: boolean; callid?: string; reason?: string }> {
+export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: boolean; callid?: string; reason?: string; durationSeconds?: number }> {
   const { client, to, text, notificationId, tenantId } = opts;
   const dial = String(to || '').replace(/[^0-9]/g, '');
   if (!dial) return { ok: false, reason: 'no_destination' };
@@ -69,6 +69,35 @@ export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: bo
   } catch (e: any) {
     log(`could not stage audio: ${e?.message || e}`);
     return { ok: false, reason: 'audio_staging_failed' };
+  }
+
+  // The duration gate. This interval — after synthesis, before dialling — is
+  // the entire reason the unit model works: the cheap leg has been spent and
+  // the expensive one has not, and the audio can be measured rather than
+  // estimated. Characters are predictable; seconds are what cost us; and on a
+  // numeral-dense alert the two diverge by a factor of four.
+  let durationSeconds = 0;
+  try {
+    durationSeconds = Number(execSync(`soxi -D ${JSON.stringify(target)}`).toString().trim()) || 0;
+  } catch (e: any) {
+    // Not fatal. An unmeasured call bills on characters alone, which is the
+    // old behaviour rather than a wrong one.
+    log(`could not measure audio: ${e?.message || e}`);
+  }
+
+  // A message this long is almost certainly a malformed template or a failed
+  // merge field rather than traffic anybody meant to send. Refused before
+  // dialling: the synthesis is spent either way, the carriage need not be.
+  if (durationSeconds > 60) {
+    log(`refusing ${Math.round(durationSeconds)}s of audio — above the 60s ceiling`);
+    await fs.unlink(target).catch(() => {});
+    return { ok: false, reason: 'audio_too_long', durationSeconds };
+  }
+  // Flagged rather than charged for: a single long message is variance, and a
+  // customer whose whole traffic pattern is numeral-dense is the thing worth
+  // seeing before it becomes a pattern.
+  if (durationSeconds > 20) {
+    log(`review: ${Math.round(durationSeconds)}s of audio for notification ${notificationId}`);
   }
 
   const trunk = opts.trunk || 'ruach-endpoint';
@@ -108,5 +137,5 @@ export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: bo
     return { ok: false, reason: 'originate_failed' };
   }
 
-  return { ok: true, callid: chan.id };
+  return { ok: true, callid: chan.id, durationSeconds };
 }

@@ -22,7 +22,7 @@ export async function getPricing(tenantId?: string, region?: string) {
   const [p] = await db.select().from(schema.pricing).where(eq(schema.pricing.id, 'singleton')).limit(1);
   let base: any = p || {
     voiceMinuteUsdMinor: 1, voiceMinuteUsdMicro: VOICE_MICRO_USD_PER_MIN,
-    voiceOtpUsdMicro: 10000,
+    voiceOtpUsdMicro: 10000, voiceNotifyUnitUsdMicro: 7500,
     channelMonthlyUsdMinor: 200, didMonthlyUsdMinor: 170,
     planStartupUsdMinor: 1000, planGrowthUsdMinor: 1500, ngnPerUsd: 1600
   } as any;
@@ -36,6 +36,7 @@ export async function getPricing(tenantId?: string, region?: string) {
         base = {
           ...base,
           voiceOtpUsdMicro: rr.voiceOtpUsdMicro ?? base.voiceOtpUsdMicro,
+          voiceNotifyUnitUsdMicro: rr.voiceNotifyUnitUsdMicro ?? base.voiceNotifyUnitUsdMicro,
           voiceMinuteUsdMicro: rr.voiceMinuteUsdMicro ?? base.voiceMinuteUsdMicro
         } as any;
       }
@@ -92,14 +93,47 @@ export function voiceCostMinor(
  *  The synthesis is charged separately and per character, because that is how
  *  the vendor charges us and a long message costs more to speak than a short
  *  one whatever its duration. */
+/** Characters per unit, and seconds per unit. A notification is sold as one or
+ *  the other, whichever is reached first. */
+export const NOTIFY_CHARS_PER_UNIT = 160;
+export const NOTIFY_SECONDS_PER_UNIT = 30;
+
+/** How many units a notification costs.
+ *
+ *  Characters are perfectly predictable and seconds are what actually cost us,
+ *  and the two diverge badly: ordinary prose runs about 13 characters a second,
+ *  while "₦1,250,000.00 on 12/09/2026" is 27 characters and eight seconds of
+ *  speech. Billing on whichever measure is greater means a numeral-dense alert
+ *  pays for the time it really takes, and plain text pays the character rate.
+ *  Neither side can be gamed.
+ *
+ *  Seconds are optional because the count is needed twice: as an estimate at
+ *  submission, when only the text exists, and as the true figure after
+ *  synthesis, when the audio file can be measured. */
+export function notifyUnits(characters: number, seconds?: number): number {
+  const byChars = Math.ceil(Math.max(1, characters) / NOTIFY_CHARS_PER_UNIT);
+  const bySeconds = seconds && seconds > 0 ? Math.ceil(seconds / NOTIFY_SECONDS_PER_UNIT) : 1;
+  return Math.max(1, byChars, bySeconds);
+}
+
+/** What a notification costs the client, in their wallet's minor units.
+ *
+ *  Per unit rather than per minute. The minimum billable duration this used to
+ *  apply was wrong: the carriers bill from answer with no floor, so a fifteen
+ *  second notification was being charged a full minute. */
 export function notifyCostMinor(
-  seconds: number,
+  characters: number,
+  seconds: number | undefined,
   currency: 'NGN' | 'USD',
   ngnPerUsd: number,
-  microUsdPerMin: number = VOICE_MICRO_USD_PER_MIN
+  microUsdPerUnit: number
 ): number {
-  const MIN_BILLABLE_SECONDS = 60;
-  return voiceCostMinor(Math.max(seconds, MIN_BILLABLE_SECONDS), currency, ngnPerUsd, microUsdPerMin);
+  const units = notifyUnits(characters, seconds);
+  const rate = Number(microUsdPerUnit) > 0 ? Number(microUsdPerUnit) : 7500;
+  const usdMinor = (units * rate) / 10000;
+  return currency === 'USD'
+    ? Math.max(1, Math.round(usdMinor))
+    : Math.max(1, Math.round(usdMinor * ngnPerUsd));
 }
 
 /** What one OTP call costs the client, in their wallet's minor units. Flat per
