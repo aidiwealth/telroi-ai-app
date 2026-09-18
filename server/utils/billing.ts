@@ -5,7 +5,7 @@
 // billing date), and suspends a subscription rather than overdrawing a wallet
 // that can't pay. Shared by the cron endpoint (/api/cron/billing) and the CLI
 // runner (server/db/run-billing.ts) so the logic lives in exactly one place.
-import { and, eq, lte } from 'drizzle-orm';
+import { and, eq, lte, sql } from 'drizzle-orm';
 import { schema } from '../db';
 import { canSpend, chargeCardToWallet } from '~/server/utils/wallet';
 
@@ -147,7 +147,19 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
     // price and the step forward depend on the interval. Getting one right and
     // the other wrong would charge a year's fee every thirty days.
     const interval = (t.billingInterval === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual';
-    const feeUsd = planFeeUsdMinor(t.plan, pricing || {}, interval);
+    // Per seat, not per workspace. A plan gives every member their own sign-in,
+    // their own extension and their own place in the ring group, so the cost of
+    // serving a team scales with the team — and charging a five-person
+    // workspace what a one-person workspace pays meant the larger customer was
+    // the cheaper one to be.
+    //
+    // Counted at renewal rather than held on the tenant, so a seat removed
+    // between cycles simply is not there: the count is a fact about the
+    // workspace now, not a number somebody has to remember to decrement.
+    const [seatRow] = await db.select({ n: sql<number>`count(*)::int` })
+      .from(schema.memberships).where(eq(schema.memberships.tenantId, t.id));
+    const seats = Math.max(1, seatRow?.n || 1);
+    const feeUsd = planFeeUsdMinor(t.plan, pricing || {}, interval) * seats;
     const nextDate = new Date(t.planNextBillingAt as any);
     if (interval === 'annual') nextDate.setFullYear(nextDate.getFullYear() + 1);
     else nextDate.setDate(nextDate.getDate() + 30);
@@ -162,6 +174,9 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
     const conv = (usdMinor: number) => wallet.currency === 'USD' ? usdMinor : Math.round(usdMinor * ngn);
     const planAmount = conv(feeUsd);
     const cycleRef = `planbill_${t.id}_${now.toISOString().slice(0, 10)}`;
+    // The count on the entry, so an invoice can say why a workspace of five
+    // paid five times the list price rather than leaving them to work it out.
+    const seatMeta = { seats, perSeatUsdMinor: Math.round(feeUsd / seats) };
     const [dupe] = await db.select().from(schema.ledger)
       .where(and(eq(schema.ledger.reference, cycleRef), eq(schema.ledger.kind, 'debit'))).limit(1);
     if (dupe) { result.plans.skipped++; continue; }
@@ -205,7 +220,9 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
       await tx.insert(schema.ledger).values({
         walletId: wallet.id, tenantId: t.id, kind: 'debit',
         amountMinor: planAmount, balanceAfterMinor: after, reason: 'plan_fee',
-        reference: cycleRef, meta: { plan: t.plan, interval }
+        // The seat count on the entry, so a workspace of five can be shown
+        // five seats at the list price rather than an unexplained multiple.
+        reference: cycleRef, meta: { plan: t.plan, interval, ...seatMeta }
       });
       await tx.update(schema.tenants).set({ planLastBilledAt: now, planNextBillingAt: nextDate }).where(eq(schema.tenants.id, t.id));
     });
