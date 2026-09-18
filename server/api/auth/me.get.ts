@@ -19,10 +19,20 @@ export default defineEventHandler(async (event) => {
     return { user: null };
   }
 
+  // Everything below this point is decoration, and decoration must not cost a
+  // session. This endpoint runs on every page load and the auth guard treats a
+  // failure as logged-out — so one query throwing on a new user's empty tenant
+  // sent every signup back to the login page for six days, with nothing to say
+  // why. Each lookup is wrapped: a fault logs and returns nothing, and the
+  // person stays signed in.
   let tenant = null;
   if (s.tenantId) {
-    const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
-    if (t) tenant = { id: t.id, name: t.name, slug: t.slug, timezone: t.timezone, country: t.country, onboardingStep: t.onboardingStep, provisioned: !!t.telroiApiKeyEnc, sandbox: t.sandboxMode };
+    try {
+      const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
+      if (t) tenant = { id: t.id, name: t.name, slug: t.slug, timezone: t.timezone, country: t.country, onboardingStep: t.onboardingStep, provisioned: !!t.telroiApiKeyEnc, sandbox: t.sandboxMode };
+    } catch (e) {
+      console.error('[me] tenant lookup failed:', (e as Error)?.message);
+    }
   }
   // When this person last looked at their missed calls. The apps filter the
   // call list themselves, so they count against this rather than us returning
@@ -33,9 +43,13 @@ export default defineEventHandler(async (event) => {
   // page moments after their code was accepted.
   let seen: any = null;
   if (s.tenantId) {
-    [seen] = await db.select().from(schema.missedSeen)
-      .where(and(eq(schema.missedSeen.tenantId, s.tenantId),
-                 eq(schema.missedSeen.userId, s.userId))).limit(1);
+    try {
+      [seen] = await db.select().from(schema.missedSeen)
+        .where(and(eq(schema.missedSeen.tenantId, s.tenantId),
+                   eq(schema.missedSeen.userId, s.userId))).limit(1);
+    } catch (e) {
+      console.error('[me] missed-seen lookup failed:', (e as Error)?.message);
+    }
   }
 
   return { user: { id: s.userId, email: s.email, role: s.role, name: u.name || null, copilotOnboarded: !!u.copilotOnboarded, missedSeenAt: seen?.seenAt || null }, tenant };
