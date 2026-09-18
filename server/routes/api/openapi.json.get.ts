@@ -44,6 +44,7 @@ export default defineEventHandler((event) => {
     security: [{ bearerAuth: [] }],
     tags: [
       { name: 'Voice OTP', description: 'Deliver and verify one-time passcodes over a voice call. OTP-only — cannot place general calls.' },
+      { name: 'Voice Notifications', description: 'Call a number and speak a message you wrote. Billed by the unit — one unit is 160 characters or 30 seconds of audio, whichever comes first — and rate limited more tightly than OTP, since a call nobody asked for is closer to outbound campaigning than to verification.' },
       { name: 'Speech', description: 'Text-to-speech synthesis and speech-to-text transcription.' },
       { name: 'Calls', description: 'Originate and list voice calls.' },
       { name: 'Numbers', description: 'List the phone numbers provisioned to your workspace.' },
@@ -109,7 +110,7 @@ export default defineEventHandler((event) => {
           // carrier and nothing else: one reads a code from recordings that
           // already exist, the other speaks whatever a client wrote, and they
           // are billed and rate limited differently.
-          tags: ['Notifications'],
+          tags: ['Voice Notifications'],
           requestBody: {
             required: true,
             content: {
