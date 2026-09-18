@@ -22,7 +22,7 @@
 // When a cache query fails, run the select on its own before theorising:
 //   node --experimental-strip-types -e "import('./control-app/src/db.ts')..."
 // The real stack names the line in drizzle and the answer follows immediately.
-import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueIndex, numeric } from 'drizzle-orm/pg-core';
 
 // We only need tenant id for FK targets; declared minimally.
 export const tenants = pgTable('tenants', {
