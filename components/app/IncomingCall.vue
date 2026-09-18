@@ -137,7 +137,10 @@ onUnmounted(() => {
 
 <style scoped>
 .incoming {
-  position: fixed; z-index: 240; right: 24px; bottom: 24px;
+  /* Left, not right: the support chat widget sits bottom-right on every page
+     and covered this entirely — a ringing call behind a chat bubble is a call
+     nobody answers. */
+  position: fixed; z-index: 240; left: 24px; bottom: 24px;
   display: flex; align-items: center; gap: 14px;
   width: min(360px, calc(100vw - 32px));
   padding: 14px 16px;

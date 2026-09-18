@@ -105,7 +105,7 @@
             <div class="plan-flag">{{ trialDays }}-day free trial</div>
             <div class="plan-name">Growth</div>
             <div class="plan-price"><span class="plan-cur">$</span>15<span class="plan-per">/user/mo</span></div>
-            <p class="plan-desc">Everything in Startup plus the Telroi One suite: CRM, dialer, messenger, your subdomain, AI summaries, admin controls.</p>
+            <p class="plan-desc">Everything in Startup plus the Telroi One suite: CRM, dialer, messenger, AI summaries, admin controls.</p>
           </button>
         </div>
         <p class="plan-trial-note">Your {{ trialDays }}-day {{ plan === 'growth' ? 'Growth' : 'Startup' }} trial starts now. We'll collect a card next and charge <strong>$0 until the trial ends</strong>; after that, your plan renews unless you cancel.</p>
