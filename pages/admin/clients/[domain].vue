@@ -296,6 +296,20 @@
           </label>
           <button class="btn btn-signal btn-sm" :disabled="intervalBusy" @click="saveInterval">{{ intervalBusy ? 'Saving…' : 'Save' }}</button>
         </div>
+        <!-- Which number their OTP and notification calls leave on. Own by
+             default: a carrier blocks a source number carrying heavy traffic,
+             and one shared number carrying everybody's verification calls is
+             how it gets blocked for all of them at once. Moved to the shared
+             number only when their own is the thing failing. -->
+        <div class="ad-adjust-row">
+          <label class="ad-ovr"><span>OTP &amp; notification caller ID</span>
+            <select :value="data?.tenant?.useOwnNumber === false ? 'shared' : 'own'" class="ad-ctl" :disabled="ownNumBusy"
+                    @change="saveOwnNumber(($event.target as HTMLSelectElement).value === 'own')">
+              <option value="own">Their own number</option>
+              <option value="shared">Platform shared number</option>
+            </select>
+          </label>
+        </div>
         <div class="ad-adjust-row" style="margin-top:12px">
           <label class="ad-ovr"><span>AI daily cap ($)</span>
             <input v-model="aiCapForm" type="number" step="0.01" min="0" class="ad-ctl mono" placeholder="platform default" />
@@ -770,6 +784,21 @@ async function saveInterval() {
   } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }
   finally { intervalBusy.value = false; }
 }
+// Which number their OTP and notification calls leave on. Own by default;
+// moved to the shared one when their own is the problem — a fresh DID the
+// carrier has not propagated, or one blocked for reasons that take days.
+const ownNumBusy = ref(false);
+async function saveOwnNumber(enabled: boolean) {
+  ownNumBusy.value = true;
+  try {
+    await $fetch(`/api/admin/clients/${route.params.domain}/use-own-number`, {
+      method: 'POST', body: { enabled }
+    });
+    alert(enabled ? 'Their calls now go out on their own number.' : 'Their calls now go out on the shared number.');
+  } catch (e: any) { alert(e?.data?.statusMessage || e?.data?.error?.message || 'Failed'); }
+  finally { ownNumBusy.value = false; }
+}
+
 const ppBusy = ref(false);
 
 /** Amounts are written inline all over this page; postpaid needs to show a

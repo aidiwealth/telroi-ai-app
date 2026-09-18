@@ -76,6 +76,9 @@ export default defineEventHandler(async (event) => {
       // resetting to defaults after a save and suggesting it did not take.
       postpaid: tenant.postpaid, creditLimitMinor: tenant.creditLimitMinor, billingDay: tenant.billingDay,
       billingInterval: tenant.billingInterval,
+      // Same reason as postpaid above: without it the caller-id select always
+      // reads "their own number" and a save to the shared one looks undone.
+      useOwnNumber: tenant.useOwnNumber,
       aiDailyCapUsdMinor: tenant.aiDailyCapUsdMinor,
       postpaidSince: tenant.postpaidSince, paymentTermsDays: tenant.paymentTermsDays,
       paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null, requiresProvisioning: requiresProvisioning(tenant.country) },
