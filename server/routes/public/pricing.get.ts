@@ -72,11 +72,16 @@ export default defineEventHandler(async (event) => {
       // separately and per character, since a long message costs more to say
       // whatever the call's length, and it costs us whether or not anybody
       // answered. Published together so a quoted rate is not half the price.
+      // Sold by the unit rather than the minute. One unit is 160 characters or
+      // 30 seconds of audio, whichever is reached first — the same shape as a
+      // multipart SMS, which is how this market already counts messages. A
+      // longer message costs more units; it is never cut short.
       voiceNotification: {
-        ...nanoPair(Math.round((Number(p.voiceMinuteUsdMicro) || 10200) * 1000)),
-        minimumBillableSeconds: 60,
-        ttsPerCharacterNanoUsd: Number(p.aiTtsPerCharNano) || 0,
-        maxCharacters: 900
+        ...nanoPair(Math.round((Number(p.voiceNotifyUnitUsdMicro) || 7500) * 1000)),
+        per: 'unit',
+        charactersPerUnit: 160,
+        secondsPerUnit: 30,
+        note: 'One unit is 160 characters or 30 seconds of audio, whichever comes first. The unit count is measured from the synthesised audio before the call is placed, and returned as estimated_units when you submit.'
       },
       channelMonthly: pair(p.channelMonthlyUsdMinor),
       numberMonthly: pair(p.didMonthlyUsdMinor),
