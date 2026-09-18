@@ -116,6 +116,29 @@ export function notifyUnits(characters: number, seconds?: number): number {
   return Math.max(1, byChars, bySeconds);
 }
 
+/** Roughly how long this text will take to say.
+ *
+ *  Not a flat rate per character. Ordinary prose runs about 13 characters a
+ *  second, but "₦1,250,000.00 on 12/09/2026" is 27 characters and eight
+ *  seconds — about 3.5 a second — because every digit is spoken as a word.
+ *  A flat estimate would tell a customer their transaction alert is one unit
+ *  and then bill two, which is the surprise this exists to remove.
+ *
+ *  The measured audio remains authoritative. This is for the submit endpoint,
+ *  so nobody first learns the count at invoice time. */
+export function estimateNotifySeconds(text: string): number {
+  const PROSE_CHARS_PER_SEC = 13.3;
+  const NUMERIC_CHARS_PER_SEC = 3.5;
+  // Digits, currency symbols and the punctuation that binds them into amounts,
+  // dates and account numbers. Read as words, not skimmed as text.
+  const numeric = (text.match(/[0-9₦$£€.,:\/-]/g) || []).length;
+  const prose = Math.max(0, text.length - numeric);
+  const seconds = prose / PROSE_CHARS_PER_SEC + numeric / NUMERIC_CHARS_PER_SEC;
+  // The preamble and the beat of silence before it, which are part of every
+  // call and none of the text.
+  return Math.round(seconds + 3);
+}
+
 /** What a notification costs the client, in their wallet's minor units.
  *
  *  Per unit rather than per minute. The minimum billable duration this used to

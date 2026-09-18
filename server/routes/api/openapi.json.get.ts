@@ -79,6 +79,27 @@ export default defineEventHandler((event) => {
           }
         }
       },
+      '/v1/otp/verify': {
+        post: {
+          tags: ['Voice OTP'], summary: 'Verify an OTP code',
+          description: 'Checks the code the end-user entered against the most recent unconsumed OTP for the number (or a specific OTP `id`). Codes are attempt-capped and expire per the operator policy.',
+          operationId: 'verifyVoiceOtp',
+          requestBody: { required: true, content: { 'application/json': { schema: {
+            type: 'object', required: ['code'],
+            properties: {
+              code: { type: 'string', description: 'The code the user entered.', example: '473829' },
+              id: { type: 'string', format: 'uuid', description: 'The OTP id returned by send (preferred).' },
+              to: { type: 'string', description: 'Destination number, if you did not keep the id.', example: '+2348012345678' }
+            }
+          }, examples: { byId: { value: { id: '8f3c...', code: '473829' } }, byNumber: { value: { to: '+2348012345678', code: '473829' } } } } } },
+          responses: {
+            200: { description: 'Verification result.', content: { 'application/json': { schema: {
+              type: 'object', properties: { object: { const: 'otp_verification' }, status: { type: 'string', enum: ['verified', 'mismatch', 'expired', 'locked', 'not_found'] }, verified: { type: 'boolean' }, attempts_left: { type: 'integer' } }
+            }, example: { object: 'otp_verification', livemode: true, status: 'verified', verified: true } } } },
+            401: { description: 'Missing or invalid API key.', content: { 'application/json': { schema: Error } } }
+          }
+        }
+      },
       '/v1/notifications': {
         post: {
           summary: 'Place a voice notification',
@@ -108,27 +129,6 @@ export default defineEventHandler((event) => {
             200: { description: 'The call has been placed.' },
             402: { description: 'The workspace lacks the notifications feature, or the wallet cannot cover the call.' },
             429: { description: 'Too many notifications to this number or from this workspace.' }
-          }
-        }
-      },
-      '/v1/otp/verify': {
-        post: {
-          tags: ['Voice OTP'], summary: 'Verify an OTP code',
-          description: 'Checks the code the end-user entered against the most recent unconsumed OTP for the number (or a specific OTP `id`). Codes are attempt-capped and expire per the operator policy.',
-          operationId: 'verifyVoiceOtp',
-          requestBody: { required: true, content: { 'application/json': { schema: {
-            type: 'object', required: ['code'],
-            properties: {
-              code: { type: 'string', description: 'The code the user entered.', example: '473829' },
-              id: { type: 'string', format: 'uuid', description: 'The OTP id returned by send (preferred).' },
-              to: { type: 'string', description: 'Destination number, if you did not keep the id.', example: '+2348012345678' }
-            }
-          }, examples: { byId: { value: { id: '8f3c...', code: '473829' } }, byNumber: { value: { to: '+2348012345678', code: '473829' } } } } } },
-          responses: {
-            200: { description: 'Verification result.', content: { 'application/json': { schema: {
-              type: 'object', properties: { object: { const: 'otp_verification' }, status: { type: 'string', enum: ['verified', 'mismatch', 'expired', 'locked', 'not_found'] }, verified: { type: 'boolean' }, attempts_left: { type: 'integer' } }
-            }, example: { object: 'otp_verification', livemode: true, status: 'verified', verified: true } } } },
-            401: { description: 'Missing or invalid API key.', content: { 'application/json': { schema: Error } } }
           }
         }
       },

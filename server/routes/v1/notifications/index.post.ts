@@ -32,11 +32,17 @@ export default defineEventHandler(async (event) => {
     throw apiError('feature_locked', 'Voice notifications are part of Telroi One. Upgrade to unlock.', 402);
   }
 
+  // What this will cost, before it is sent. Customers should not first learn
+  // the unit count at invoice time — the measured audio remains authoritative,
+  // but the estimate removes the surprise that generates disputes.
+  const { estimateNotifySeconds, notifyUnits } = await import('~/server/utils/pricing');
+  const estimatedUnits = notifyUnits(p.data.message.length, estimateNotifySeconds(p.data.message));
+
   if (ctx.env === 'sandbox') {
     return {
       object: 'notification', simulated: true, livemode: false,
       id: `ntf_test_${Math.random().toString(36).slice(2, 12)}`,
-      to: p.data.to, status: 'delivered', characters: p.data.message.length
+      to: p.data.to, status: 'delivered', characters: p.data.message.length, estimated_units: estimatedUnits
     };
   }
 
@@ -53,5 +59,5 @@ export default defineEventHandler(async (event) => {
 
   // Dialing rather than delivered: the call has been placed and nobody has
   // answered yet. The notification.completed webhook says how it ended.
-  return { object: 'notification', livemode: true, id: r.id, to: p.data.to, status: 'dialing', characters: p.data.message.length };
+  return { object: 'notification', livemode: true, id: r.id, to: p.data.to, status: 'dialing', characters: p.data.message.length, estimated_units: estimatedUnits };
 });
