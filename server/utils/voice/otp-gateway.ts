@@ -8,6 +8,8 @@
 import type { PlaceOtpCallInput, PlaceOtpCallResult } from './vendors';
 import { voiceCredentials } from '../voice-credentials';
 
+import { ownCallerId } from './vendors';
+
 export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string): Promise<PlaceOtpCallResult> {
   // Telroi routes OTP voice over its default carrier gateway. We need the
   // gateway credentials to be configured; without them this honestly reports
@@ -55,7 +57,10 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
         // Digits only. The settings dropdown offers numbers in E.164, and the
         // carrier's switch returned 500 on a caller id with a leading plus while
         // accepting the same number without one.
-        callerId: String(ps?.otpNgCallerId || '').replace(/[^0-9]/g, ''),
+        // Their own Nigerian number when they have one, the platform's when
+        // they do not. The dialplan presents whatever it is given here — it
+        // does no lookup of its own — so this is the only place it is decided.
+        callerId: String((await ownCallerId(input.tenantId, (ps?.otpNgTrunk || 'ruach-endpoint').replace(/-endpoint$/, ''))) || ps?.otpNgCallerId || '').replace(/[^0-9]/g, ''),
         repeatCount: input.repeatCount,
         timeoutSec: input.callTimeoutSec
       }),

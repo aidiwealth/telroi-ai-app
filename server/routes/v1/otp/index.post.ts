@@ -30,6 +30,9 @@ export default defineEventHandler(async (event) => {
 
   const { sendVoiceOtp } = await import('~/server/utils/voice/otp-service');
   const r = await sendVoiceOtp(ctx.tenantId, p.data.to, { codeLength: p.data.code_length, language: p.data.language, ownCode: p.data.code, securityNotice: p.data.security_notice });
+  if (r.error === 'number_required') {
+    throw apiError('number_required', 'Buy a phone number before sending voice OTPs. Calls go out on your own number so your traffic is not affected by anybody else\'s.', 402);
+  }
   if (!r.ok) {
     if (r.error?.startsWith('rate_limited')) throw apiError('rate_limited', `Too many requests for this number. Retry after ${r.retryAfterSeconds || 60}s.`, 429);
     throw apiError('otp_failed', r.error || 'Could not place the OTP call', 502);

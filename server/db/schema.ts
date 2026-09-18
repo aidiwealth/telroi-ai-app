@@ -286,6 +286,13 @@ export const tenants = pgTable('tenants', {
   // No parallel accounting — an invoice is "bring this back to zero", and the
   // ledger already says what every charge was for. A credit decision, so only an
   // operator sets it.
+  // Whether OTP and notification calls go out on this workspace's own purchased
+  // number or on the platform's shared one. Own by default: carriers block a
+  // source number carrying heavy traffic, and putting every client's
+  // verification calls on one number is how that number gets blocked for all of
+  // them. The switch is for when their own number is the problem — a fresh DID
+  // the carrier has not propagated, or one blocked for reasons that take days.
+  useOwnNumber: boolean('use_own_number').notNull().default(true),
   postpaid: boolean('postpaid').notNull().default(false),
   creditLimitMinor: bigint('credit_limit_minor', { mode: 'number' }),
   billingDay: integer('billing_day'),

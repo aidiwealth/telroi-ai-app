@@ -94,6 +94,14 @@ export async function sendVoiceNotification(
   if (!text) return { ok: false, error: 'empty_message' };
   if (text.length > MAX_NOTIFY_CHARS) return { ok: false, error: 'message_too_long' };
 
+  // As with OTP: a workspace calling people needs a number of its own to call
+  // them from, or the platform's number carries their reputation as well as
+  // their traffic.
+  const { ownsAnyNumber } = await import('./vendors');
+  if (!(await ownsAnyNumber(tenantId))) {
+    return { ok: false, error: 'number_required' };
+  }
+
   const rate = await checkRate(tenantId, toNumber);
   if (!rate.ok) return { ok: false, error: `rate_limited:${rate.reason}`, retryAfterSeconds: rate.retryAfter };
 

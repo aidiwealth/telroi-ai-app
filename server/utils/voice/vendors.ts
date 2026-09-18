@@ -14,6 +14,11 @@ import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 
 export interface PlaceOtpCallInput {
+  // Whose call this is, so the caller id can be their own number rather than
+  // the platform's. A carrier blocks a source number carrying heavy traffic,
+  // and one shared number carrying every client's verification calls is how it
+  // gets blocked for all of them at once.
+  tenantId: string;
   // Whether to play the closing "do not share this code" line. Undefined means
   // on: a client who has not thought about it gets the protection.
   securityNotice?: boolean;
@@ -349,7 +354,12 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
   const host = ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng';
   // The caller id has to belong to the carrier carrying the call — a Ruach
   // number on a Kasooko trunk is refused as blacklisted, which cost an hour.
-  const callerId = ps?.otpNgCallerId;
+  // Their own number when they have one on this carrier, the platform's when
+  // they do not. A number is only presentable on the network that issued it —
+  // a Ruach number offered on a Kasooko trunk is refused as blacklisted — so
+  // the lookup is per carrier rather than "their first number".
+  const carrier = (trunk || '').replace(/-endpoint$/, '').replace(/-out$/, '');
+  const callerId = (await ownCallerId(input.tenantId, carrier)) || ps?.otpNgCallerId;
   console.log(`[notify-route] to=${input.toNumber} nigeria=${isNigeria} trunk=${trunk}`);
 
   try {
@@ -385,4 +395,55 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
   } catch (e: any) {
     return { ok: false, reason: e?.message || 'agent_unreachable' };
   }
+}
+
+/**
+ * The number this workspace should present when placing an OTP or notification
+ * on a given carrier, or null if they have none there.
+ *
+ * Their own number by default. A carrier blocks a source number carrying heavy
+ * traffic, so every client's verification calls going out on one shared number
+ * is how that number gets blocked for all of them — a Kasooko trunk refused a
+ * call today with exactly that. Spreading the traffic across the numbers the
+ * clients already pay for is both safer and more honest: the recipient sees who
+ * is actually calling them.
+ *
+ * Carrier-specific, because a number is only presentable on the network that
+ * issued it. A Ruach number offered on a Kasooko trunk is refused as
+ * blacklisted, which cost an hour before it was understood.
+ */
+export async function ownCallerId(tenantId: string, provider: string): Promise<string | null> {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq } = await import('drizzle-orm');
+  const db = useDb();
+  const [t] = await db.select({ own: schema.tenants.useOwnNumber })
+    .from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  // Switched off by an operator: their own number is the problem, so the shared
+  // one carries them until it is sorted.
+  if (!t?.own) return null;
+
+  const [n] = await db.select({ telnum: schema.numberSubscriptions.telnum })
+    .from(schema.numberSubscriptions)
+    .where(and(
+      eq(schema.numberSubscriptions.tenantId, tenantId),
+      eq(schema.numberSubscriptions.provider, provider),
+      eq(schema.numberSubscriptions.status, 'active')
+    )).limit(1);
+  return n?.telnum || null;
+}
+
+/** Does this workspace own any number at all? OTP and notifications are refused
+ *  without one — a client sending verification calls on our number, with no
+ *  number of their own, is our traffic reputation paying for their volume. */
+export async function ownsAnyNumber(tenantId: string): Promise<boolean> {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq, sql } = await import('drizzle-orm');
+  const db = useDb();
+  const [r] = await db.select({ n: sql<number>`count(*)::int` })
+    .from(schema.numberSubscriptions)
+    .where(and(
+      eq(schema.numberSubscriptions.tenantId, tenantId),
+      eq(schema.numberSubscriptions.status, 'active')
+    ));
+  return (r?.n || 0) > 0;
 }

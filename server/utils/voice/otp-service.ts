@@ -91,6 +91,14 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
   // operator policy bounds (never longer than allowed, min 4).
   const len = Math.max(4, Math.min(opts.codeLength || p.codeLength, p.codeLength));
 
+  // A number of their own, first. Verification calls placed on our shared
+  // number put our traffic reputation behind somebody else's volume, and a
+  // carrier blocking that number blocks it for every client at once.
+  const { ownsAnyNumber } = await import('./vendors');
+  if (!(await ownsAnyNumber(tenantId))) {
+    return { ok: false, error: 'number_required' };
+  }
+
   const rate = await checkRate(tenantId, toNumber, p);
   if (!rate.ok) return { ok: false, error: `rate_limited:${rate.reason}`, retryAfterSeconds: rate.retryAfter };
 
@@ -159,7 +167,7 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
 
   const placed = sandboxed
     ? { ok: true as const, providerRef: `sbx_otp_${row.id}` }
-    : await placeOtpCall({ toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec, securityNotice: opts.securityNotice });
+    : await placeOtpCall({ tenantId, toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec, securityNotice: opts.securityNotice });
   if (!placed.ok) {
     await db.update(schema.voiceOtps).set({ status: 'failed', reason: placed.reason }).where(eq(schema.voiceOtps.id, row.id));
     void import('../webhooks-out').then(({ emitWebhook }) => emitWebhook(tenantId, 'otp.failed', {
