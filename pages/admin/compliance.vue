@@ -177,6 +177,15 @@
           <button class="btn btn-ghost btn-sm ad-reject" :disabled="busy === s.id" @click="decide(s.id, 'rejected')">Reject</button>
           <button class="btn btn-signal btn-sm" :disabled="busy === s.id" @click="decide(s.id, 'approved')">Approve</button>
         </div>
+        <!-- Its own row, and shown whatever the status: a submission most needs
+             removing once it has been approved on the wrong evidence, which is
+             exactly when the approve/reject row is hidden. Kept quiet and apart
+             from the decision buttons so neither is hit by reaching for the
+             other. -->
+        <div class="ad-sub-danger">
+          <button v-if="s.directorName || s.ninVerifiedAt" class="ad-doc-clear" :disabled="busy === s.id" @click="clearNin(s)">Clear director &amp; NIN</button>
+          <button class="ad-doc-clear ad-danger" :disabled="busy === s.id" @click="deleteSubmission(s)">Delete submission</button>
+        </div>
       </div>
     </div>
   </div>
@@ -319,6 +328,36 @@ async function clearDoc(sub: any, doc: 'business' | 'regulatory' | 'ncc') {
   }
 }
 
+// The director's identity number, separately from the rest. A NIN entered for
+// the wrong person does not invalidate the licences they uploaded, and making
+// somebody resubmit everything to fix one field is a poor answer.
+async function clearNin(sub: any) {
+  const warning = sub.status === 'approved'
+    ? 'This submission is approved. Clearing the director and NIN will send it back to pending review. Continue?'
+    : 'Clear the director name and NIN from this submission?';
+  if (!confirm(warning)) return;
+  busy.value = sub.id;
+  try {
+    await $fetch(`/api/admin/compliance/${sub.tenantId}/nin`, { method: 'DELETE' });
+    await load();
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || 'Could not clear the NIN.');
+  } finally { busy.value = null; }
+}
+
+// The whole submission. Named in the confirmation, because a list of workspaces
+// looks much the same from a distance and this one does not come back.
+async function deleteSubmission(sub: any) {
+  if (!confirm(`Delete the entire compliance submission for ${sub.officialName || sub.tenantName || 'this workspace'}? They will need to submit again from the start. This cannot be undone.`)) return;
+  busy.value = sub.id;
+  try {
+    await $fetch(`/api/admin/compliance/${sub.tenantId}`, { method: 'DELETE' });
+    await load();
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || 'Could not delete the submission.');
+  } finally { busy.value = null; }
+}
+
 async function decide(id: string, decision: string) {
   busy.value = id;
   try {
@@ -402,4 +441,6 @@ onMounted(() => { load(); loadForms(); });
 }
 .ad-doc-clear:hover:not(:disabled) { color: var(--danger, #b42318); border-color: var(--danger, #b42318); }
 .ad-doc-clear:disabled { opacity: 0.5; cursor: default; }
+.ad-sub-danger { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.ad-danger { color: var(--danger, #b42318); border-color: rgba(180,35,24,0.3); }
 </style>
