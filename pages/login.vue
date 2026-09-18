@@ -34,9 +34,16 @@
             <span v-if="error" class="field-error">{{ error }}</span>
           </div>
           <div v-show="cap.enabled.value" id="captcha-widget" class="captcha-widget"></div>
-          <button class="btn btn-signal btn-block" :disabled="busy">
+          <!-- Greyed while the challenge runs, not hidden: a button that
+               disappears reads as a broken page, and one that can be pressed
+               into "complete the verification" when nothing visible asked for
+               it reads as a lie. The app already waits this way. -->
+          <button class="btn btn-signal btn-block" :disabled="busy || (cap.enabled.value && !cap.token.value)">
             {{ busy ? 'Sending…' : (mode === 'signin' ? 'Sign in' : 'Create account') }} <span v-if="!busy" class="arrow">→</span>
           </button>
+          <!-- Says why the button is grey. Without it the wait is silent and a
+               page that will not respond reads as broken rather than busy. -->
+          <p v-if="cap.enabled.value && !cap.token.value && !busy" class="cap-wait">Checking you're human…</p>
         </form>
       </template>
 
@@ -214,5 +221,6 @@ function reset() {
 .signin-foot { display: flex; justify-content: space-between; margin-top: 18px; }
 .link-btn { font-size: 13px; color: var(--signal); }
 .link-btn:disabled { color: var(--ink-mute); cursor: default; }
+.cap-wait { margin: 8px 0 0; font-size: 13px; color: var(--ink-mute); text-align: center; }
 .signin-legal { text-align: center; color: var(--ink-mute); font-size: 12px; margin-top: 22px; }
 </style>
