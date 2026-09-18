@@ -11,7 +11,10 @@ export const aiProviderEnum = pgEnum('ai_provider', ['openai', 'anthropic', 'dee
 export const tokenPurposeEnum = pgEnum('token_purpose', ['login']);
 export const vanStatusEnum = pgEnum('van_status', ['draft', 'live', 'paused']);
 export const currencyEnum = pgEnum('currency', ['NGN', 'USD']);
-export const ledgerKindEnum = pgEnum('ledger_kind', ['credit', 'debit']);
+// vat is neither: it is tax withheld from a credit, shown for transparency and
+// never spendable. A page that treats anything not a credit as a debit renders
+// it as money taken out, which it is not.
+export const ledgerKindEnum = pgEnum('ledger_kind', ['credit', 'debit', 'vat']);
 export const aiTierEnum = pgEnum('ai_tier', ['byok', 'managed']);
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'succeeded', 'failed']);
 export const planEnum = pgEnum('plan', ['startup', 'growth', 'custom']);

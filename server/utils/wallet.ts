@@ -121,6 +121,13 @@ export async function debit(args: DebitArgs) {
 }
 
 /** Credit a wallet (top-up). Idempotent by reference — webhook-safe. */
+/** Nigerian VAT, inclusive. A price quoted in naira already contains it, so a
+ *  ₦10,000 top-up is ₦9,302 of credit and ₦698 we hold for FIRS. Held here as a
+ *  constant rather than a pricing column: the rate is set by law, not by us,
+ *  and a field somebody can edit invites a workspace being charged the wrong
+ *  tax. It moves when FIRS moves it, in a commit with a date on it. */
+export const VAT_RATE = 0.075;
+
 export async function credit(tenantId: string, amountMinor: number, reason: string, reference: string, meta: Record<string, unknown> = {}) {
   if (!Number.isInteger(amountMinor) || amountMinor <= 0) {
     throw apiError('invalid_amount', 'Credit amount must be a positive integer (minor units)');
@@ -136,18 +143,46 @@ export async function credit(tenantId: string, amountMinor: number, reason: stri
       .where(and(eq(schema.ledger.reference, reference), eq(schema.ledger.kind, 'credit'))).limit(1);
     if (dupe) return { balanceMinor: wallet.balanceMinor, idempotent: true };
 
-    const after = wallet.balanceMinor + amountMinor;
+    // VAT, inclusive, on naira top-ups. A ₦10,000 payment credits ₦9,302 and
+    // ₦698 is tax we hold for FIRS rather than revenue — so it is split here,
+    // in the one function every payment provider arrives through, rather than
+    // in five call sites that would each have to remember.
+    //
+    // Only real top-ups. An admin adjustment or a refund is not a sale, and
+    // VATing one would mean remitting tax on money nobody paid us.
+    const vatable = wallet.currency === 'NGN' && (reason === 'topup' || reason === 'manual_topup');
+    const vatMinor = vatable ? Math.round(amountMinor - amountMinor / (1 + VAT_RATE)) : 0;
+    const netMinor = amountMinor - vatMinor;
+
+    const after = wallet.balanceMinor + netMinor;
     await tx.update(schema.wallets).set({ balanceMinor: after, updatedAt: new Date() }).where(eq(schema.wallets.id, wallet.id));
     const fxMeta = await fxStamp(wallet.currency);
     await tx.insert(schema.ledger).values({
       walletId: wallet.id, tenantId, kind: 'credit',
-      amountMinor, balanceAfterMinor: after, reason, reference, meta: { ...fxMeta, ...meta },
+      amountMinor: netMinor, balanceAfterMinor: after, reason, reference,
+      // The gross and the tax recorded alongside the net, so a client querying
+      // why ₦10,000 credited ₦9,302 can be shown the arithmetic rather than
+      // told to trust it.
+      meta: { ...fxMeta, ...meta, ...(vatMinor ? { grossMinor: amountMinor, vatMinor, vatRate: VAT_RATE } : {}) },
       // Callers marked simulated money in the meta and left the column false, so
       // the two disagreed and anything filtering on the column counted play money
       // as real. Set it here rather than trusting every caller to remember.
       sandbox: meta.simulated === true
     });
-    return { balanceMinor: after, idempotent: false };
+
+    // The tax as its own line. Not money the workspace can spend and not money
+    // we earned — it sits in the ledger so admin can total what is owed to
+    // FIRS without unpicking it from every credit's metadata.
+    if (vatMinor > 0) {
+      await tx.insert(schema.ledger).values({
+        walletId: wallet.id, tenantId, kind: 'vat',
+        amountMinor: vatMinor, balanceAfterMinor: after,
+        reason: `vat:${reason}`, reference: `${reference}:vat`,
+        meta: { ...fxMeta, rate: VAT_RATE, grossMinor: amountMinor, netMinor },
+        sandbox: meta.simulated === true
+      });
+    }
+    return { balanceMinor: after, idempotent: false, vatMinor };
   }).then(async (r) => {
     // A real top-up/credit counts as account activity (suppresses follow-ups).
     if (!(r as any).idempotent) {
