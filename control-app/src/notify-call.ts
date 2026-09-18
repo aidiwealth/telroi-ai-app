@@ -108,7 +108,11 @@ export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: bo
   const chan = client.Channel();
   try {
     await chan.originate({
-      endpoint: `PJSIP/${trunk}/sip:${dial}@${host}:5060`,
+      // E.164 with the plus for the international trunks, digits alone for the
+      // Nigerian ones. Ruach's switch returned 500 on a leading plus and
+      // accepted the same number without it; Telnyx and Twilio want it. One
+      // format for both would fail on whichever was not chosen.
+      endpoint: `PJSIP/${trunk}/sip:${/telnyx|twilio/.test(trunk) ? '+' : ''}${dial}@${host}:5060`,
       context: 'notify-out',
       extension: 's',
       priority: 1,
