@@ -34,7 +34,10 @@ export default defineEventHandler(async (event) => {
   if (eventType === 'call.speak.ended' && payload.client_state) {
     let st = '';
     try { st = Buffer.from(String(payload.client_state), 'base64').toString('utf8'); } catch { /* not ours */ }
-    if (st.includes('otp-done')) {
+    // A notification ends the call when its text finishes. Without this the
+    // leg stays open after the message has been read, with the recipient
+    // holding a silent line and the carrier still charging for it.
+    if (st.includes('otp-done') || st.includes('notify-done')) {
       try {
         const cc = await import('~/server/utils/telnyx-cc');
         await cc.telnyxHangup(callId);
@@ -142,7 +145,7 @@ export default defineEventHandler(async (event) => {
           .from(schema.voiceNotifications).where(eq(schema.voiceNotifications.id, notifyId)).limit(1);
         if (row?.body) {
           const cc = await import('~/server/utils/telnyx-cc');
-          await cc.telnyxSpeak(callId, row.body, null);
+          await cc.telnyxSpeak(callId, row.body, 'notify-done');
           // Delivered once it has been spoken. There is no hangup handler on
           // this path — the dialplan never runs — so nothing else would close
           // the row, and a notification stuck at dialing is one nobody bills.
