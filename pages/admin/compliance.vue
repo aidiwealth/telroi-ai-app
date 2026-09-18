@@ -162,10 +162,12 @@
         <div class="ad-sub-docs">
           <div><span class="ad-doc-label">Business license</span>
             <a v-if="s.hasBusinessDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=business`" target="_blank" rel="noopener" class="ad-doc-link">{{ s.businessLicenseName || 'View document' }} →</a>
+            <button v-if="s.hasBusinessDoc" class="ad-doc-clear" :disabled="busy === s.id" @click="clearDoc(s, 'business')" title="Clear so the client can re-upload">Clear</button>
             <span v-else>—</span>
           </div>
           <div><span class="ad-doc-label">Regulatory license</span>
             <a v-if="s.hasRegulatoryDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=regulatory`" target="_blank" rel="noopener" class="ad-doc-link">{{ s.regulatoryLicenseName || 'View document' }} →</a>
+            <button v-if="s.hasRegulatoryDoc" class="ad-doc-clear" :disabled="busy === s.id" @click="clearDoc(s, 'regulatory')" title="Clear so the client can re-upload">Clear</button>
             <span v-else>—</span>
           </div>
         </div>
@@ -297,6 +299,26 @@ async function load() {
   catch { await navigateTo('/admin/login'); }
   finally { pending.value = false; }
 }
+// Clearing a document sends the submission back to pending, because a
+// submission missing a document it was approved on is not an approved one. So
+// it asks first: a stray click should not withdraw somebody's approval.
+async function clearDoc(sub: any, doc: 'business' | 'regulatory' | 'ncc') {
+  const wasApproved = sub.status === 'approved';
+  const warning = wasApproved
+    ? 'This submission is approved. Clearing the document will send it back to pending review. Continue?'
+    : 'Clear this document so the client can upload a replacement?';
+  if (!confirm(warning)) return;
+  busy.value = sub.id;
+  try {
+    await $fetch(`/api/admin/compliance/${sub.tenantId}/document?doc=${doc}`, { method: 'DELETE' });
+    await load();
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || 'Could not clear the document.');
+  } finally {
+    busy.value = null;
+  }
+}
+
 async function decide(id: string, decision: string) {
   busy.value = id;
   try {
@@ -371,4 +393,13 @@ onMounted(() => { load(); loadForms(); });
 .ad-note-input { flex: 1; padding: 8px 12px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13px; }
 .ad-reject { color: #e0664e; border-color: rgba(192,57,43,0.3); }
 .ad-doc-link { color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
+/* Quiet by default: clearing a document withdraws an approval, so it should not
+   sit on the page competing with the link to read the document. */
+.ad-doc-clear {
+  margin-left: 10px; padding: 2px 8px; font-size: 12px;
+  color: var(--ink-mute); background: transparent;
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer;
+}
+.ad-doc-clear:hover:not(:disabled) { color: var(--danger, #b42318); border-color: var(--danger, #b42318); }
+.ad-doc-clear:disabled { opacity: 0.5; cursor: default; }
 </style>
