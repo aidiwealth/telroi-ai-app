@@ -228,7 +228,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
   } catch { return ''; }
 }
 
-export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string; language?: string } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
+export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string; language?: string; speed?: number } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
   const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai', 'google-cloud']);
   try {
     if (conn?.provider === 'elevenlabs') {
@@ -242,7 +242,10 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
       }
       const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_16000`, {
         method: 'POST', headers: { 'xi-api-key': conn.apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, model_id: (conn.meta.model as string) || 'eleven_multilingual_v2' })
+        body: JSON.stringify({
+          text, model_id: (conn.meta.model as string) || 'eleven_multilingual_v2',
+          ...(opts.speed ? { voice_settings: { speed: opts.speed } } : {})
+        })
       });
       if (!res.ok) {
         // The default voice id is a stock one that not every account carries, so
@@ -255,7 +258,7 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
     if (conn?.provider === 'openai') {
       const res = await fetch('https://api.openai.com/v1/audio/speech', {
         method: 'POST', headers: { Authorization: `Bearer ${conn.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: (conn.meta.model as string) || 'tts-1', voice: opts.voice || 'alloy', input: text, response_format: 'wav' })
+        body: JSON.stringify({ model: (conn.meta.model as string) || 'tts-1', voice: opts.voice || 'alloy', input: text, response_format: 'wav', ...(opts.speed ? { speed: opts.speed } : {}) })
       });
       if (!res.ok) {
         // Silence with no explanation anywhere was the worst of both: the caller

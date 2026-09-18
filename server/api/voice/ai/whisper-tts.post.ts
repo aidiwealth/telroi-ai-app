@@ -14,7 +14,11 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event).catch(() => ({} as any));
   const { tenantId, agentId } = body || {};
-  const text = String(body?.text || '').slice(0, 300).trim();
+  // 900, not 300. The 300 was right for a whisper line announcing a caller,
+  // which is what this was written for — but notifications synthesise through
+  // the same endpoint and allow 900, so a longer one was cut mid-sentence and
+  // the client charged for characters nobody heard.
+  const text = String(body?.text || '').slice(0, 900).trim();
   if (!tenantId || !text) throw createError({ statusCode: 400, statusMessage: 'tenantId and text required' });
 
   let ttsConnId: string | null = null;
@@ -24,7 +28,10 @@ export default defineEventHandler(async (event) => {
     if (agent) { ttsConnId = agent.ttsConnId; allowManaged = agent.tier === 'managed'; }
   }
 
-  const tts = await ttsSynthesize(tenantId, ttsConnId, text, {}, allowManaged);
+  // A shade faster than default. The stock pace reads as slow on a phone, and
+  // a notification that drags is one people hang up on — 1.1 is brisker without
+  // sounding hurried.
+  const tts = await ttsSynthesize(tenantId, ttsConnId, text, { speed: 1.1 }, allowManaged);
   if (!tts) return { audioBase64: null, audioContentType: null };
   return { audioBase64: tts.audio.toString('base64'), audioContentType: tts.contentType };
 });
