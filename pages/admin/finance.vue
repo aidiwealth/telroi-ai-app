@@ -57,6 +57,13 @@
         <span class="fin-card-label">Net (USD)</span>
         <span class="fin-card-val mono">{{ usd(totals.creditUsdMinor - totals.debitUsdMinor) }}</span>
       </div>
+      <!-- Held, not earned. VAT is withheld from a naira top-up and owed to
+           FIRS — the credit figures above are already net of it, so this sits
+           outside the net rather than inside it. -->
+      <div class="fin-card">
+        <span class="fin-card-label">VAT collected (owed)</span>
+        <span class="fin-card-val mono">{{ usd(totals.vatUsdMinor || 0) }}</span>
+      </div>
     </div>
 
     <!-- One tidy filter bar: direction toggle + a feature dropdown -->
