@@ -20,7 +20,11 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ id?: string; seconds?: number }>(event).catch(() => ({}));
   const id = String(body?.id || '');
   const seconds = Number(body?.seconds || 0);
-  if (!id || seconds <= 0) return { ok: false, reason: 'id and seconds are required' };
+  // Seconds are optional. They were required when every notification played an
+  // audio file we had measured — but an international one is spoken by Telnyx
+  // on their own platform, so there is nothing of ours to measure and the
+  // character count alone decides the unit.
+  if (!id) return { ok: false, reason: 'id is required' };
 
   const db = useDb();
   const [row] = await db.select().from(schema.voiceNotifications)

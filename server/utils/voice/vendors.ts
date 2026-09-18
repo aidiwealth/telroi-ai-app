@@ -307,11 +307,49 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
   // way, so this chooses a trunk rather than a vendor with its own voice.
   const dest = String(input.toNumber || '').replace(/[^0-9]/g, '');
   const isNigeria = dest.startsWith('234') || dest.startsWith('0');
-  const trunk = isNigeria ? (ps?.otpNgTrunk || 'ruach-endpoint') : 'telnyx-out';
-  const host = isNigeria ? (ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng') : 'sip.telnyx.com';
+  // International goes through Telnyx's own API rather than the SIP trunk, for
+  // the same reason OTP does: their platform places the call and speaks on
+  // answer. It means an international notification is read in Telnyx's voice
+  // rather than ours, and that the duration gate does not apply — but it uses a
+  // path that has worked for months, where originating our own audio over the
+  // trunk produced a call id and no channel.
+  if (!isNigeria) {
+    if (!ps?.otpCreds?.apiKey || !ps?.otpCreds?.connectionId || !ps?.otpCreds?.from) {
+      return { ok: false, reason: 'Telnyx not configured for international notifications' };
+    }
+    try {
+      const res = await fetch('https://api.telnyx.com/v2/calls', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ps.otpCreds.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connection_id: ps.otpCreds.connectionId,
+          to: input.toNumber,
+          from: ps.otpCreds.from,
+          timeout_secs: input.callTimeoutSec || 45,
+          // The id only. The text stays with us and is read from our own store
+          // when Telnyx tells us the call was answered.
+          client_state: Buffer.from(`notify:${input.notificationId}`).toString('base64')
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        console.error(`[notify-telnyx] ${res.status}: ${body.slice(0, 300)}`);
+        return { ok: false, reason: `Telnyx error ${res.status}` };
+      }
+      const d: any = await res.json();
+      console.log(`[notify-telnyx] placed ${d?.data?.call_control_id || '(no id)'}`);
+      return { ok: true, providerRef: d?.data?.call_control_id, durationSeconds: 0 };
+    } catch (e: any) {
+      return { ok: false, reason: e?.message || 'telnyx_unreachable' };
+    }
+  }
+
+  const trunk = ps?.otpNgTrunk || 'ruach-endpoint';
+  const host = ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng';
   // The caller id has to belong to the carrier carrying the call — a Ruach
   // number on a Kasooko trunk is refused as blacklisted, which cost an hour.
-  const callerId = isNigeria ? ps?.otpNgCallerId : (ps?.telnyxCallerId || ps?.otpNgCallerId);
+  const callerId = ps?.otpNgCallerId;
   console.log(`[notify-route] to=${input.toNumber} nigeria=${isNigeria} trunk=${trunk}`);
 
   try {
