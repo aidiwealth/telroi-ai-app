@@ -36,7 +36,23 @@ export default defineEventHandler(async (event) => {
     // mistake being made elsewhere.
     units: 'Minor units — usdMinor is cents, ngnMinor is kobo. Nano fields are billionths.',
     ngnPerUsd: rate,
+    // Naira prices include VAT. A ₦10,000 top-up credits ₦9,302 and ₦698 is
+    // tax remitted to FIRS — published here rather than discovered at the
+    // wallet, where a client seeing less credit than they paid reads it as a
+    // shortfall rather than a tax they already knew about.
+    vat: {
+      rate: 0.075,
+      inclusive: true,
+      appliesTo: 'NGN',
+      note: 'Prices in naira include 7.5% VAT. A ₦10,000 payment credits ₦9,302 to your wallet; the balance is VAT, shown separately in your wallet history.'
+    },
     plans: {
+      // Per seat. Every member of a workspace has their own sign-in, their own
+      // extension and their own place in the ring group, so a plan is priced
+      // per person rather than per workspace — a figure quoted without that is
+      // one a customer budgets wrong.
+      per: 'seat',
+      note: 'Plan prices are per team member, per month. A member added partway through a month is charged for the days remaining, not the whole month.',
       startup: pair(p.planStartupUsdMinor),
       growth: pair(p.planGrowthUsdMinor),
       // Annual is stored as a price rather than a discount, because "$150 a

@@ -231,3 +231,106 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
 
   return result;
 }
+
+/**
+ * Charge for a seat added partway through a cycle.
+ *
+ * Seats are counted at renewal, so without this a workspace could add ten
+ * people the day after billing and have them free until the next one. The seat
+ * works from the moment it exists, so it is paid for from then too.
+ *
+ * Prorated rather than charged in full: a member added with four days left in
+ * the cycle costs four days. Charging a whole month for four days is the thing
+ * customers write in about, and the arithmetic to avoid it is one division.
+ *
+ * Never refuses. A workspace that cannot cover a few dollars still gets its
+ * colleague — the shortfall sits on the wallet like any other spend, and
+ * turning away a customer who is growing is a poor trade for a small sum.
+ */
+export async function seatCostMinor(tenantId: string): Promise<{ amountMinor: number; daysLeft: number } | null> {
+  const db = useDb();
+  const now = new Date();
+  const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  if (!t || t.isInternal) return null;
+  if (t.trialEndsAt && new Date(t.trialEndsAt) > now) return null;
+  if (!t.planNextBillingAt) return null;
+
+  const { getPricing, planFeeUsdMinor } = await import('./pricing');
+  const pricing = await getPricing(tenantId);
+  const interval = (t.billingInterval === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual';
+  const seatUsd = planFeeUsdMinor(t.plan, pricing || {}, interval);
+  if (!seatUsd) return null;
+
+  const cycleDays = interval === 'annual' ? 365 : 30;
+  const msLeft = new Date(t.planNextBillingAt as any).getTime() - now.getTime();
+  const daysLeft = Math.max(0, Math.min(cycleDays, Math.ceil(msLeft / 86400000)));
+  if (daysLeft <= 0) return null;
+
+  const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.tenantId, tenantId)).limit(1);
+  if (!wallet) return null;
+  const usdMinor = Math.round((seatUsd * daysLeft) / cycleDays);
+  const amountMinor = wallet.currency === 'USD'
+    ? usdMinor
+    : Math.round(usdMinor * ((pricing as any)?.ngnPerUsd || 1600));
+  return { amountMinor, daysLeft };
+}
+
+/** Can this workspace afford one more seat right now? Asked before the member
+ *  is created rather than after: a seat that could not be charged would be a
+ *  seat used free until the next renewal, and refusing at the point of adding
+ *  is clearer to the customer than a debt appearing later. */
+export async function canAffordSeat(tenantId: string): Promise<boolean> {
+  const cost = await seatCostMinor(tenantId);
+  if (!cost || cost.amountMinor < 1) return true;
+  const { canSpend } = await import('./wallet');
+  const db = useDb();
+  const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.tenantId, tenantId)).limit(1);
+  if (!wallet) return true;
+  const [t] = await db.select({
+    postpaid: schema.tenants.postpaid,
+    creditLimitMinor: schema.tenants.creditLimitMinor,
+    billingSuspendedAt: schema.tenants.billingSuspendedAt
+  }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  return canSpend(t, wallet.balanceMinor, cost.amountMinor);
+}
+
+export async function prorateSeat(tenantId: string, userId: string): Promise<{ charged: number } | null> {
+  const db = useDb();
+  const now = new Date();
+
+  const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  if (!t || t.isInternal) return null;
+  // A trial covers the fee, so it covers the seats inside it.
+  if (t.trialEndsAt && new Date(t.trialEndsAt) > now) return null;
+  if (!t.planNextBillingAt) return null;
+
+  const { getPricing } = await import('./pricing');
+  const { planFeeUsdMinor } = await import('./pricing');
+  const pricing = await getPricing(tenantId);
+  const interval = (t.billingInterval === 'annual' ? 'annual' : 'monthly') as 'monthly' | 'annual';
+  const seatUsd = planFeeUsdMinor(t.plan, pricing || {}, interval);
+  if (!seatUsd) return null;
+
+  const cycleDays = interval === 'annual' ? 365 : 30;
+  const msLeft = new Date(t.planNextBillingAt as any).getTime() - now.getTime();
+  const daysLeft = Math.max(0, Math.min(cycleDays, Math.ceil(msLeft / 86400000)));
+  if (daysLeft <= 0) return null;
+
+  const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.tenantId, tenantId)).limit(1);
+  if (!wallet) return null;
+  const usdMinor = Math.round((seatUsd * daysLeft) / cycleDays);
+  const amountMinor = wallet.currency === 'USD'
+    ? usdMinor
+    : Math.round(usdMinor * ((pricing as any)?.ngnPerUsd || 1600));
+  if (amountMinor < 1) return null;
+
+  // Keyed on the member, so a retry or a re-invite cannot charge twice for the
+  // same seat in the same cycle.
+  const reference = `seat_${tenantId}_${userId}_${String(t.planNextBillingAt).slice(0, 10)}`;
+  const { debit } = await import('./wallet');
+  await debit({
+    tenantId, amountMinor, reason: 'plan_seat', reference,
+    meta: { userId, daysLeft, cycleDays, seatUsdMinor: seatUsd, interval, prorated: true }
+  });
+  return { charged: amountMinor };
+}
