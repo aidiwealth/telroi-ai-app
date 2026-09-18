@@ -85,7 +85,12 @@ export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCa
   // to older wording, which nobody would notice until a vendor switch changed
   // what callers heard.
   const digits = input.code.split('').join(', ');
-  const speech = `Hi. Your O T P code is. ${digits}. Let me repeat that. Your O T P code is. ${digits}. Please do not share this code with anyone. Goodbye.`;
+  // The same choice the Nigerian dialplan makes, in the one place it can be
+  // made here: Telnyx and Twilio speak this text themselves, so there is no
+  // file to skip — the line is simply not written. On unless a client turns it
+  // off, since it is what stops somebody reading their code to a stranger.
+  const notice = input.securityNotice === false ? '' : ' Please do not share this code with anyone.';
+  const speech = `Hi. Your O T P code is. ${digits}. Let me repeat that. Your O T P code is. ${digits}.${notice} Goodbye.`;
 
   if (vendor === 'telroi') {
     // Use Telroi's own configured carrier gateway. The control-plane request is
