@@ -112,7 +112,10 @@ export async function placeNotifyCall(opts: NotifyCallOptions): Promise<{ ok: bo
       // Nigerian ones. Ruach's switch returned 500 on a leading plus and
       // accepted the same number without it; Telnyx and Twilio want it. One
       // format for both would fail on whichever was not chosen.
-      endpoint: `PJSIP/${trunk}/sip:${/telnyx|twilio/.test(trunk) ? '+' : ''}${dial}@${host}:5060`,
+      // Digits, no plus — the form the carrier dialplans use and the one that
+      // routes. Adding a plus for the international trunks was a guess, and the
+      // working Telnyx context does not use one.
+      endpoint: `PJSIP/${trunk}/sip:${dial}@${host}:5060`,
       context: 'notify-out',
       extension: 's',
       priority: 1,
