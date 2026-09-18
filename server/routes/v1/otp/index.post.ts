@@ -10,7 +10,11 @@ const Body = z.object({
   // Your own code, if you already generate them. We read it out and record the
   // call; verifying it stays with you, since we never hold it in a form we
   // could check against.
-  code: z.string().regex(/^[0-9]{4,10}$/, 'code must be 4 to 10 digits').optional()
+  code: z.string().regex(/^[0-9]{4,10}$/, 'code must be 4 to 10 digits').optional(),
+  // The closing "do not share this code" line. On unless a client turns it off:
+  // it is what stops somebody reading their code to a caller pretending to be
+  // their bank, and it costs about two seconds.
+  security_notice: z.boolean().optional()
 });
 export default defineEventHandler(async (event) => {
   const ctx = await requireApiKey(event);
@@ -25,7 +29,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const { sendVoiceOtp } = await import('~/server/utils/voice/otp-service');
-  const r = await sendVoiceOtp(ctx.tenantId, p.data.to, { codeLength: p.data.code_length, language: p.data.language, ownCode: p.data.code });
+  const r = await sendVoiceOtp(ctx.tenantId, p.data.to, { codeLength: p.data.code_length, language: p.data.language, ownCode: p.data.code, securityNotice: p.data.security_notice });
   if (!r.ok) {
     if (r.error?.startsWith('rate_limited')) throw apiError('rate_limited', `Too many requests for this number. Retry after ${r.retryAfterSeconds || 60}s.`, 429);
     throw apiError('otp_failed', r.error || 'Could not place the OTP call', 502);

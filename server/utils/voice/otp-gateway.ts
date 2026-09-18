@@ -45,6 +45,9 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
         // So the hangup can be reported against this row rather than the call
         // simply ending unrecorded.
         otpId: input.otpId || null,
+        // Undefined means on: a client who has not asked to turn it off keeps
+        // the line that stops somebody reading their code to a stranger.
+        securityNotice: input.securityNotice !== false,
         to: input.toNumber,
         code: input.code,
         trunk: ps?.otpNgTrunk || 'ruach-endpoint',

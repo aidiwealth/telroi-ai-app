@@ -14,6 +14,9 @@ import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 
 export interface PlaceOtpCallInput {
+  // Whether to play the closing "do not share this code" line. Undefined means
+  // on: a client who has not thought about it gets the protection.
+  securityNotice?: boolean;
   toNumber: string;
   code: string;               // the plaintext code to read aloud (never persisted)
   language?: string;          // e.g. 'en-US'

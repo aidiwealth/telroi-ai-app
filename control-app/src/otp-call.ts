@@ -23,6 +23,9 @@ export interface OtpCallOptions {
   host?: string;           // carrier SIP host, e.g. sip.ruach.ng
   callerId?: string;
   repeatCount?: number;
+  // Whether to play the closing "do not share this code" line. Undefined means
+  // on: a client who has not asked to turn it off keeps the protection.
+  securityNotice?: boolean;
   timeoutSec?: number;
   otpId?: string;          // ours, so the hangup can be reported against the row
 }
@@ -61,7 +64,8 @@ export async function placeOtpCall(opts: OtpCallOptions): Promise<{ callid: stri
       OTP_DEST: dial,
       OTP_TRUNK: trunk,
       OTP_HOST: opts.host || 'sip.ruach.ng',
-      OTP_CID: opts.callerId || ''
+      OTP_CID: opts.callerId || '',
+      OTP_NOTICE: opts.securityNotice === false ? '0' : '1'
     }
   });
 
