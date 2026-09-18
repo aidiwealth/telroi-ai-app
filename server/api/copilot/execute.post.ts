@@ -19,6 +19,11 @@ const ACTIONS: Record<string, z.ZodTypeAny> = {
   knowledge_url: z.object({ agentId: z.string().uuid(), url: z.string().min(4) }),
   knowledge_drive: z.object({ agentId: z.string().uuid(), url: z.string().min(4) }),
   toggle_feature: z.object({ feature: z.string().min(1), enabled: z.boolean() }),
+  set_agent_greeting: z.object({ agentId: z.string().uuid(), greeting: z.string().min(1).max(500) }),
+  // Spends, like buy_number. Kept behind the same confirm as everything else,
+  // but the copilot is told to say what it will cost before proposing it —
+  // a call placed on somebody's behalf should never be a surprise on a bill.
+  send_notification: z.object({ to: z.string().min(3), message: z.string().min(1).max(900) }),
   buy_number: z.object({ inventoryId: z.string().uuid().optional(), telnum: z.string().optional(), channels: z.number().int().min(1).max(50).optional() }).refine((v) => v.inventoryId || v.telnum, { message: 'inventoryId or telnum required' })
 };
 
@@ -78,6 +83,21 @@ export default defineEventHandler(async (event) => {
         method: 'PUT', body: { enabled: args.enabled }, headers: { cookie: getHeader(event, 'cookie') || '' }
       }).catch((e: any) => { throw apiError('invalid', e?.data?.message || 'Could not update feature', 400); });
       return { ok: true, message: `${args.enabled ? 'Enabled' : 'Disabled'} ${args.feature}.`, result: r };
+    }
+    case 'set_agent_greeting': {
+      await assertAgent(db, s.tenantId, args.agentId);
+      await db.update(schema.aiAgents).set({ greeting: args.greeting })
+        .where(and(eq(schema.aiAgents.id, args.agentId), eq(schema.aiAgents.tenantId, s.tenantId)));
+      return { ok: true, message: 'Greeting updated.' };
+    }
+    case 'send_notification': {
+      // Through the same service the public API uses, so the feature gate, the
+      // rate limits, the wallet check and the unit billing are the ones already
+      // proven rather than a second path that could drift from them.
+      const { sendVoiceNotification } = await import('~/server/utils/voice/notify-service');
+      const r = await sendVoiceNotification(s.tenantId, args.to, args.message);
+      if (!r.ok) throw apiError('failed', r.error || 'The notification could not be placed.', 502);
+      return { ok: true, id: r.id, message: `Calling ${args.to} now.` };
     }
     case 'buy_number': {
       // Resolve to an available inventory row. Accept either a UUID or a telnum,
