@@ -665,6 +665,10 @@ onMounted(() => {
   refreshPlan();
   loadCompliance();
   loadAiCap();
+  // The plan cards show prices from this, and they are not on the billing tab —
+  // so waiting for somebody to open billing meant a dash where the price should
+  // be for anyone who landed anywhere else, which is most people.
+  loadBilling();
 });
 
 watch(tab, async (t) => {
