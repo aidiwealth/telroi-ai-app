@@ -9,7 +9,7 @@ import { getObject } from '~/server/utils/storage';
 
 export default defineEventHandler(async (event) => {
   await requirePlatformAdmin(event);
-  const tenantId = getRouterParam(event, 'tenantId')!;
+  const tenantId = getRouterParam(event, 'id')!;
   const doc = (getQuery(event).doc as string) || 'business';
 
   const db = useDb();

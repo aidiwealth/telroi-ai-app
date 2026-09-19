@@ -378,9 +378,9 @@ async function clearNin(sub: any) {
 // could open looked like a broken server.
 async function openDoc(tenantId: string, doc: string) {
   try {
-    const blob = await $fetch<Blob>(`/api/admin/compliance/${tenantId}/document`, {
-      query: { doc }, responseType: 'blob'
-    });
+    const res = await fetch(`/api/admin/compliance/${tenantId}/document?doc=${doc}`, { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
     // Released once the new tab has taken it; revoking immediately can race.

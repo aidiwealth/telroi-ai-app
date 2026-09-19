@@ -20,7 +20,11 @@ const SLOTS = {
 
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
-  const tenantId = getRouterParam(event, 'tenantId') || '';
+  // Named id because a sibling route already claimed that parameter name
+  // on this path — Nitro cannot have :id and :tenantId on the same segment,
+  // and having both meant one of them always arrived undefined. The value
+  // is still a tenant id.
+  const tenantId = getRouterParam(event, 'id') || '';
   const slot = String(getQuery(event).doc || '') as keyof typeof SLOTS;
   if (!tenantId || !SLOTS[slot]) {
     throw createError({ statusCode: 400, statusMessage: 'tenantId and a valid doc are required' });

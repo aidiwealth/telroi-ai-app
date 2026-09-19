@@ -19,7 +19,11 @@ import { useDb, schema } from '~/server/db';
 
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
-  const tenantId = getRouterParam(event, 'tenantId') || '';
+  // Named id because a sibling route already claimed that parameter name
+  // on this path — Nitro cannot have :id and :tenantId on the same segment,
+  // and having both meant one of them always arrived undefined. The value
+  // is still a tenant id.
+  const tenantId = getRouterParam(event, 'id') || '';
   if (!tenantId) throw createError({ statusCode: 400, statusMessage: 'tenantId is required' });
 
   const db = useDb();
