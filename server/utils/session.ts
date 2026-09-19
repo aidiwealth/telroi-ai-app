@@ -169,6 +169,13 @@ export async function clearSession(event: H3Event) {
 // into the admin console and a client workspace at the same time without one
 // clobbering the other. ──
 const ADMIN_COOKIE = 'telroi_admin_session';
+// The mobile app holds its own cookie. One shared between the app and the
+// console meant signing in on a phone replaced the session on a laptop — the
+// browser then carried a support-scoped token it could do almost nothing with,
+// and the console looked randomly signed out. They are two devices and two
+// sessions, and nothing is gained by making them fight over one name.
+const ADMIN_MOBILE_COOKIE = 'telroi_admin_mobile';
+const adminCookieFor = (scope?: string) => scope === 'support' ? ADMIN_MOBILE_COOKIE : ADMIN_COOKIE;
 
 export interface AdminSessionClaims {
   email: string;
@@ -193,7 +200,7 @@ export async function issueAdminSession(event: H3Event, claims: AdminSessionClai
     .setIssuedAt()
     .setExpirationTime(`${age}s`)
     .sign(secret());
-  setCookie(event, ADMIN_COOKIE, jwt, {
+  setCookie(event, adminCookieFor(claims.scope), jwt, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -212,14 +219,16 @@ export async function refreshAdminSession(event: H3Event, claims: AdminSessionCl
   // on every request and orphan the one being refreshed.
   let sid: string | undefined;
   try {
-    const token = getCookie(event, ADMIN_COOKIE);
+    const token = getCookie(event, adminCookieFor(claims.scope));
     if (token) { const { payload } = await jwtVerify(token, secret()); sid = payload.sid as string | undefined; }
   } catch { /* re-issued without one */ }
   await issueAdminSession(event, claims, sid);
 }
 
 export async function readAdminSession(event: H3Event): Promise<AdminSessionClaims | null> {
-  const token = getCookie(event, ADMIN_COOKIE);
+  // The console's cookie first: a laptop that holds both should get the full
+  // session rather than the phone's narrower one.
+  const token = getCookie(event, ADMIN_COOKIE) || getCookie(event, ADMIN_MOBILE_COOKIE);
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
@@ -239,7 +248,10 @@ export async function readAdminSession(event: H3Event): Promise<AdminSessionClai
 
 export async function clearAdminSession(event: H3Event) {
   try {
-    const token = getCookie(event, ADMIN_COOKIE);
+    // Either cookie, or signing out on the phone would drop its cookie and
+    // leave the session row live — revoked nowhere, and still valid to anything
+    // holding the token.
+    const token = getCookie(event, ADMIN_COOKIE) || getCookie(event, ADMIN_MOBILE_COOKIE);
     if (token) {
       const { payload } = await jwtVerify(token, secret());
       const sid = payload.sid as string | undefined;
@@ -253,4 +265,8 @@ export async function clearAdminSession(event: H3Event) {
     }
   } catch { /* as above */ }
   deleteCookie(event, ADMIN_COOKIE, { path: '/' });
+  // Both, because "sign me out" means this device — and clearing only one
+  // would leave whichever survived to be picked up by the reader on the next
+  // request, which is not signing out at all.
+  deleteCookie(event, ADMIN_MOBILE_COOKIE, { path: '/' });
 }
