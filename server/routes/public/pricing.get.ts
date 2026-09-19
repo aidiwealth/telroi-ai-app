@@ -111,9 +111,13 @@ export default defineEventHandler(async (event) => {
       // Flat per call rather than per minute: a carrier bills a whole minute for
       // a fifteen-second OTP, so charging by duration loses money on every one.
       // Sub-cent like airtime, so the nano fields are the real rate.
+      // Nano only. A call costs four tenths of a cent, and rounding that to
+      // the nearest cent published a zero — a client reading usdMinor would
+      // conclude verification calls are free.
       voiceOtpCall: {
-        ...pair(Math.round((Number(p.voiceOtpUsdMicro) || 10000) / 10000)),
-        ...nanoPair(Math.round((Number(p.voiceOtpUsdMicro) || 10000) * 1000))
+        ...nanoPair(Math.round((Number(p.voiceOtpUsdMicro) || 10000) * 1000)),
+        per: 'call',
+        note: 'Charged per call placed, whatever its length — a carrier bills a whole minute for a fifteen-second verification.'
       }
     },
     // Managed AI is charged by what it actually uses, which is why the page says
