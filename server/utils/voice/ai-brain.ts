@@ -128,7 +128,13 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const res = await fetch(`https://api.deepgram.com/v1/listen?punctuate=true&model=nova-2&language=${encodeURIComponent((lang.split('-')[0]) || 'en')}`, {
         method: 'POST', headers: { Authorization: `Token ${conn.apiKey}`, 'Content-Type': contentType }, body: audio
       });
-      if (!res.ok) return '';
+      if (!res.ok) {
+        // An empty transcript is indistinguishable from a caller who said
+        // nothing, so a failure here looks like silence on their end rather
+        // than ours — which is how a vendor outage goes unnoticed for hours.
+        console.error(`[ai-brain] Deepgram STT ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+        return '';
+      }
       const d: any = await res.json();
       const dgTx = (d?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
       const dgLang = lang;
@@ -277,7 +283,7 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: { text }, voice: voice ? { languageCode: lang, name: voice } : { languageCode: lang }, audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 16000 } })
       });
-      if (!res.ok) { console.error(`[ai-brain] Google TTS failed ${res.status}`); return null; }
+      if (!res.ok) { console.error(`[ai-brain] Google TTS failed ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`); return null; }
       const d: any = await res.json();
       if (!d?.audioContent) return null;
       return { audio: Buffer.from(d.audioContent, 'base64'), contentType: 'audio/wav' };
@@ -441,7 +447,13 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
       headers: { Authorization: `Bearer ${llm.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(chatBody)
     });
-    if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
+    if (!res.ok) {
+      // The same silence the Anthropic branch produced when the account ran out
+      // of credit: a null reply, a copilot saying it could not respond, and an
+      // hour spent finding out why.
+      console.error(`[ai-brain] ${llm.provider} ${res.status} (model ${llm.model}): ${(await res.text().catch(() => '')).slice(0, 300)}`);
+      return { text: null, inputTokens: 0, outputTokens: 0 };
+    }
     const d: any = await res.json();
     return { text: (d.choices?.[0]?.message?.content || '').trim() || null, inputTokens: d.usage?.prompt_tokens || 0, outputTokens: d.usage?.completion_tokens || 0 };
   } catch {
