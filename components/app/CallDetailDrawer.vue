@@ -7,6 +7,17 @@
           <button class="modal-x" @click="$emit('close')">✕</button>
         </div>
         <h2 class="drawer-num mono">{{ call.client }}</h2>
+        <!-- Who the number belongs to, when the CRM knows. A call log answers
+             "when" and "how long" perfectly well and never answered "who" —
+             which is the first thing anybody looking at one wants. Absent for
+             an unknown number rather than showing an empty panel. -->
+        <div v-if="contact" class="drawer-who">
+          <NuxtLink :to="`/crm?contact=${contact.id}`" class="drawer-who-name">{{ contact.name || 'Unnamed contact' }}</NuxtLink>
+          <span v-if="contact.company" class="drawer-who-co">{{ contact.company }}</span>
+          <div v-if="contact.tags?.length" class="drawer-who-tags">
+            <span v-for="t in contact.tags" :key="t.id" class="crm-tag">{{ t.name }}</span>
+          </div>
+        </div>
         <p class="drawer-when">{{ fmtTime(call.start) }}</p>
 
         <dl class="drawer-dl">
@@ -61,6 +72,17 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+// Looked up per call rather than carried on it: a contact can be renamed or
+// tagged after the call happened, and the log should show who they are now.
+const contact = ref<any>(null);
+async function loadContact(phone?: string) {
+  contact.value = null;
+  if (!phone) return;
+  try {
+    const r = await $fetch<any>('/api/crm/lookup', { query: { phone } });
+    contact.value = r?.contact || null;
+  } catch { /* an unknown caller is not an error */ }
+}
 import type { TelroiCall } from '~/server/utils/telroi/client';
 
 const props = defineProps<{ call: TelroiCall | null; recordingId?: string | null }>();
@@ -120,7 +142,12 @@ async function pollTranscript() {
 const toast = useToast();
 const saving = ref(false);
 const noteDraft = ref('');
-watch(() => props.call, (c) => { noteDraft.value = (c?.note as string) || ''; });
+watch(() => props.call, (c) => {
+  noteDraft.value = (c?.note as string) || '';
+  // The caller's number on an inbound call, the number dialled on an outbound
+  // one: either way it is the other party, which is who the drawer is about.
+  loadContact(c?.type === 'out' ? (c?.destination || c?.client) : c?.client);
+});
 
 async function setRating(rating: number | null) {
   if (!props.call) return;
@@ -198,6 +225,15 @@ function statusChip(status: string) {
 .drawer-actions { margin-top: 26px; }
 .drawer-enter-active, .drawer-leave-active { transition: opacity .2s; }
 .drawer-enter-active .drawer, .drawer-leave-active .drawer { transition: transform .25s var(--motion-ease); }
+.drawer-who { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 6px; }
+.drawer-who-name { font-size: 15px; font-weight: 600; color: var(--signal); text-decoration: none; }
+.drawer-who-name:hover { text-decoration: underline; }
+.drawer-who-co { font-size: 13px; color: var(--ink-mute); }
+.drawer-who-tags { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+.drawer-who-tags .crm-tag {
+  display: inline-flex; padding: 2px 9px; border-radius: 999px; font-size: 12px;
+  background: var(--signal-soft); color: var(--signal);
+}
 .drawer-enter-from, .drawer-leave-to { opacity: 0; }
 .drawer-enter-from .drawer, .drawer-leave-to .drawer { transform: translateX(40px); }
 </style>
