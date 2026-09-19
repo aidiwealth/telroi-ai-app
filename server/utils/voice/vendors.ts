@@ -14,6 +14,9 @@ import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 
 export interface PlaceOtpCallInput {
+  // Which of their numbers to present, when the request named one. Ignored if
+  // an operator has pinned the workspace or the platform.
+  fromNumber?: string;
   // Whose call this is, so the caller id can be their own number rather than
   // the platform's. A carrier blocks a source number carrying heavy traffic,
   // and one shared number carrying every client's verification calls is how it
@@ -277,6 +280,8 @@ export interface PlaceNotifyCallInput {
   // The agent synthesises through the web app, which needs to know whose
   // voice settings and whose bill it is.
   tenantId: string;
+  // Which of their numbers to present, when the request named one.
+  fromNumber?: string;
   // The tenant's SIP username, so the dialplan can resolve their own DID for
   // the carrier carrying the call.
   sipEndpoint?: string;
@@ -359,7 +364,7 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
   // a Ruach number offered on a Kasooko trunk is refused as blacklisted — so
   // the lookup is per carrier rather than "their first number".
   const carrier = (trunk || '').replace(/-endpoint$/, '').replace(/-out$/, '');
-  const callerId = (await ownCallerId(input.tenantId, carrier)) || ps?.otpNgCallerId;
+  const callerId = (await ownCallerId(input.tenantId, carrier, input.fromNumber)) || ps?.otpNgCallerId;
   console.log(`[notify-route] to=${input.toNumber} nigeria=${isNigeria} trunk=${trunk}`);
 
   try {
@@ -412,12 +417,24 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
  * issued it. A Ruach number offered on a Kasooko trunk is refused as
  * blacklisted, which cost an hour before it was understood.
  */
-export async function ownCallerId(tenantId: string, provider: string): Promise<string | null> {
+export async function ownCallerId(tenantId: string, provider: string, requested?: string | null): Promise<string | null> {
   const { useDb, schema } = await import('~/server/db');
   const { and, eq } = await import('drizzle-orm');
   const db = useDb();
-  const [t] = await db.select({ own: schema.tenants.useOwnNumber, preferred: schema.tenants.otpCallerTelnum })
-    .from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  const [t] = await db.select({
+    own: schema.tenants.useOwnNumber,
+    preferred: schema.tenants.otpCallerTelnum,
+    pinned: schema.tenants.otpCallerPinned
+  }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+
+  // Pins first, and they answer before anything else is considered — including
+  // whether the workspace uses its own numbers at all. A pin exists because
+  // somebody looked at a failing account and decided; a client's API request
+  // routing around that would put the call back on the line that was failing.
+  const [pinRow] = await db.select({ pin: schema.platformSettings.voiceCallerPinned })
+    .from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+  if (pinRow?.pin) return pinRow.pin;
+  if (t?.pinned) return t.pinned;
   // Their own setting when an operator has made one, the platform default when
   // they have not. Switched off either way means the shared number carries
   // them — because their own is the problem, or because ours are working
@@ -442,8 +459,13 @@ export async function ownCallerId(tenantId: string, provider: string): Promise<s
   // the network that issued it, so a preference set for a Nigerian line cannot
   // carry a US call — then the first number on the right carrier stands in,
   // which is what happened before anybody could choose at all.
+  // What they asked for, then what they chose, then whatever they hold on this
+  // carrier. A request naming a number they do not own is refused by the
+  // endpoint before reaching here, so an unmatched one at this point means it
+  // is theirs but on another network — which cannot carry this call.
+  const asked = requested ? rows.find((r) => r.telnum === requested) : null;
   const preferred = rows.find((r) => r.telnum === t.preferred);
-  return (preferred || rows[0]).telnum;
+  return (asked || preferred || rows[0]).telnum;
 }
 
 /** Does this workspace own any number at all? OTP and notifications are refused
@@ -460,4 +482,22 @@ export async function ownsAnyNumber(tenantId: string): Promise<boolean> {
       eq(schema.numberSubscriptions.status, 'active')
     ));
   return (r?.n || 0) > 0;
+}
+
+/** Does this workspace hold this number? Asked before a call is placed, so a
+ *  request naming somebody else's number is refused rather than quietly
+ *  ignored — a client who asked for a specific caller ID and silently got a
+ *  different one has no way to know. */
+export async function ownsNumber(tenantId: string, telnum: string): Promise<boolean> {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq } = await import('drizzle-orm');
+  const db = useDb();
+  const [n] = await db.select({ id: schema.numberSubscriptions.id })
+    .from(schema.numberSubscriptions)
+    .where(and(
+      eq(schema.numberSubscriptions.tenantId, tenantId),
+      eq(schema.numberSubscriptions.telnum, telnum),
+      eq(schema.numberSubscriptions.status, 'active')
+    )).limit(1);
+  return !!n;
 }

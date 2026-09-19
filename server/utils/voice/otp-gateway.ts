@@ -60,7 +60,7 @@ export async function resolveOtpGateway(input: PlaceOtpCallInput, speech: string
         // Their own Nigerian number when they have one, the platform's when
         // they do not. The dialplan presents whatever it is given here — it
         // does no lookup of its own — so this is the only place it is decided.
-        callerId: String((await ownCallerId(input.tenantId, (ps?.otpNgTrunk || 'ruach-endpoint').replace(/-endpoint$/, ''))) || ps?.otpNgCallerId || '').replace(/[^0-9]/g, ''),
+        callerId: String((await ownCallerId(input.tenantId, (ps?.otpNgTrunk || 'ruach-endpoint').replace(/-endpoint$/, ''), input.fromNumber)) || ps?.otpNgCallerId || '').replace(/[^0-9]/g, ''),
         repeatCount: input.repeatCount,
         timeoutSec: input.callTimeoutSec
       }),

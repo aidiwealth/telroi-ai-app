@@ -86,7 +86,8 @@ async function checkRate(tenantId: string, toNumber: string): Promise<{ ok: bool
 export async function sendVoiceNotification(
   tenantId: string,
   toNumber: string,
-  body: string
+  body: string,
+  fromNumber?: string
 ): Promise<NotifyResult> {
   const db = useDb();
 
@@ -153,7 +154,7 @@ export async function sendVoiceNotification(
   // against the endpoint without spending carrier minutes.
   const placed = sandboxed
     ? { ok: true as const, providerRef: `sbx_notify_${row.id}` }
-    : await placeNotifyCall({ toNumber, notificationId: row.id, text, tenantId, sipEndpoint });
+    : await placeNotifyCall({ toNumber, notificationId: row.id, text, tenantId, sipEndpoint, fromNumber });
 
   if (!placed.ok) {
     await db.update(schema.voiceNotifications)

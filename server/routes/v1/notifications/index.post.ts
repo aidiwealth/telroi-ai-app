@@ -13,7 +13,10 @@ import { MAX_NOTIFY_CHARS } from '~/server/utils/voice/notify-service';
 
 const Body = z.object({
   to: z.string().min(3),
-  message: z.string().min(1).max(MAX_NOTIFY_CHARS)
+  message: z.string().min(1).max(MAX_NOTIFY_CHARS),
+  // Which of your own numbers the call comes from. Optional; an operator pin
+  // overrides it.
+  from: z.string().min(3).optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -46,8 +49,15 @@ export default defineEventHandler(async (event) => {
     };
   }
 
+  if (p.data.from) {
+    const { ownsNumber } = await import('~/server/utils/voice/vendors');
+    if (!(await ownsNumber(ctx.tenantId, p.data.from))) {
+      throw apiError('invalid_from', `${p.data.from} is not a number on your workspace.`, 400);
+    }
+  }
+
   const { sendVoiceNotification } = await import('~/server/utils/voice/notify-service');
-  const r = await sendVoiceNotification(ctx.tenantId, p.data.to, p.data.message);
+  const r = await sendVoiceNotification(ctx.tenantId, p.data.to, p.data.message, p.data.from);
   if (!r.ok) {
     if (r.error === 'number_required') {
       throw apiError('number_required', 'Buy a phone number before sending voice notifications. Calls go out on your own number so your traffic is not affected by anybody else\'s.', 402);

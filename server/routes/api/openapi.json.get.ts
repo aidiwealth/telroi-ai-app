@@ -64,6 +64,7 @@ export default defineEventHandler((event) => {
               to: { type: 'string', description: 'Destination number in E.164 format.', example: '+2348012345678' },
               code_length: { type: 'integer', minimum: 4, maximum: 10, description: 'Requested code length (clamped to the operator maximum).', example: 6 },
               language: { type: 'string', description: 'BCP-47 language for the spoken prompt.', example: 'en-US' },
+              from: { type: 'string', description: 'Which of your own numbers the call comes from, in E.164. Must be a number on your workspace or the request is refused. Omit it and we use the number set in your dashboard, or any you hold on the carrier carrying the call. An operator can pin a workspace to one number, which overrides this.', example: '+2348012345678' },
               security_notice: { type: 'boolean', default: true, description: 'Whether the call ends with "Do not share this code with anyone." On unless you turn it off: it is what stops somebody reading their code to a caller pretending to be their bank. Turning it off saves about two seconds.', example: true },
               code: { type: 'string', pattern: '^[0-9]{4,10}$', description: 'Your own code, if you generate them. We read it out and record the call; verifying it stays with you. When set, `code_length` is ignored and no `expires_at` is returned — how long it stays valid is your decision.', example: '483920' }
             }
@@ -120,7 +121,8 @@ export default defineEventHandler((event) => {
                   required: ['to', 'message'],
                   properties: {
                     to: { type: 'string', description: 'Destination in E.164, e.g. +2348012345678.' },
-                    message: { type: 'string', maxLength: 900, description: 'What to say. Up to 900 characters, about ninety seconds of speech.' }
+                    message: { type: 'string', maxLength: 900, description: 'What to say. Up to 900 characters, about ninety seconds of speech.' },
+                    from: { type: 'string', description: 'Which of your own numbers the call comes from, in E.164. Must be a number on your workspace or the request is refused. An operator can pin a workspace to one number, which overrides this.', example: '+2348012345678' }
                   }
                 }
               }

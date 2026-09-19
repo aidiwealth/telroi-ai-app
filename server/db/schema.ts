@@ -147,6 +147,10 @@ export const platformSettings = pgTable('platform_settings', {
   // default. A behaviour setting, so it sits here with the other vendor and
   // routing choices rather than in pricing, which holds rates.
   voiceUseOwnNumber: boolean('voice_use_own_number').notNull().default(true),
+  // Every workspace on this one number, whatever they own or ask for. For when
+  // clients' own numbers are failing across the board — then the question is
+  // not which of theirs to use but whether to use theirs at all.
+  voiceCallerPinned: text('voice_caller_pinned'),
   // The carrier's SIP host travels with the trunk: Ruach answers on a hostname
   // and Kasooko on an IP, so switching trunks without it dialled the new carrier
   // at the old one's address.
@@ -307,6 +311,11 @@ export const tenants = pgTable('tenants', {
   // and not for one with a marketing line and a support line that would rather
   // verification calls came from the latter.
   otpCallerTelnum: text('otp_caller_telnum'),
+  // An operator pinning this workspace to one number, overriding the client's
+  // choice and anything their API asks for. Its own column rather than sharing
+  // the one above: pinning would otherwise discard what the client chose, and
+  // unpinning could not give it back.
+  otpCallerPinned: text('otp_caller_pinned'),
   postpaid: boolean('postpaid').notNull().default(false),
   creditLimitMinor: bigint('credit_limit_minor', { mode: 'number' }),
   billingDay: integer('billing_day'),

@@ -83,7 +83,7 @@ async function checkRate(tenantId: string, toNumber: string, p: OtpPolicy): Prom
 }
 
 // Send a voice OTP: generate, rate-check, place the call, persist (hashed).
-export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string; ownCode?: string; securityNotice?: boolean } = {}): Promise<SendResult> {
+export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string; ownCode?: string; securityNotice?: boolean; fromNumber?: string } = {}): Promise<SendResult> {
   const p = await otpPolicy(tenantId);
   const db = useDb();
 
@@ -167,7 +167,7 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
 
   const placed = sandboxed
     ? { ok: true as const, providerRef: `sbx_otp_${row.id}` }
-    : await placeOtpCall({ tenantId, toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec, securityNotice: opts.securityNotice });
+    : await placeOtpCall({ tenantId, toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec, securityNotice: opts.securityNotice, fromNumber: opts.fromNumber });
   if (!placed.ok) {
     await db.update(schema.voiceOtps).set({ status: 'failed', reason: placed.reason }).where(eq(schema.voiceOtps.id, row.id));
     void import('../webhooks-out').then(({ emitWebhook }) => emitWebhook(tenantId, 'otp.failed', {
