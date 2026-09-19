@@ -683,6 +683,34 @@ export const crmContacts = pgTable('crm_contacts', {
 }));
 
 // Notes / call reports logged against a contact.
+/** Tags a workspace puts on its contacts.
+ *
+ *  Their own table rather than a text field on the contact, so a tag is a thing
+ *  that exists rather than a string retyped each time. "VIP" and "vip" would
+ *  otherwise be two tags, nobody could see what had been used before, and
+ *  renaming one would mean editing every contact that carried it. */
+export const crmTags = pgTable('crm_tags', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  // So a board of tags reads at a glance rather than as a list of words.
+  color: text('color'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/** Which contacts carry which tags. Many to many: a contact can be both a
+ *  reseller and overdue, and both tags mean something on their own. */
+export const crmContactTags = pgTable('crm_contact_tags', {
+  contactId: uuid('contact_id').notNull().references(() => crmContacts.id, { onDelete: 'cascade' }),
+  tagId: uuid('tag_id').notNull().references(() => crmTags.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  pk: primaryKey({ columns: [t.contactId, t.tagId] }),
+  tagIdx: index('crm_contact_tags_tag_idx').on(t.tagId),
+  tenantIdx: index('crm_contact_tags_tenant_idx').on(t.tenantId)
+}));
+
 export const crmContactNotes = pgTable('crm_contact_notes', {  id: uuid('id').primaryKey().defaultRandom(),
   contactId: uuid('contact_id').notNull().references(() => crmContacts.id, { onDelete: 'cascade' }),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),

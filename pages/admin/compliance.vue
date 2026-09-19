@@ -161,12 +161,12 @@
 
         <div class="ad-sub-docs">
           <div><span class="ad-doc-label">Business license</span>
-            <a v-if="s.hasBusinessDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=business`" target="_blank" rel="noopener" class="ad-doc-link">{{ s.businessLicenseName || 'View document' }} →</a>
+            <a v-if="s.hasBusinessDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=business`" target="_blank" rel="noopener" external class="ad-doc-link">{{ s.businessLicenseName || 'View document' }} →</a>
             <button v-if="s.hasBusinessDoc" class="ad-doc-clear" :disabled="busy === s.id" @click="clearDoc(s, 'business')" title="Clear so the client can re-upload">Clear</button>
             <span v-else>—</span>
           </div>
           <div><span class="ad-doc-label">Regulatory license</span>
-            <a v-if="s.hasRegulatoryDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=regulatory`" target="_blank" rel="noopener" class="ad-doc-link">{{ s.regulatoryLicenseName || 'View document' }} →</a>
+            <a v-if="s.hasRegulatoryDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=regulatory`" target="_blank" rel="noopener" external class="ad-doc-link">{{ s.regulatoryLicenseName || 'View document' }} →</a>
             <button v-if="s.hasRegulatoryDoc" class="ad-doc-clear" :disabled="busy === s.id" @click="clearDoc(s, 'regulatory')" title="Clear so the client can re-upload">Clear</button>
             <span v-else>—</span>
           </div>
