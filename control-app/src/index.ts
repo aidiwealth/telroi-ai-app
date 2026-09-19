@@ -99,12 +99,12 @@ async function inboundCapacity(tenantId: string, log: (m: string) => void): Prom
  */
 async function wakeAndWait(args: {
   tenantId: string; users: string[]; callId: string;
-  from: string; to: string; log: (m: string) => void;
+  from: string; fromName?: string; to: string; log: (m: string) => void;
 }): Promise<void> {
-  const { tenantId, users, callId, from, to, log } = args;
+  const { tenantId, users, callId, from, fromName, to, log } = args;
   if (!users.length) return;
   try {
-    const woke = await pushIncomingCall({ tenantId, callId, from, to });
+    const woke = await pushIncomingCall({ tenantId, callId, from, fromName, to });
     if (!woke) return;
     // Wait for a device rather than a fixed interval: a cold iOS launch takes
     // about 1.7s to start its stack, fetch a token, handshake and register, and
@@ -365,7 +365,12 @@ async function main() {
         const allUsers = resolveTenantEndpoints(widgetTenantId);
         await wakeAndWait({
           tenantId: widgetTenantId, users: allUsers, callId: chId,
-          from: callerNum || '', to: 'Live Call', log
+          // The push reaches a closed app before any INVITE, so CallKit shows
+          // whatever this says and nothing else. Without a name it showed the
+          // SIP username, which tells the person answering nothing — and the
+          // lookup for a named visitor cannot go here, since waiting up to
+          // three seconds on it would delay the wake itself.
+          from: callerNum || '', fromName: 'Live Call', to: 'Live Call', log
         });
         const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
         const visitorName = await guestCallerName(String(callerNum || ''));
