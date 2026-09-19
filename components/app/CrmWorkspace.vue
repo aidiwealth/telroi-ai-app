@@ -553,7 +553,13 @@ function startPoll(id: string) {
 }
 function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
-onMounted(() => { loadPlan(); load(); loadTags(); });
+onMounted(() => {
+  loadPlan(); load(); loadTags();
+  // Arriving from a call: the drawer links to a person, and landing on a list
+  // of three hundred having clicked somebody's name is a poor answer.
+  const wanted = useRoute().query.contact;
+  if (wanted) open({ id: String(wanted) });
+});
 </script>
 
 <style scoped>
