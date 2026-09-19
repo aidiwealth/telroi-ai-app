@@ -193,6 +193,28 @@
     <!-- The wording an acceptance points at, not the current wording. Two
          versions on, those differ, and the register exists to answer which one
          somebody actually saw. -->
+    <!-- Deleting a submission is not something to confirm in a browser dialog:
+         it removes a client's documents and their approval, and the person
+         doing it should see what goes and what stays before they decide. -->
+    <div v-if="deleting" class="modal-overlay" @click.self="deleting = null">
+      <div class="modal acc-modal">
+        <button class="modal-x" @click="deleting = null">&times;</button>
+        <h3 class="acc-h">Delete {{ deleting.officialName || deleting.tenantName || 'this' }}'s submission?</h3>
+        <p class="acc-sub muted">They will need to submit again from the start.</p>
+
+        <div class="acc-facts">
+          <div><span>Removed</span><strong>Documents, director details, NIN and approval status</strong></div>
+          <div><span>Kept</span><strong>The uploaded files, in storage, for our records</strong></div>
+          <div><span>Current status</span><strong>{{ deleting.status }}</strong></div>
+        </div>
+
+        <div class="del-actions">
+          <button class="btn btn-ghost btn-sm" :disabled="busy === deleting.id" @click="deleting = null">Cancel</button>
+          <button class="btn btn-sm del-confirm" :disabled="busy === deleting.id" @click="confirmDelete">{{ busy === deleting.id ? 'Deleting…' : 'Delete submission' }}</button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="viewing" class="modal-overlay" @click.self="viewing = null">
       <div class="modal acc-modal">
         <button class="modal-x" @click="viewing = null">&times;</button>
@@ -347,11 +369,18 @@ async function clearNin(sub: any) {
 
 // The whole submission. Named in the confirmation, because a list of workspaces
 // looks much the same from a distance and this one does not come back.
-async function deleteSubmission(sub: any) {
-  if (!confirm(`Delete the entire compliance submission for ${sub.officialName || sub.tenantName || 'this workspace'}? They will need to submit again from the start. This cannot be undone.`)) return;
+// Opens the modal rather than deciding anything. A browser confirm cannot say
+// what is removed and what is kept, and this removes a client's documents and
+// their approval — worth seeing before agreeing to.
+const deleting = ref<any>(null);
+function deleteSubmission(sub: any) { deleting.value = sub; }
+async function confirmDelete() {
+  const sub = deleting.value;
+  if (!sub) return;
   busy.value = sub.id;
   try {
     await $fetch(`/api/admin/compliance/${sub.tenantId}`, { method: 'DELETE' });
+    deleting.value = null;
     await load();
   } catch (e: any) {
     alert(e?.data?.statusMessage || 'Could not delete the submission.');
@@ -442,5 +471,8 @@ onMounted(() => { load(); loadForms(); });
 .ad-doc-clear:hover:not(:disabled) { color: var(--danger, #b42318); border-color: var(--danger, #b42318); }
 .ad-doc-clear:disabled { opacity: 0.5; cursor: default; }
 .ad-sub-danger { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.del-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+.del-confirm { background: var(--danger, #b42318); color: #fff; border: none; }
+.del-confirm:hover:not(:disabled) { background: #98200f; }
 .ad-danger { color: var(--danger, #b42318); border-color: rgba(180,35,24,0.3); }
 </style>
