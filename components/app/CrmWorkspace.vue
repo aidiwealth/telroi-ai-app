@@ -156,6 +156,23 @@
         </div>
         <p v-else class="muted crm-none">No calls logged yet.</p>
 
+        <!-- Tags. Above the notes because they are the shorter answer to
+             "who is this": a note is read, a tag is glanced at, and both the
+             search bar and the call view match on them. -->
+        <div class="crm-section-h">Tags</div>
+        <div class="crm-tags">
+          <span v-for="t in sel.tags || []" :key="t.id" class="crm-tag">
+            {{ t.name }}
+            <button class="crm-tag-x" title="Remove" @click="removeTag(t)">&times;</button>
+          </span>
+          <input v-model="newTag" class="input crm-tag-input" placeholder="Add a tag…"
+                 list="crm-tag-options" @keyup.enter="addTag" />
+          <datalist id="crm-tag-options">
+            <option v-for="t in allTags" :key="t.id" :value="t.name" />
+          </datalist>
+          <button class="btn btn-ghost btn-sm" :disabled="!newTag.trim()" @click="addTag">Add</button>
+        </div>
+
         <!-- Notes / reports -->
         <div class="crm-section-h">Notes &amp; reports</div>
         <div class="crm-note-add">
@@ -419,6 +436,34 @@ async function save(field: string, value: any) {
   }
   catch (e: any) { toast.err(e?.data?.error?.message || 'Could not save'); }
 }
+// The workspace's whole set, so the input can suggest what has been used
+// before — a tag typed slightly differently each time is a tag that finds
+// nothing when somebody searches for it.
+const allTags = ref<any[]>([]);
+const newTag = ref('');
+async function loadTags() {
+  try { allTags.value = (await api.get<any>(`${props.apiBase}/tags`)).tags || []; }
+  catch { /* the picker is a convenience; typing a new one still works */ }
+}
+async function addTag() {
+  if (!sel.value || !newTag.value.trim()) return;
+  try {
+    const r = await api.post<{ tag: any }>(`${props.apiBase}/contacts/${sel.value.id}/tags`, { name: newTag.value.trim() });
+    if (!(sel.value.tags || []).some((t: any) => t.id === r.tag.id)) {
+      sel.value.tags = [...(sel.value.tags || []), r.tag];
+    }
+    newTag.value = '';
+    loadTags();
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not add tag'); }
+}
+async function removeTag(tag: any) {
+  if (!sel.value) return;
+  try {
+    await api.delete(`${props.apiBase}/contacts/${sel.value.id}/tags?tagId=${tag.id}`);
+    sel.value.tags = (sel.value.tags || []).filter((t: any) => t.id !== tag.id);
+  } catch (e: any) { toast.err(e?.data?.error?.message || 'Could not remove tag'); }
+}
+
 async function addNote() {
   if (!sel.value || !newNote.value.trim()) return;
   try {
@@ -508,7 +553,7 @@ function startPoll(id: string) {
 }
 function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
-onMounted(() => { loadPlan(); load(); });
+onMounted(() => { loadPlan(); load(); loadTags(); });
 </script>
 
 <style scoped>
@@ -585,6 +630,15 @@ onMounted(() => { loadPlan(); load(); });
 .crm-note { padding: 10px 0; border-bottom: 1px solid var(--rule-2); }
 .crm-note-meta { display: flex; justify-content: space-between; margin-bottom: 4px; }
 .crm-note-kind { font-size: 11px; font-weight: 600; color: var(--signal); }
+.crm-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px; }
+.crm-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12.5px;
+  background: var(--signal-soft); color: var(--signal);
+}
+.crm-tag-x { background: none; border: none; padding: 0; font-size: 15px; line-height: 1; color: inherit; cursor: pointer; opacity: 0.6; }
+.crm-tag-x:hover { opacity: 1; }
+.crm-tag-input { width: 150px; }
 .crm-note-body { font-size: 13.5px; white-space: pre-wrap; }
 .modal { width: 100%; max-width: 420px; margin: auto; background: var(--paper); }
 .crm-head-actions { display: flex; gap: 10px; }
