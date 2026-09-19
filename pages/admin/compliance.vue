@@ -161,12 +161,12 @@
 
         <div class="ad-sub-docs">
           <div><span class="ad-doc-label">Business license</span>
-            <a v-if="s.hasBusinessDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=business`" target="_blank" rel="noopener" external class="ad-doc-link">{{ s.businessLicenseName || 'View document' }} →</a>
+            <button v-if="s.hasBusinessDoc" class="ad-doc-link as-btn" @click="openDoc(s.tenantId, 'business')">{{ s.businessLicenseName || 'View document' }} →</button>
             <button v-if="s.hasBusinessDoc" class="ad-doc-clear" :disabled="busy === s.id" @click="clearDoc(s, 'business')" title="Clear so the client can re-upload">Clear</button>
             <span v-else>—</span>
           </div>
           <div><span class="ad-doc-label">Regulatory license</span>
-            <a v-if="s.hasRegulatoryDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=regulatory`" target="_blank" rel="noopener" external class="ad-doc-link">{{ s.regulatoryLicenseName || 'View document' }} →</a>
+            <button v-if="s.hasRegulatoryDoc" class="ad-doc-link as-btn" @click="openDoc(s.tenantId, 'regulatory')">{{ s.regulatoryLicenseName || 'View document' }} →</button>
             <button v-if="s.hasRegulatoryDoc" class="ad-doc-clear" :disabled="busy === s.id" @click="clearDoc(s, 'regulatory')" title="Clear so the client can re-upload">Clear</button>
             <span v-else>—</span>
           </div>
@@ -372,6 +372,24 @@ async function clearNin(sub: any) {
 // Opens the modal rather than deciding anything. A browser confirm cannot say
 // what is removed and what is kept, and this removes a client's documents and
 // their approval — worth seeing before agreeing to.
+// Fetched and opened as a blob rather than linked. A plain href to an API
+// route was being taken by Nuxt's router as an internal page, which does not
+// exist — so it rendered a 404 that threw its own 500, and a document nobody
+// could open looked like a broken server.
+async function openDoc(tenantId: string, doc: string) {
+  try {
+    const blob = await $fetch<Blob>(`/api/admin/compliance/${tenantId}/document`, {
+      query: { doc }, responseType: 'blob'
+    });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    // Released once the new tab has taken it; revoking immediately can race.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || 'Could not open that document.');
+  }
+}
+
 const deleting = ref<any>(null);
 function deleteSubmission(sub: any) { deleting.value = sub; }
 async function confirmDelete() {
@@ -461,6 +479,7 @@ onMounted(() => { load(); loadForms(); });
 .ad-note-input { flex: 1; padding: 8px 12px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13px; }
 .ad-reject { color: #e0664e; border-color: rgba(192,57,43,0.3); }
 .ad-doc-link { color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
+.as-btn { background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
 /* Quiet by default: clearing a document withdraws an approval, so it should not
    sit on the page competing with the link to read the document. */
 .ad-doc-clear {
