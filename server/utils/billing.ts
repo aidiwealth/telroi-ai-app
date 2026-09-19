@@ -6,7 +6,7 @@
 // that can't pay. Shared by the cron endpoint (/api/cron/billing) and the CLI
 // runner (server/db/run-billing.ts) so the logic lives in exactly one place.
 import { and, eq, lte, sql } from 'drizzle-orm';
-import { schema } from '../db';
+import { schema, useDb } from '../db';
 import { canSpend, chargeCardToWallet } from '~/server/utils/wallet';
 
 export interface BillingResult {
