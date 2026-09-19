@@ -1343,7 +1343,11 @@ export const compliance = pgTable('compliance', {
   status: text('status').notNull().default('pending'),  // pending | approved | rejected
   notes: text('notes'),
   submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
-  reviewedAt: timestamp('reviewed_at', { withTimezone: true })
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  // Who decided. Staff approve these, so the record of which of them did is the
+  // accountability — a regulatory decision with no author is worse than a queue
+  // that waits for a superadmin.
+  reviewedBy: text('reviewed_by')
 }, (t) => ({
   tenantIdx: uniqueIndex('compliance_tenant_idx').on(t.tenantId)
 }));
