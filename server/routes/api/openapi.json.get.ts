@@ -69,7 +69,7 @@ export default defineEventHandler((event) => {
               code: { type: 'string', pattern: '^[0-9]{4,10}$', description: 'Your own code, if you generate them. We read it out and record the call; verifying it stays with you. When set, `code_length` is ignored and no `expires_at` is returned — how long it stays valid is your decision.', example: '483920' }
             }
           }, examples: {
-            default: { summary: 'We generate the code', value: { to: '+2348012345678', code_length: 6 } },
+            default: { summary: 'We generate the code', value: { to: '+2348012345678', code_length: 6, from: '+2347080673987', security_notice: true } },
             ownCode: { summary: 'You supply the code', value: { to: '+2348012345678', code: '483920' } },
             fromNumber: { summary: 'Choose which of your numbers calls', value: { to: '+2348012345678', code_length: 6, from: '+2347080673987' } },
             noNotice: { summary: 'Without the closing security line', value: { to: '+2348012345678', code_length: 6, security_notice: false } }
@@ -128,7 +128,7 @@ export default defineEventHandler((event) => {
                   }
                 },
                 examples: {
-                  default: { summary: 'A short notification', value: { to: '+2348012345678', message: 'Your delivery is on its way and should arrive within the hour.' } },
+                  default: { summary: 'A short notification', value: { to: '+2348012345678', message: 'Your delivery is on its way and should arrive within the hour.', from: '+2347080673987' } },
                   fromNumber: { summary: 'Choose which of your numbers calls', value: { to: '+2348012345678', message: 'Your delivery is on its way.', from: '+2347080673987' } }
                 }
               }
