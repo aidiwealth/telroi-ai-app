@@ -70,7 +70,9 @@ export default defineEventHandler((event) => {
             }
           }, examples: {
             default: { summary: 'We generate the code', value: { to: '+2348012345678', code_length: 6 } },
-            ownCode: { summary: 'You supply the code', value: { to: '+2348012345678', code: '483920' } }
+            ownCode: { summary: 'You supply the code', value: { to: '+2348012345678', code: '483920' } },
+            fromNumber: { summary: 'Choose which of your numbers calls', value: { to: '+2348012345678', code_length: 6, from: '+2347080673987' } },
+            noNotice: { summary: 'Without the closing security line', value: { to: '+2348012345678', code_length: 6, security_notice: false } }
           } } } },
           responses: {
             200: { description: 'OTP call placed.', content: { 'application/json': { schema: {
@@ -105,7 +107,7 @@ export default defineEventHandler((event) => {
       '/v1/notifications': {
         post: {
           summary: 'Place a voice notification',
-          description: 'Calls `to` and speaks `message` aloud.\n\nYour workspace must own at least one phone number: the call goes out on your own number rather than a shared one, so that a carrier blocking somebody else\'s traffic cannot block yours. Without a number the request is refused with `number_required`.\n\nDistinct from `/v1/otp`, which reads a code from recordings that already exist. A notification is synthesised from your own words, so it is billed differently: the speech is charged per character when the request is accepted, because it costs us whether or not anybody answers, and the call time is charged per second with a one-minute minimum — the minimum matching what a carrier bills us for a short call.\n\nRate limited more tightly than verification: one per minute and five per hour to the same number, and two hundred an hour across a workspace. A call nobody asked for is closer to outbound campaigning than to verification, and the same number-use rules apply.\n\nThe response returns once the call is placed, not once it is answered. Subscribe to `notification.completed` to learn how it ended.',
+          description: 'Calls `to` and speaks `message` aloud.\n\nYour workspace must own at least one phone number: the call goes out on your own number rather than a shared one, so that a carrier blocking somebody else\'s traffic cannot block yours. Without a number the request is refused with `number_required`.\n\nDistinct from `/v1/otp`, which reads a code from recordings that already exist. A notification is synthesised from your own words, so it is billed differently: it is sold by the unit, and one unit is 160 characters or 30 seconds of audio, whichever is reached first. The count is measured from the synthesised audio before the call is placed and returned as `estimated_units` when you submit, so a long or numeral-heavy message never costs you a surprise.\n\nRate limited more tightly than verification: one per minute and five per hour to the same number, and two hundred an hour across a workspace. A call nobody asked for is closer to outbound campaigning than to verification, and the same number-use rules apply.\n\nThe response returns once the call is placed, not once it is answered. Subscribe to `notification.completed` to learn how it ended.',
           operationId: 'placeNotification',
           // Its own group rather than under Voice with OTP. They share a
           // carrier and nothing else: one reads a code from recordings that
@@ -124,6 +126,10 @@ export default defineEventHandler((event) => {
                     message: { type: 'string', maxLength: 900, description: 'What to say. Up to 900 characters, about ninety seconds of speech.' },
                     from: { type: 'string', description: 'Which of your own numbers the call comes from, in E.164. Must be a number on your workspace or the request is refused. An operator can pin a workspace to one number, which overrides this.', example: '+2348012345678' }
                   }
+                },
+                examples: {
+                  default: { summary: 'A short notification', value: { to: '+2348012345678', message: 'Your delivery is on its way and should arrive within the hour.' } },
+                  fromNumber: { summary: 'Choose which of your numbers calls', value: { to: '+2348012345678', message: 'Your delivery is on its way.', from: '+2347080673987' } }
                 }
               }
             }
