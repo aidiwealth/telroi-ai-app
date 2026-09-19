@@ -143,6 +143,10 @@ export const platformSettings = pgTable('platform_settings', {
   // hardcoded, so moving traffic off a faltering carrier meant a deploy.
   otpNgTrunk: text('otp_ng_trunk').notNull().default('ruach-endpoint'),
   otpNgCallerId: text('otp_ng_caller_id'),
+  // Whether workspaces send OTP and notification calls on their own numbers by
+  // default. A behaviour setting, so it sits here with the other vendor and
+  // routing choices rather than in pricing, which holds rates.
+  voiceUseOwnNumber: boolean('voice_use_own_number').notNull().default(true),
   // The carrier's SIP host travels with the trunk: Ruach answers on a hostname
   // and Kasooko on an IP, so switching trunks without it dialled the new carrier
   // at the old one's address.
@@ -292,7 +296,12 @@ export const tenants = pgTable('tenants', {
   // verification calls on one number is how that number gets blocked for all of
   // them. The switch is for when their own number is the problem — a fresh DID
   // the carrier has not propagated, or one blocked for reasons that take days.
-  useOwnNumber: boolean('use_own_number').notNull().default(true),
+  // Null means follow the platform default; true or false means an operator
+  // decided this workspace specifically. Three states rather than two, because
+  // a platform-wide switch that wrote to every tenant would overwrite the
+  // override set for the one workspace whose own number is blocked — which is
+  // the case the override exists for.
+  useOwnNumber: boolean('use_own_number'),
   // Which of their own numbers carries OTP and notification calls. Null means
   // whichever the lookup finds first — fine for a workspace with one number,
   // and not for one with a marketing line and a support line that would rather

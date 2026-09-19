@@ -83,6 +83,9 @@ export default defineEventHandler(async (event) => {
     opsEmail: (s?.opsEmail as string) || '',
     premblySet: !!s?.premblyCredsEnc,
     otpNgCallerId: (s?.otpNgCallerId as string) || '',
+    // Without this the select always reads "their own number" and a save to the
+    // shared one looks undone.
+    voiceUseOwnNumber: s?.voiceUseOwnNumber !== false,
     ttsVendor: (s?.ttsVendor as string) || 'telroi',
     sttVendor: (s?.sttVendor as string) || 'telroi',
     otpVoiceVendorCredsSet: !!s?.otpVoiceVendorCredsEnc,

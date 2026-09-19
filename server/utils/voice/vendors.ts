@@ -418,9 +418,17 @@ export async function ownCallerId(tenantId: string, provider: string): Promise<s
   const db = useDb();
   const [t] = await db.select({ own: schema.tenants.useOwnNumber, preferred: schema.tenants.otpCallerTelnum })
     .from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
-  // Switched off by an operator: their own number is the problem, so the shared
-  // one carries them until it is sorted.
-  if (!t?.own) return null;
+  // Their own setting when an operator has made one, the platform default when
+  // they have not. Switched off either way means the shared number carries
+  // them — because their own is the problem, or because ours are working
+  // better at the moment.
+  let useOwn = t?.own;
+  if (useOwn == null) {
+    const [ps] = await db.select({ d: schema.platformSettings.voiceUseOwnNumber })
+      .from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+    useOwn = ps?.d ?? true;
+  }
+  if (!useOwn) return null;
 
   const rows = await db.select({ telnum: schema.numberSubscriptions.telnum })
     .from(schema.numberSubscriptions)
