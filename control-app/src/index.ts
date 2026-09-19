@@ -286,7 +286,20 @@ async function main() {
       return;
     }
     let dialedDid = event.args?.[0] || channel.dialplan?.exten || '';
-    const callerNum = channel.caller?.number || '';
+    // Sotel presents Nigerian callers as 008027016644 — a 00 international
+    // prefix in front of a national number, with no country code between them.
+    // Left alone it reaches the recipient's phone in that form, and a number
+    // nobody can call back is most of the value of caller id gone.
+    //
+    // Only the Nigerian case is corrected. 00 is a real international prefix,
+    // so 0044... is a UK number and must be left as it is; what marks this one
+    // is 00 followed immediately by a Nigerian national number, which starts
+    // with a 0 the carrier has dropped or an 8 or 9 mobile prefix.
+    const rawCaller = channel.caller?.number || '';
+    const callerNum = /^00[89]\d{9}$/.test(rawCaller)
+      ? `+234${rawCaller.slice(2)}`
+      : rawCaller;
+    if (callerNum !== rawCaller) log(`[callerid] ${rawCaller} -> ${callerNum}`);
     const callerName = channel.caller?.name || '';
     const chId = channel.id;
 
