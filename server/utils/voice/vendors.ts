@@ -416,20 +416,26 @@ export async function ownCallerId(tenantId: string, provider: string): Promise<s
   const { useDb, schema } = await import('~/server/db');
   const { and, eq } = await import('drizzle-orm');
   const db = useDb();
-  const [t] = await db.select({ own: schema.tenants.useOwnNumber })
+  const [t] = await db.select({ own: schema.tenants.useOwnNumber, preferred: schema.tenants.otpCallerTelnum })
     .from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
   // Switched off by an operator: their own number is the problem, so the shared
   // one carries them until it is sorted.
   if (!t?.own) return null;
 
-  const [n] = await db.select({ telnum: schema.numberSubscriptions.telnum })
+  const rows = await db.select({ telnum: schema.numberSubscriptions.telnum })
     .from(schema.numberSubscriptions)
     .where(and(
       eq(schema.numberSubscriptions.tenantId, tenantId),
       eq(schema.numberSubscriptions.provider, provider),
       eq(schema.numberSubscriptions.status, 'active')
-    )).limit(1);
-  return n?.telnum || null;
+    ));
+  if (!rows.length) return null;
+  // Their choice when it is on this carrier. A number is only presentable on
+  // the network that issued it, so a preference set for a Nigerian line cannot
+  // carry a US call — then the first number on the right carrier stands in,
+  // which is what happened before anybody could choose at all.
+  const preferred = rows.find((r) => r.telnum === t.preferred);
+  return (preferred || rows[0]).telnum;
 }
 
 /** Does this workspace own any number at all? OTP and notifications are refused

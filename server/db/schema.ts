@@ -293,6 +293,11 @@ export const tenants = pgTable('tenants', {
   // them. The switch is for when their own number is the problem — a fresh DID
   // the carrier has not propagated, or one blocked for reasons that take days.
   useOwnNumber: boolean('use_own_number').notNull().default(true),
+  // Which of their own numbers carries OTP and notification calls. Null means
+  // whichever the lookup finds first — fine for a workspace with one number,
+  // and not for one with a marketing line and a support line that would rather
+  // verification calls came from the latter.
+  otpCallerTelnum: text('otp_caller_telnum'),
   postpaid: boolean('postpaid').notNull().default(false),
   creditLimitMinor: bigint('credit_limit_minor', { mode: 'number' }),
   billingDay: integer('billing_day'),
