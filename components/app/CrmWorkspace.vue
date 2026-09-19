@@ -269,6 +269,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
+// Explicit rather than relying on Nuxt's auto-import: four faults this week came
+// from a symbol that resolved at build and was undefined at runtime.
+import { useRoute } from 'vue-router';
 const props = withDefaults(defineProps<{ apiBase?: string; admin?: boolean }>(), { apiBase: '/api/crm', admin: false });
 const api = useApi();
 const toast = useToast();
