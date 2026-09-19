@@ -21,7 +21,13 @@ import { z } from 'zod';
 import { requirePlatformAdmin } from '~/server/utils/platform';
 import { useDb, schema } from '~/server/db';
 
-const Body = z.object({ enabled: z.boolean() });
+// Two things, because they are set in the same place and answer the same
+// question: whether this workspace uses its own numbers, and if so whether an
+// operator has pinned it to one of them.
+const Body = z.object({
+  enabled: z.boolean().optional(),
+  pinned: z.string().max(32).nullable().optional()
+});
 
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
@@ -37,8 +43,11 @@ export default defineEventHandler(async (event) => {
   if (!t) throw createError({ statusCode: 404, statusMessage: 'Workspace not found' });
   const db = useDb();
 
-  await db.update(schema.tenants).set({ useOwnNumber: p.data.enabled })
-    .where(eq(schema.tenants.id, t.id));
-  console.log(`[client] ${t.name} now sends on ${p.data.enabled ? 'their own number' : 'the shared number'} (by ${admin.email})`);
-  return { ok: true, useOwnNumber: p.data.enabled };
+  const patch: any = {};
+  if (p.data.enabled !== undefined) patch.useOwnNumber = p.data.enabled;
+  if (p.data.pinned !== undefined) patch.otpCallerPinned = p.data.pinned || null;
+  if (!Object.keys(patch).length) return { ok: true, unchanged: true };
+  await db.update(schema.tenants).set(patch).where(eq(schema.tenants.id, t.id));
+  console.log(`[client] ${t.name} caller id changed (by ${admin.email}): ${JSON.stringify(patch)}`);
+  return { ok: true, ...patch };
 });

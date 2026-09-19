@@ -79,6 +79,9 @@ export default defineEventHandler(async (event) => {
       // Same reason as postpaid above: without it the caller-id select always
       // reads "their own number" and a save to the shared one looks undone.
       useOwnNumber: tenant.useOwnNumber,
+      // Or the pin field reads blank on a workspace that is pinned, and an
+      // operator would set it twice.
+      otpCallerPinned: tenant.otpCallerPinned,
       aiDailyCapUsdMinor: tenant.aiDailyCapUsdMinor,
       postpaidSince: tenant.postpaidSince, paymentTermsDays: tenant.paymentTermsDays,
       paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null, requiresProvisioning: requiresProvisioning(tenant.country) },

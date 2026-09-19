@@ -88,6 +88,7 @@ const Body = z.object({
   premblyApiKey: z.string().min(8).max(200).optional(),
   otpNgCallerId: z.string().max(32).optional(),
   voiceUseOwnNumber: z.boolean().optional(),
+  voiceCallerPinned: z.string().max(32).optional(),
   ttsVendor: z.enum(['telroi', 'elevenlabs', 'openai', 'google', 'azure', 'custom']).optional(),
   sttVendor: z.enum(['telroi', 'deepgram', 'openai', 'google', 'azure', 'custom']).optional(),
   otpVoiceVendorCreds: z.record(z.any()).optional(),
@@ -256,6 +257,7 @@ export default defineEventHandler(async (event) => {
   if (d.premblyApiKey) patch.premblyCredsEnc = encrypt(JSON.stringify({ apiKey: d.premblyApiKey }));
   if (d.otpNgCallerId !== undefined) patch.otpNgCallerId = d.otpNgCallerId || null;
   if (d.voiceUseOwnNumber !== undefined) patch.voiceUseOwnNumber = d.voiceUseOwnNumber;
+  if (d.voiceCallerPinned !== undefined) patch.voiceCallerPinned = d.voiceCallerPinned || null;
   if (d.ttsVendor) patch.ttsVendor = d.ttsVendor;
   if (d.sttVendor) patch.sttVendor = d.sttVendor;
   if (d.otpVoiceVendorCreds && Object.keys(d.otpVoiceVendorCreds).length) patch.otpVoiceVendorCredsEnc = encrypt(JSON.stringify(d.otpVoiceVendorCreds));

@@ -310,6 +310,15 @@
             </select>
           </label>
         </div>
+        <!-- One number, overriding whatever they chose or their API asks for.
+             For a workspace whose other lines are failing: blank means they
+             pick, as normal. -->
+        <div class="ad-adjust-row">
+          <label class="ad-ovr"><span>Pin to one number</span>
+            <input v-model="pinnedNum" class="ad-ctl mono" placeholder="Not pinned" :disabled="ownNumBusy" />
+          </label>
+          <button class="btn btn-signal btn-sm" :disabled="ownNumBusy" @click="savePinned">{{ ownNumBusy ? 'Saving…' : 'Save' }}</button>
+        </div>
         <div class="ad-adjust-row" style="margin-top:12px">
           <label class="ad-ovr"><span>AI daily cap ($)</span>
             <input v-model="aiCapForm" type="number" step="0.01" min="0" class="ad-ctl mono" placeholder="platform default" />
@@ -619,7 +628,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue';
+import { ref, computed, reactive, onMounted, watch } from 'vue';
 const toast = useToast();
 import { useRoute } from 'vue-router';
 definePageMeta({ layout: 'admin' });
@@ -788,6 +797,18 @@ async function saveInterval() {
 // moved to the shared one when their own is the problem — a fresh DID the
 // carrier has not propagated, or one blocked for reasons that take days.
 const ownNumBusy = ref(false);
+const pinnedNum = ref('');
+watch(() => data.value?.tenant?.otpCallerPinned, (v) => { pinnedNum.value = v || ''; }, { immediate: true });
+async function savePinned() {
+  ownNumBusy.value = true;
+  try {
+    await $fetch(`/api/admin/clients/${route.params.domain}/use-own-number`, {
+      method: 'POST', body: { pinned: pinnedNum.value || null }
+    });
+    alert(pinnedNum.value ? `Pinned to ${pinnedNum.value}.` : 'Pin cleared — they choose again.');
+  } catch (e: any) { alert(e?.data?.statusMessage || 'Failed'); }
+  finally { ownNumBusy.value = false; }
+}
 async function saveOwnNumber(enabled: boolean) {
   ownNumBusy.value = true;
   try {
