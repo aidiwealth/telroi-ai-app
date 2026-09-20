@@ -13,7 +13,19 @@ export async function listContacts(tenantId: string, opts: { q?: string; status?
   if (opts.sources && opts.sources.length) conds.push(inArray(schema.crmContacts.source, opts.sources));
   if (opts.q) {
     const like = `%${opts.q}%`;
-    conds.push(or(ilike(schema.crmContacts.name, like), ilike(schema.crmContacts.company, like), ilike(schema.crmContacts.phone, like), ilike(schema.crmContacts.email, like)));
+    // Tags too, so typing one into the search bar finds everybody carrying it —
+    // which is the whole reason a client asked for tags rather than notes.
+    const tagged = db.select({ id: schema.crmContactTags.contactId })
+      .from(schema.crmContactTags)
+      .innerJoin(schema.crmTags, eq(schema.crmTags.id, schema.crmContactTags.tagId))
+      .where(and(eq(schema.crmContactTags.tenantId, tenantId), ilike(schema.crmTags.name, like)));
+    conds.push(or(
+      ilike(schema.crmContacts.name, like),
+      ilike(schema.crmContacts.company, like),
+      ilike(schema.crmContacts.phone, like),
+      ilike(schema.crmContacts.email, like),
+      inArray(schema.crmContacts.id, tagged)
+    ));
   }
   // The same conditions count as list, so the total reflects the filter rather
   // than the whole book — "3 of 12,000" when searching for one name would be
@@ -36,6 +48,12 @@ export async function getContact(tenantId: string, id: string) {
   if (!c) return null;
   const notes = await db.select().from(schema.crmContactNotes)
     .where(eq(schema.crmContactNotes.contactId, id)).orderBy(desc(schema.crmContactNotes.createdAt));
+  const tags = await db.select({
+    id: schema.crmTags.id, name: schema.crmTags.name, color: schema.crmTags.color
+  }).from(schema.crmContactTags)
+    .innerJoin(schema.crmTags, eq(schema.crmTags.id, schema.crmContactTags.tagId))
+    .where(eq(schema.crmContactTags.contactId, id))
+    .orderBy(schema.crmTags.name);
   // Call history: match callEvents by phone (last 9 digits to be tolerant of formatting).
   let calls: any[] = [];
   if (c.phone) {
@@ -46,7 +64,7 @@ export async function getContact(tenantId: string, id: string) {
         .orderBy(desc(schema.callEvents.startedAt)).limit(50);
     }
   }
-  return { ...c, notes, calls };
+  return { ...c, notes, calls, tags };
 }
 
 export async function createContact(tenantId: string, data: Partial<typeof schema.crmContacts.$inferInsert>) {

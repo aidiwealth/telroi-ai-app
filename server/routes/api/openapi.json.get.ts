@@ -44,6 +44,7 @@ export default defineEventHandler((event) => {
     security: [{ bearerAuth: [] }],
     tags: [
       { name: 'Voice OTP', description: 'Deliver and verify one-time passcodes over a voice call. OTP-only — cannot place general calls.' },
+      { name: 'Voice Notifications', description: 'Call a number and speak a message you wrote. Billed by the unit — one unit is 160 characters or 30 seconds of audio, whichever comes first — and rate limited more tightly than OTP, since a call nobody asked for is closer to outbound campaigning than to verification.' },
       { name: 'Speech', description: 'Text-to-speech synthesis and speech-to-text transcription.' },
       { name: 'Calls', description: 'Originate and list voice calls.' },
       { name: 'Numbers', description: 'List the phone numbers provisioned to your workspace.' },
@@ -55,7 +56,7 @@ export default defineEventHandler((event) => {
       '/v1/otp': {
         post: {
           tags: ['Voice OTP'], summary: 'Send a voice OTP',
-          description: 'Places a phone call to `to` and reads a one-time code aloud.\n\nBy default we generate the code and you verify it with `POST /v1/otp/verify`. The code length, validity window, repeat count and per-number frequency are governed by the operator policy; a request may ask for a shorter code but never a longer-lived one.\n\nIf you already generate codes yourself, send one as `code`. We read it out, record the call and bill for it, but never check it — expiry, attempt limits and verification stay entirely with you, and `POST /v1/otp/verify` will refuse a code it did not generate.',
+          description: 'Places a phone call to `to` and reads a one-time code aloud.\n\nYour workspace must own at least one phone number: the call goes out on your own number rather than a shared one, so that a carrier blocking somebody else\'s traffic cannot block yours. Without a number the request is refused with `number_required`.\n\nBy default we generate the code and you verify it with `POST /v1/otp/verify`. The code length, validity window, repeat count and per-number frequency are governed by the operator policy; a request may ask for a shorter code but never a longer-lived one.\n\nIf you already generate codes yourself, send one as `code`. We read it out, record the call and bill for it, but never check it — expiry, attempt limits and verification stay entirely with you, and `POST /v1/otp/verify` will refuse a code it did not generate.',
           operationId: 'sendVoiceOtp',
           requestBody: { required: true, content: { 'application/json': { schema: {
             type: 'object', required: ['to'],
@@ -63,11 +64,15 @@ export default defineEventHandler((event) => {
               to: { type: 'string', description: 'Destination number in E.164 format.', example: '+2348012345678' },
               code_length: { type: 'integer', minimum: 4, maximum: 10, description: 'Requested code length (clamped to the operator maximum).', example: 6 },
               language: { type: 'string', description: 'BCP-47 language for the spoken prompt.', example: 'en-US' },
+              from: { type: 'string', description: 'Which of your own numbers the call comes from, in E.164. Must be a number on your workspace or the request is refused. Omit it and we use the number set in your dashboard, or any you hold on the carrier carrying the call. An operator can pin a workspace to one number, which overrides this.', example: '+2348012345678' },
+              security_notice: { type: 'boolean', default: true, description: 'Whether the call ends with "Do not share this code with anyone." On unless you turn it off: it is what stops somebody reading their code to a caller pretending to be their bank. Turning it off saves about two seconds.', example: true },
               code: { type: 'string', pattern: '^[0-9]{4,10}$', description: 'Your own code, if you generate them. We read it out and record the call; verifying it stays with you. When set, `code_length` is ignored and no `expires_at` is returned — how long it stays valid is your decision.', example: '483920' }
             }
           }, examples: {
-            default: { summary: 'We generate the code', value: { to: '+2348012345678', code_length: 6 } },
-            ownCode: { summary: 'You supply the code', value: { to: '+2348012345678', code: '483920' } }
+            default: { summary: 'We generate the code', value: { to: '+2348012345678', code_length: 6, from: '+2347080673987', security_notice: true } },
+            ownCode: { summary: 'You supply the code', value: { to: '+2348012345678', code: '483920' } },
+            fromNumber: { summary: 'Choose which of your numbers calls', value: { to: '+2348012345678', code_length: 6, from: '+2347080673987' } },
+            noNotice: { summary: 'Without the closing security line', value: { to: '+2348012345678', code_length: 6, security_notice: false } }
           } } } },
           responses: {
             200: { description: 'OTP call placed.', content: { 'application/json': { schema: {
@@ -75,34 +80,6 @@ export default defineEventHandler((event) => {
             }, example: { object: 'otp', livemode: true, id: 'otp_8f3c...', to: '+2348012345678', status: 'delivered', expires_at: '2026-06-05T12:34:56Z' } } } },
             429: { description: 'Rate limited for this destination.', content: { 'application/json': { schema: Error, example: { error: { code: 'rate_limited', message: 'Too many requests for this number. Retry after 60s.' } } } } },
             401: { description: 'Missing or invalid API key.', content: { 'application/json': { schema: Error } } }
-          }
-        }
-      },
-      '/v1/notifications': {
-        post: {
-          summary: 'Place a voice notification',
-          description: 'Calls `to` and speaks `message` aloud.\n\nDistinct from `/v1/otp`, which reads a code from recordings that already exist. A notification is synthesised from your own words, so it is billed differently: the speech is charged per character when the request is accepted, because it costs us whether or not anybody answers, and the call time is charged per second with a one-minute minimum — the minimum matching what a carrier bills us for a short call.\n\nRate limited more tightly than verification: one per minute and five per hour to the same number, and two hundred an hour across a workspace. A call nobody asked for is closer to outbound campaigning than to verification, and the same number-use rules apply.\n\nThe response returns once the call is placed, not once it is answered. Subscribe to `notification.completed` to learn how it ended.',
-          operationId: 'placeNotification',
-          tags: ['Voice'],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['to', 'message'],
-                  properties: {
-                    to: { type: 'string', description: 'Destination in E.164, e.g. +2348012345678.' },
-                    message: { type: 'string', maxLength: 900, description: 'What to say. Up to 900 characters, about ninety seconds of speech.' }
-                  }
-                }
-              }
-            }
-          },
-          responses: {
-            200: { description: 'The call has been placed.' },
-            402: { description: 'The workspace lacks the notifications feature, or the wallet cannot cover the call.' },
-            429: { description: 'Too many notifications to this number or from this workspace.' }
           }
         }
       },
@@ -124,6 +101,43 @@ export default defineEventHandler((event) => {
               type: 'object', properties: { object: { const: 'otp_verification' }, status: { type: 'string', enum: ['verified', 'mismatch', 'expired', 'locked', 'not_found'] }, verified: { type: 'boolean' }, attempts_left: { type: 'integer' } }
             }, example: { object: 'otp_verification', livemode: true, status: 'verified', verified: true } } } },
             401: { description: 'Missing or invalid API key.', content: { 'application/json': { schema: Error } } }
+          }
+        }
+      },
+      '/v1/notifications': {
+        post: {
+          summary: 'Place a voice notification',
+          description: 'Calls `to` and speaks `message` aloud.\n\nYour workspace must own at least one phone number: the call goes out on your own number rather than a shared one, so that a carrier blocking somebody else\'s traffic cannot block yours. Without a number the request is refused with `number_required`.\n\nDistinct from `/v1/otp`, which reads a code from recordings that already exist. A notification is synthesised from your own words, so it is billed differently: it is sold by the unit, and one unit is 160 characters or 30 seconds of audio, whichever is reached first. The count is measured from the synthesised audio before the call is placed and returned as `estimated_units` when you submit, so a long or numeral-heavy message never costs you a surprise.\n\nRate limited more tightly than verification: one per minute and five per hour to the same number, and two hundred an hour across a workspace. A call nobody asked for is closer to outbound campaigning than to verification, and the same number-use rules apply.\n\nThe response returns once the call is placed, not once it is answered. Subscribe to `notification.completed` to learn how it ended.',
+          operationId: 'placeNotification',
+          // Its own group rather than under Voice with OTP. They share a
+          // carrier and nothing else: one reads a code from recordings that
+          // already exist, the other speaks whatever a client wrote, and they
+          // are billed and rate limited differently.
+          tags: ['Voice Notifications'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['to', 'message'],
+                  properties: {
+                    to: { type: 'string', description: 'Destination in E.164, e.g. +2348012345678.' },
+                    message: { type: 'string', maxLength: 900, description: 'What to say. Up to 900 characters, about ninety seconds of speech.' },
+                    from: { type: 'string', description: 'Which of your own numbers the call comes from, in E.164. Must be a number on your workspace or the request is refused. An operator can pin a workspace to one number, which overrides this.', example: '+2348012345678' }
+                  }
+                },
+                examples: {
+                  default: { summary: 'A short notification', value: { to: '+2348012345678', message: 'Your delivery is on its way and should arrive within the hour.', from: '+2347080673987' } },
+                  fromNumber: { summary: 'Choose which of your numbers calls', value: { to: '+2348012345678', message: 'Your delivery is on its way.', from: '+2347080673987' } }
+                }
+              }
+            }
+          },
+          responses: {
+            200: { description: 'The call has been placed.' },
+            402: { description: 'The workspace lacks the notifications feature, or the wallet cannot cover the call.' },
+            429: { description: 'Too many notifications to this number or from this workspace.' }
           }
         }
       },

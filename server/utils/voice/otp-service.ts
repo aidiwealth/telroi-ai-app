@@ -83,13 +83,21 @@ async function checkRate(tenantId: string, toNumber: string, p: OtpPolicy): Prom
 }
 
 // Send a voice OTP: generate, rate-check, place the call, persist (hashed).
-export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string; ownCode?: string } = {}): Promise<SendResult> {
+export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string; ownCode?: string; securityNotice?: boolean; fromNumber?: string } = {}): Promise<SendResult> {
   const p = await otpPolicy(tenantId);
   const db = useDb();
 
   // A client may request a SHORTER-or-equal nothing; length is clamped to the
   // operator policy bounds (never longer than allowed, min 4).
   const len = Math.max(4, Math.min(opts.codeLength || p.codeLength, p.codeLength));
+
+  // A number of their own, first. Verification calls placed on our shared
+  // number put our traffic reputation behind somebody else's volume, and a
+  // carrier blocking that number blocks it for every client at once.
+  const { ownsAnyNumber } = await import('./vendors');
+  if (!(await ownsAnyNumber(tenantId))) {
+    return { ok: false, error: 'number_required' };
+  }
 
   const rate = await checkRate(tenantId, toNumber, p);
   if (!rate.ok) return { ok: false, error: `rate_limited:${rate.reason}`, retryAfterSeconds: rate.retryAfter };
@@ -144,7 +152,10 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
   const [row] = await db.insert(schema.voiceOtps).values({
     tenantId, toNumber, codeHash: sha256(code), codeLength: ownCode ? ownCode.length : len,
     clientSupplied: !!ownCode,
-    status: 'calling', maxAttempts: p.maxAttempts, expiresAt
+    status: 'calling', maxAttempts: p.maxAttempts, expiresAt,
+    // Stored, not just passed on: Telnyx speaks when it answers, long after
+    // this request has returned, so the preference has to outlive it.
+    securityNotice: opts.securityNotice !== false
   }).returning({ id: schema.voiceOtps.id });
 
   // Stored against the row before dialling: a carrier that speaks the code over
@@ -156,7 +167,7 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
 
   const placed = sandboxed
     ? { ok: true as const, providerRef: `sbx_otp_${row.id}` }
-    : await placeOtpCall({ toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec });
+    : await placeOtpCall({ tenantId, toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec, securityNotice: opts.securityNotice, fromNumber: opts.fromNumber });
   if (!placed.ok) {
     await db.update(schema.voiceOtps).set({ status: 'failed', reason: placed.reason }).where(eq(schema.voiceOtps.id, row.id));
     void import('../webhooks-out').then(({ emitWebhook }) => emitWebhook(tenantId, 'otp.failed', {

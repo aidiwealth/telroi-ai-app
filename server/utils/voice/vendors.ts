@@ -14,6 +14,17 @@ import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 
 export interface PlaceOtpCallInput {
+  // Which of their numbers to present, when the request named one. Ignored if
+  // an operator has pinned the workspace or the platform.
+  fromNumber?: string;
+  // Whose call this is, so the caller id can be their own number rather than
+  // the platform's. A carrier blocks a source number carrying heavy traffic,
+  // and one shared number carrying every client's verification calls is how it
+  // gets blocked for all of them at once.
+  tenantId: string;
+  // Whether to play the closing "do not share this code" line. Undefined means
+  // on: a client who has not thought about it gets the protection.
+  securityNotice?: boolean;
   toNumber: string;
   code: string;               // the plaintext code to read aloud (never persisted)
   language?: string;          // e.g. 'en-US'
@@ -76,13 +87,18 @@ export async function placeOtpCall(input: PlaceOtpCallInput): Promise<PlaceOtpCa
   const dest = String(input.toNumber || '').replace(/[^0-9]/g, '');
   const isNigeria = dest.startsWith('234') || dest.startsWith('0');
   const vendor = isNigeria ? 'telroi' : (v.otpIntlVendor || v.otpVoiceVendor);
-  console.log(`[otp-route] to=${input.toNumber} dest=${dest} nigeria=${isNigeria} vendor=${vendor}`);
+  console.log(`[otp-route] to=${input.toNumber} dest=${dest} nigeria=${isNigeria} vendor=${vendor} notice=${input.securityNotice !== false}`);
   // The same script the other two paths use. Nigeria plays recorded audio and
   // Telnyx speaks at call.answered, so this is Twilio's copy — and it had drifted
   // to older wording, which nobody would notice until a vendor switch changed
   // what callers heard.
   const digits = input.code.split('').join(', ');
-  const speech = `Hi. Your O T P code is. ${digits}. Let me repeat that. Your O T P code is. ${digits}. Please do not share this code with anyone. Goodbye.`;
+  // The same choice the Nigerian dialplan makes, in the one place it can be
+  // made here: Telnyx and Twilio speak this text themselves, so there is no
+  // file to skip — the line is simply not written. On unless a client turns it
+  // off, since it is what stops somebody reading their code to a stranger.
+  const notice = input.securityNotice === false ? '' : ' Please do not share this code with anyone.';
+  const speech = `Hi. Your O T P code is. ${digits}. Let me repeat that. Your O T P code is. ${digits}.${notice} Goodbye.`;
 
   if (vendor === 'telroi') {
     // Use Telroi's own configured carrier gateway. The control-plane request is
@@ -264,6 +280,8 @@ export interface PlaceNotifyCallInput {
   // The agent synthesises through the web app, which needs to know whose
   // voice settings and whose bill it is.
   tenantId: string;
+  // Which of their numbers to present, when the request named one.
+  fromNumber?: string;
   // The tenant's SIP username, so the dialplan can resolve their own DID for
   // the carrier carrying the call.
   sipEndpoint?: string;
@@ -299,11 +317,54 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
   // way, so this chooses a trunk rather than a vendor with its own voice.
   const dest = String(input.toNumber || '').replace(/[^0-9]/g, '');
   const isNigeria = dest.startsWith('234') || dest.startsWith('0');
-  const trunk = isNigeria ? (ps?.otpNgTrunk || 'ruach-endpoint') : 'telnyx-out';
-  const host = isNigeria ? (ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng') : 'sip.telnyx.com';
+  // International goes through Telnyx's own API rather than the SIP trunk, for
+  // the same reason OTP does: their platform places the call and speaks on
+  // answer. It means an international notification is read in Telnyx's voice
+  // rather than ours, and that the duration gate does not apply — but it uses a
+  // path that has worked for months, where originating our own audio over the
+  // trunk produced a call id and no channel.
+  if (!isNigeria) {
+    if (!ps?.otpCreds?.apiKey || !ps?.otpCreds?.connectionId || !ps?.otpCreds?.from) {
+      return { ok: false, reason: 'Telnyx not configured for international notifications' };
+    }
+    try {
+      const res = await fetch('https://api.telnyx.com/v2/calls', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${ps.otpCreds.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connection_id: ps.otpCreds.connectionId,
+          to: input.toNumber,
+          from: ps.otpCreds.from,
+          timeout_secs: input.callTimeoutSec || 45,
+          // The id only. The text stays with us and is read from our own store
+          // when Telnyx tells us the call was answered.
+          client_state: Buffer.from(`notify:${input.notificationId}`).toString('base64')
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        console.error(`[notify-telnyx] ${res.status}: ${body.slice(0, 300)}`);
+        return { ok: false, reason: `Telnyx error ${res.status}` };
+      }
+      const d: any = await res.json();
+      console.log(`[notify-telnyx] placed ${d?.data?.call_control_id || '(no id)'}`);
+      return { ok: true, providerRef: d?.data?.call_control_id, durationSeconds: 0 };
+    } catch (e: any) {
+      return { ok: false, reason: e?.message || 'telnyx_unreachable' };
+    }
+  }
+
+  const trunk = ps?.otpNgTrunk || 'ruach-endpoint';
+  const host = ps?.otpNgHost || cfg.otpHost || 'sip.ruach.ng';
   // The caller id has to belong to the carrier carrying the call — a Ruach
   // number on a Kasooko trunk is refused as blacklisted, which cost an hour.
-  const callerId = isNigeria ? ps?.otpNgCallerId : (ps?.telnyxCallerId || ps?.otpNgCallerId);
+  // Their own number when they have one on this carrier, the platform's when
+  // they do not. A number is only presentable on the network that issued it —
+  // a Ruach number offered on a Kasooko trunk is refused as blacklisted — so
+  // the lookup is per carrier rather than "their first number".
+  const carrier = (trunk || '').replace(/-endpoint$/, '').replace(/-out$/, '');
+  const callerId = (await ownCallerId(input.tenantId, carrier, input.fromNumber)) || ps?.otpNgCallerId;
   console.log(`[notify-route] to=${input.toNumber} nigeria=${isNigeria} trunk=${trunk}`);
 
   try {
@@ -331,8 +392,112 @@ export async function placeNotifyCall(input: PlaceNotifyCallInput): Promise<Plac
     });
     if (!res.ok) return { ok: false, reason: `agent_http_${res.status}` };
     const j: any = await res.json();
-    return j?.ok ? { ok: true, providerRef: j.callid || input.notificationId } : { ok: false, reason: j?.reason || 'agent_refused' };
+    // The measured duration comes back so the unit count can be resolved from
+    // the real audio rather than an estimate of it.
+    return j?.ok
+      ? { ok: true, providerRef: j.callid || input.notificationId, durationSeconds: Number(j.durationSeconds) || 0 }
+      : { ok: false, reason: j?.reason || 'agent_refused' };
   } catch (e: any) {
     return { ok: false, reason: e?.message || 'agent_unreachable' };
   }
+}
+
+/**
+ * The number this workspace should present when placing an OTP or notification
+ * on a given carrier, or null if they have none there.
+ *
+ * Their own number by default. A carrier blocks a source number carrying heavy
+ * traffic, so every client's verification calls going out on one shared number
+ * is how that number gets blocked for all of them — a Kasooko trunk refused a
+ * call today with exactly that. Spreading the traffic across the numbers the
+ * clients already pay for is both safer and more honest: the recipient sees who
+ * is actually calling them.
+ *
+ * Carrier-specific, because a number is only presentable on the network that
+ * issued it. A Ruach number offered on a Kasooko trunk is refused as
+ * blacklisted, which cost an hour before it was understood.
+ */
+export async function ownCallerId(tenantId: string, provider: string, requested?: string | null): Promise<string | null> {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq } = await import('drizzle-orm');
+  const db = useDb();
+  const [t] = await db.select({
+    own: schema.tenants.useOwnNumber,
+    preferred: schema.tenants.otpCallerTelnum,
+    pinned: schema.tenants.otpCallerPinned
+  }).from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+
+  // Pins first, and they answer before anything else is considered — including
+  // whether the workspace uses its own numbers at all. A pin exists because
+  // somebody looked at a failing account and decided; a client's API request
+  // routing around that would put the call back on the line that was failing.
+  const [pinRow] = await db.select({ pin: schema.platformSettings.voiceCallerPinned })
+    .from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+  if (pinRow?.pin) return pinRow.pin;
+  if (t?.pinned) return t.pinned;
+  // Their own setting when an operator has made one, the platform default when
+  // they have not. Switched off either way means the shared number carries
+  // them — because their own is the problem, or because ours are working
+  // better at the moment.
+  let useOwn = t?.own;
+  if (useOwn == null) {
+    const [ps] = await db.select({ d: schema.platformSettings.voiceUseOwnNumber })
+      .from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+    useOwn = ps?.d ?? true;
+  }
+  if (!useOwn) return null;
+
+  const rows = await db.select({ telnum: schema.numberSubscriptions.telnum })
+    .from(schema.numberSubscriptions)
+    .where(and(
+      eq(schema.numberSubscriptions.tenantId, tenantId),
+      eq(schema.numberSubscriptions.provider, provider),
+      eq(schema.numberSubscriptions.status, 'active')
+    ));
+  if (!rows.length) return null;
+  // Their choice when it is on this carrier. A number is only presentable on
+  // the network that issued it, so a preference set for a Nigerian line cannot
+  // carry a US call — then the first number on the right carrier stands in,
+  // which is what happened before anybody could choose at all.
+  // What they asked for, then what they chose, then whatever they hold on this
+  // carrier. A request naming a number they do not own is refused by the
+  // endpoint before reaching here, so an unmatched one at this point means it
+  // is theirs but on another network — which cannot carry this call.
+  const asked = requested ? rows.find((r) => r.telnum === requested) : null;
+  const preferred = rows.find((r) => r.telnum === t.preferred);
+  return (asked || preferred || rows[0]).telnum;
+}
+
+/** Does this workspace own any number at all? OTP and notifications are refused
+ *  without one — a client sending verification calls on our number, with no
+ *  number of their own, is our traffic reputation paying for their volume. */
+export async function ownsAnyNumber(tenantId: string): Promise<boolean> {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq, sql } = await import('drizzle-orm');
+  const db = useDb();
+  const [r] = await db.select({ n: sql<number>`count(*)::int` })
+    .from(schema.numberSubscriptions)
+    .where(and(
+      eq(schema.numberSubscriptions.tenantId, tenantId),
+      eq(schema.numberSubscriptions.status, 'active')
+    ));
+  return (r?.n || 0) > 0;
+}
+
+/** Does this workspace hold this number? Asked before a call is placed, so a
+ *  request naming somebody else's number is refused rather than quietly
+ *  ignored — a client who asked for a specific caller ID and silently got a
+ *  different one has no way to know. */
+export async function ownsNumber(tenantId: string, telnum: string): Promise<boolean> {
+  const { useDb, schema } = await import('~/server/db');
+  const { and, eq } = await import('drizzle-orm');
+  const db = useDb();
+  const [n] = await db.select({ id: schema.numberSubscriptions.id })
+    .from(schema.numberSubscriptions)
+    .where(and(
+      eq(schema.numberSubscriptions.tenantId, tenantId),
+      eq(schema.numberSubscriptions.telnum, telnum),
+      eq(schema.numberSubscriptions.status, 'active')
+    )).limit(1);
+  return !!n;
 }

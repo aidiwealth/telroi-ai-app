@@ -87,6 +87,10 @@ export interface IncomingPush {
   userIds?: string[];
   callId: string;
   from: string;
+  /** What to show as the caller. A push reaches a closed app before any INVITE,
+   *  so CallKit displays this and nothing else — without it the app falls back
+   *  to the number, which for a widget call is a SIP username. */
+  fromName?: string;
   to: string;
 }
 
@@ -139,7 +143,12 @@ export async function pushIncomingCall(p: IncomingPush): Promise<number> {
     if (d.platform === 'ios') {
       const r = await sendApns(d.pushToken, d.environment || 'production', {
         type: 'incoming_call', callId: p.callId,
-        caller: p.from || '', dialed: p.to || ''
+        // callerName beside caller: a push reaches a closed app before any
+        // INVITE exists, so CallKit shows what this says and nothing else. The
+        // app falls back to the number when it is absent, which is what a
+        // recipient was seeing — a SIP username, or a bare number for somebody
+        // whose name we knew.
+        caller: p.from || '', callerName: p.fromName || '', dialed: p.to || ''
       });
       if (r.ok) { sent++; return; }
       console.error('[push] apns failed:', r.status || '', r.reason || '');
@@ -167,6 +176,7 @@ export async function pushIncomingCall(p: IncomingPush): Promise<number> {
           type: 'incoming_call',
           callId: p.callId,
           caller: p.from || '',
+          callerName: p.fromName || '',
           dialed: p.to || ''
         },
         android: { priority: 'HIGH', direct_boot_ok: true }

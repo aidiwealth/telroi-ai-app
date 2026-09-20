@@ -11,6 +11,9 @@ const Body = z.object({
   // Micro-dollars, since a verification costs a fraction of a cent to us and
   // rounding to cents would price every one of them the same.
   voiceOtpUsdMicro: z.number().int().positive().optional(),
+  // Per unit rather than per minute: a unit is 160 characters or 30 seconds of
+  // audio, whichever is reached first.
+  voiceNotifyUnitUsdMicro: z.number().int().positive().optional(),
   planStartupUsdMinor: z.number().int().positive().optional(),
   // Annual as a price, not a discount: "$150 a year" is quotable and a
   // percentage is not, and the saving is derived for display.

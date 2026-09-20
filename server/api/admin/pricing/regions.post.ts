@@ -15,6 +15,7 @@ const Body = z.object({
   // absent means "leave it", null means "clear it back to the global rate",
   // and a form that could not say the second would make an override permanent.
   voiceOtpUsdMicro: z.number().int().nonnegative().nullable().optional(),
+  voiceNotifyUnitUsdMicro: z.number().int().nonnegative().nullable().optional(),
   voiceMinuteUsdMicro: z.number().int().nonnegative().nullable().optional(),
   notes: z.string().max(500).nullable().optional()
 });
@@ -26,6 +27,7 @@ export default defineEventHandler(async (event) => {
 
   const patch: any = { updatedAt: new Date() };
   if (p.data.voiceOtpUsdMicro !== undefined) patch.voiceOtpUsdMicro = p.data.voiceOtpUsdMicro;
+  if (p.data.voiceNotifyUnitUsdMicro !== undefined) patch.voiceNotifyUnitUsdMicro = p.data.voiceNotifyUnitUsdMicro;
   if (p.data.voiceMinuteUsdMicro !== undefined) patch.voiceMinuteUsdMicro = p.data.voiceMinuteUsdMicro;
   if (p.data.notes !== undefined) patch.notes = p.data.notes;
 

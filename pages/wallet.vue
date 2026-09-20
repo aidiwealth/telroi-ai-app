@@ -182,15 +182,18 @@
             <td class="muted wal-date">{{ fmtDate(l.createdAt) }}</td>
             <td>
               <div class="wal-desc">
-                <span class="wal-desc-icon" :class="l.kind">{{ l.kind === 'credit' ? '↓' : '↑' }}</span>
+                <span class="wal-desc-icon" :class="l.kind">{{ l.kind === 'credit' ? '↓' : l.kind === 'vat' ? '%' : '↑' }}</span>
                 {{ describe(l.reason) }}
                 <span v-if="chargeBreakdown(l)" class="wal-bd">{{ chargeBreakdown(l) }}</span>
                 <span v-if="l.sandbox" class="sbx-badge">Sandbox</span>
               </div>
             </td>
             <td class="amount">
-              <span class="money" :class="l.kind === 'credit' ? 'pos' : 'neg'">
-                {{ l.kind === 'credit' ? '+' : '−' }}{{ part(l.amountMinor).sym }}{{ part(l.amountMinor).whole }}<span class="cents">{{ part(l.amountMinor).cents }}</span>
+              <!-- VAT is neither added nor taken: it is the tax inside a payment
+                   already made, shown so a client can see why ₦10,000 credited
+                   ₦9,302 rather than being left to wonder. -->
+              <span class="money" :class="l.kind === 'credit' ? 'pos' : l.kind === 'vat' ? 'vat' : 'neg'">
+                {{ l.kind === 'credit' ? '+' : l.kind === 'vat' ? '' : '−' }}{{ part(l.amountMinor).sym }}{{ part(l.amountMinor).whole }}<span class="cents">{{ part(l.amountMinor).cents }}</span>
               </span>
             </td>
             <td class="amount"><span class="money muted">{{ part(l.balanceAfterMinor).sym }}{{ part(l.balanceAfterMinor).whole }}<span class="cents">{{ part(l.balanceAfterMinor).cents }}</span></span></td>

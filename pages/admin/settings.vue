@@ -113,6 +113,24 @@
           </select>
           <span class="ad-hint">Calls to +234 numbers leave on this trunk, whatever the vendor below is set to.</span>
         </label>
+          <!-- What every workspace does unless an operator has decided
+               otherwise for one of them. Spreading traffic across the numbers
+               clients already own is the safer arrangement, since a carrier
+               blocks a source number carrying too much — this switches it off
+               platform-wide for the case where our own numbers are working
+               better than theirs. -->
+        <label class="ad-field"><span>OTP &amp; notification caller ID — default</span>
+          <select v-model="sp.voiceUseOwnNumber" class="ad-input">
+            <option :value="true">Each workspace's own number</option>
+            <option :value="false">Platform shared number</option>
+          </select>
+          <span class="ad-hint">What a workspace does unless set otherwise on its own page. Their own number spreads traffic, so one blocked line cannot stop everybody.</span>
+        </label>
+        <label class="ad-field"><span>Pin every workspace to one number</span>
+          <input v-model="sp.voiceCallerPinned" class="ad-input mono" placeholder="Leave blank — not pinned" />
+          <span class="ad-hint">Overrides every client's choice and anything their API asks for. For when clients' own numbers are failing across the board; leave blank in normal running.</span>
+        </label>
+
         <label class="ad-field"><span>Nigerian calls — presenting number</span>
           <select v-model="sp.otpNgCallerId" class="ad-input">
             <option value="">Carrier default</option>
@@ -903,7 +921,7 @@ const sp = reactive<any>({
   otpVoiceVendor: 'telroi', ttsVendor: 'telroi', sttVendor: 'telroi',
   // Nigerian OTP route. Defaults match what was hardcoded before, so saving
   // without touching them changes nothing.
-  otpIntlVendor: '', otpNgTrunk: 'ruach-endpoint', otpNgHost: 'sip.ruach.ng', otpNgCallerId: '',
+  otpIntlVendor: '', otpNgTrunk: 'ruach-endpoint', otpNgHost: 'sip.ruach.ng', otpNgCallerId: '', voiceUseOwnNumber: true, voiceCallerPinned: '',
   otpCreds: {}, ttsCreds: {}, sttCreds: {},
   otpPolicy: { codeLength: 6, ttlSeconds: 300, maxAttempts: 3, callTimeoutSeconds: 45, repeatCount: 2, rateCooldownSeconds: 60, rateMaxPerHour: 5, rateMaxPerDay: 20 }
 });
@@ -1021,6 +1039,8 @@ function hydrateSpeech(s: any) {
   sp.otpNgTrunk = s.otpNgTrunk || 'ruach-endpoint';
   sp.otpNgHost = s.otpNgHost || OTP_TRUNK_HOSTS[sp.otpNgTrunk] || '';
   sp.otpNgCallerId = s.otpNgCallerId || '';
+  sp.voiceUseOwnNumber = s.voiceUseOwnNumber !== false;
+  sp.voiceCallerPinned = s.voiceCallerPinned || '';
   sp.ttsVendor = s.ttsVendor || 'telroi';
   sp.sttVendor = s.sttVendor || 'telroi';
   if (s.otpPolicy) Object.assign(sp.otpPolicy, s.otpPolicy);

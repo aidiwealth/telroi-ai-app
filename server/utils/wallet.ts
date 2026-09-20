@@ -173,6 +173,13 @@ export async function debit(args: DebitArgs) {
 }
 
 /** Credit a wallet (top-up). Idempotent by reference — webhook-safe. */
+/** Nigerian VAT, inclusive. A price quoted in naira already contains it, so a
+ *  ₦10,000 top-up is ₦9,302 of credit and ₦698 we hold for FIRS. Held here as a
+ *  constant rather than a pricing column: the rate is set by law, not by us,
+ *  and a field somebody can edit invites a workspace being charged the wrong
+ *  tax. It moves when FIRS moves it, in a commit with a date on it. */
+export const VAT_RATE = 0.075;
+
 export async function creditInTransaction(
   tx: Parameters<Parameters<ReturnType<typeof useDb>['transaction']>[0]>[0],
   tenantId: string, amountMinor: number, reason: string, reference: string, meta: Record<string, unknown> = {}
@@ -184,17 +191,22 @@ export async function creditInTransaction(
       .where(eq(schema.wallets.tenantId, tenantId)).for('update').limit(1);
     if (!wallet) throw apiError('no_wallet', 'No wallet for this workspace', 404);
 
+    // VAT is inclusive for real NGN top-ups. The wallet receives the net amount.
+    const vatable = wallet.currency === 'NGN' && (reason === 'topup' || reason === 'manual_topup');
+    const vatMinor = vatable ? Math.round(amountMinor - amountMinor / (1 + VAT_RATE)) : 0;
+    const netMinor = amountMinor - vatMinor;
+
     // Idempotency: a webhook retry with the same reference must not double-credit.
     const [dupe] = await tx.select().from(schema.ledger)
       .where(and(eq(schema.ledger.reference, reference), eq(schema.ledger.kind, 'credit'))).limit(1);
     if (dupe) {
-      if (dupe.walletId !== wallet.id || dupe.tenantId !== tenantId || dupe.amountMinor !== amountMinor) {
+      if (dupe.walletId !== wallet.id || dupe.tenantId !== tenantId || dupe.amountMinor !== netMinor) {
         throw new Error('Wallet credit reference identity mismatch');
       }
       return { balanceMinor: wallet.balanceMinor, idempotent: true };
     }
 
-    const after = wallet.balanceMinor + amountMinor;
+    const after = wallet.balanceMinor + netMinor;
     await tx.update(schema.wallets).set({ balanceMinor: after, updatedAt: new Date() }).where(eq(schema.wallets.id, wallet.id));
     // A manual/provider credit that restores the threshold makes queued work
     // unnecessary. Cancel it while holding the same wallet lock used by the
@@ -208,13 +220,29 @@ export async function creditInTransaction(
     const fxMeta = await fxStamp(wallet.currency, tx);
     await tx.insert(schema.ledger).values({
       walletId: wallet.id, tenantId, kind: 'credit',
-      amountMinor, balanceAfterMinor: after, reason, reference, meta: { ...fxMeta, ...meta },
+      amountMinor: netMinor, balanceAfterMinor: after, reason, reference,
+      // The gross and the tax recorded alongside the net, so a client querying
+      // why ₦10,000 credited ₦9,302 can be shown the arithmetic rather than
+      // told to trust it.
+      meta: { ...fxMeta, ...meta, ...(vatMinor ? { grossMinor: amountMinor, vatMinor, vatRate: VAT_RATE } : {}) },
       // Callers marked simulated money in the meta and left the column false, so
       // the two disagreed and anything filtering on the column counted play money
       // as real. Set it here rather than trusting every caller to remember.
       sandbox: meta.simulated === true
     });
-    return { balanceMinor: after, idempotent: false };
+    // The tax as its own line. Not money the workspace can spend and not money
+    // we earned — it sits in the ledger so admin can total what is owed to
+    // FIRS without unpicking it from every credit's metadata.
+    if (vatMinor > 0) {
+      await tx.insert(schema.ledger).values({
+        walletId: wallet.id, tenantId, kind: 'vat',
+        amountMinor: vatMinor, balanceAfterMinor: after,
+        reason: `vat:${reason}`, reference: `${reference}:vat`,
+        meta: { ...fxMeta, rate: VAT_RATE, grossMinor: amountMinor, netMinor },
+        sandbox: meta.simulated === true
+      });
+    }
+    return { balanceMinor: after, idempotent: false, vatMinor };
 }
 
 /** Public credit wrapper retains the existing post-commit notifications. */

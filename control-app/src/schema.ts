@@ -22,7 +22,7 @@
 // When a cache query fails, run the select on its own before theorising:
 //   node --experimental-strip-types -e "import('./control-app/src/db.ts')..."
 // The real stack names the line in drizzle and the answer follows immediately.
-import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, integer, boolean, jsonb, index, uniqueIndex, numeric } from 'drizzle-orm/pg-core';
 
 // We only need tenant id for FK targets; declared minimally.
 export const tenants = pgTable('tenants', {
@@ -115,6 +115,10 @@ export const voiceNotifications = pgTable('voice_notifications', {
   reason: text('reason'),
   callId: text('call_id'),
   duration: integer('duration'),
+  // How long the synthesised audio runs, measured before dialling. Distinct
+  // from duration, which is how long the call lasted — the unit count turns on
+  // the audio, since that is what we knew before committing any carriage.
+  audioSeconds: numeric('audio_seconds'),
   chargeMinor: integer('charge_minor'),
   ttsChars: integer('tts_chars'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

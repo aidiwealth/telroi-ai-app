@@ -2,7 +2,7 @@
 // next billing date and the monthly recurring total (numbers + channels + plan
 // fee), in their wallet currency. Read-only; derived from the same pricing and
 // subscription data the billing engine charges from, so it always matches.
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { requireTenant } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 import { getPricing, toCurrencyMinor, planFeeUsdMinor } from '~/server/utils/pricing';
@@ -33,7 +33,13 @@ export default defineEventHandler(async (event) => {
 
   const onTrial = !!(tenant?.trialEndsAt && new Date(tenant.trialEndsAt) > new Date());
   const planUsd = planFeeUsdMinor(tenant?.plan || 'startup', pricing, tenant?.billingInterval === 'annual' ? 'annual' : 'monthly');
-  const planMinor = onTrial ? 0 : conv(planUsd);
+  // Times the seats, as billing charges it. Without this a workspace of three
+  // was shown one seat's fee here and charged three at renewal, which reads as
+  // a billing error rather than a page that had not caught up.
+  const [seatRow] = await db.select({ n: sql<number>`count(*)::int` })
+    .from(schema.memberships).where(eq(schema.memberships.tenantId, s.tenantId));
+  const seats = Math.max(1, seatRow?.n || 1);
+  const planMinor = onTrial ? 0 : conv(planUsd) * seats;
   const planNext = tenant?.planNextBillingAt ? new Date(tenant.planNextBillingAt) : null;
 
   // Both options, in the workspace's own currency. The settings page had $10
@@ -53,7 +59,7 @@ export default defineEventHandler(async (event) => {
   return {
     currency: cur,
     monthlyTotalMinor: numbersMinor + planMinor,
-    breakdown: { numbersMinor, planMinor, planOnTrial: onTrial, numberCount: subs.length, channelCount: channelsTotal },
+    breakdown: { numbersMinor, planMinor, planOnTrial: onTrial, numberCount: subs.length, channelCount: channelsTotal, seats },
     nextBillingAt: nextBillingAt ? nextBillingAt.toISOString() : null,
     planNextBillingAt: planNext ? planNext.toISOString() : null,
     planOptions

@@ -2,7 +2,7 @@
 // Drizzle ORM schema for the Telroi dashboard (PostgreSQL).
 import {
   pgTable, uuid, text, timestamp, integer, bigint, boolean, jsonb, pgEnum, index, uniqueIndex,
-  check, primaryKey
+  check, primaryKey, numeric
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -12,7 +12,10 @@ export const aiProviderEnum = pgEnum('ai_provider', ['openai', 'anthropic', 'dee
 export const tokenPurposeEnum = pgEnum('token_purpose', ['login']);
 export const vanStatusEnum = pgEnum('van_status', ['draft', 'live', 'paused']);
 export const currencyEnum = pgEnum('currency', ['NGN', 'USD']);
-export const ledgerKindEnum = pgEnum('ledger_kind', ['credit', 'debit']);
+// vat is neither: it is tax withheld from a credit, shown for transparency and
+// never spendable. A page that treats anything not a credit as a debit renders
+// it as money taken out, which it is not.
+export const ledgerKindEnum = pgEnum('ledger_kind', ['credit', 'debit', 'vat']);
 export const aiTierEnum = pgEnum('ai_tier', ['byok', 'managed']);
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'succeeded', 'failed']);
 export const planEnum = pgEnum('plan', ['startup', 'growth', 'custom']);
@@ -141,6 +144,14 @@ export const platformSettings = pgTable('platform_settings', {
   // hardcoded, so moving traffic off a faltering carrier meant a deploy.
   otpNgTrunk: text('otp_ng_trunk').notNull().default('ruach-endpoint'),
   otpNgCallerId: text('otp_ng_caller_id'),
+  // Whether workspaces send OTP and notification calls on their own numbers by
+  // default. A behaviour setting, so it sits here with the other vendor and
+  // routing choices rather than in pricing, which holds rates.
+  voiceUseOwnNumber: boolean('voice_use_own_number').notNull().default(true),
+  // Every workspace on this one number, whatever they own or ask for. For when
+  // clients' own numbers are failing across the board — then the question is
+  // not which of theirs to use but whether to use theirs at all.
+  voiceCallerPinned: text('voice_caller_pinned'),
   // The carrier's SIP host travels with the trunk: Ruach answers on a hostname
   // and Kasooko on an IP, so switching trunks without it dialled the new carrier
   // at the old one's address.
@@ -284,6 +295,28 @@ export const tenants = pgTable('tenants', {
   // No parallel accounting — an invoice is "bring this back to zero", and the
   // ledger already says what every charge was for. A credit decision, so only an
   // operator sets it.
+  // Whether OTP and notification calls go out on this workspace's own purchased
+  // number or on the platform's shared one. Own by default: carriers block a
+  // source number carrying heavy traffic, and putting every client's
+  // verification calls on one number is how that number gets blocked for all of
+  // them. The switch is for when their own number is the problem — a fresh DID
+  // the carrier has not propagated, or one blocked for reasons that take days.
+  // Null means follow the platform default; true or false means an operator
+  // decided this workspace specifically. Three states rather than two, because
+  // a platform-wide switch that wrote to every tenant would overwrite the
+  // override set for the one workspace whose own number is blocked — which is
+  // the case the override exists for.
+  useOwnNumber: boolean('use_own_number'),
+  // Which of their own numbers carries OTP and notification calls. Null means
+  // whichever the lookup finds first — fine for a workspace with one number,
+  // and not for one with a marketing line and a support line that would rather
+  // verification calls came from the latter.
+  otpCallerTelnum: text('otp_caller_telnum'),
+  // An operator pinning this workspace to one number, overriding the client's
+  // choice and anything their API asks for. Its own column rather than sharing
+  // the one above: pinning would otherwise discard what the client chose, and
+  // unpinning could not give it back.
+  otpCallerPinned: text('otp_caller_pinned'),
   postpaid: boolean('postpaid').notNull().default(false),
   creditLimitMinor: bigint('credit_limit_minor', { mode: 'number' }),
   billingDay: integer('billing_day'),
@@ -651,6 +684,34 @@ export const crmContacts = pgTable('crm_contacts', {
 }));
 
 // Notes / call reports logged against a contact.
+/** Tags a workspace puts on its contacts.
+ *
+ *  Their own table rather than a text field on the contact, so a tag is a thing
+ *  that exists rather than a string retyped each time. "VIP" and "vip" would
+ *  otherwise be two tags, nobody could see what had been used before, and
+ *  renaming one would mean editing every contact that carried it. */
+export const crmTags = pgTable('crm_tags', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  // So a board of tags reads at a glance rather than as a list of words.
+  color: text('color'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/** Which contacts carry which tags. Many to many: a contact can be both a
+ *  reseller and overdue, and both tags mean something on their own. */
+export const crmContactTags = pgTable('crm_contact_tags', {
+  contactId: uuid('contact_id').notNull().references(() => crmContacts.id, { onDelete: 'cascade' }),
+  tagId: uuid('tag_id').notNull().references(() => crmTags.id, { onDelete: 'cascade' }),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  pk: primaryKey({ columns: [t.contactId, t.tagId] }),
+  tagIdx: index('crm_contact_tags_tag_idx').on(t.tagId),
+  tenantIdx: index('crm_contact_tags_tenant_idx').on(t.tenantId)
+}));
+
 export const crmContactNotes = pgTable('crm_contact_notes', {  id: uuid('id').primaryKey().defaultRandom(),
   contactId: uuid('contact_id').notNull().references(() => crmContacts.id, { onDelete: 'cascade' }),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
@@ -942,6 +1003,10 @@ export const apiKeys = pgTable('api_keys', {
    This is intentionally separate from general calling — it cannot be used to
    place arbitrary calls, only to deliver+verify an OTP. */
 export const voiceOtps = pgTable('voice_otps', {
+  // Whether the call ends with "do not share this code". Stored rather than
+  // passed through, because Telnyx speaks when it answers — after our request
+  // has returned — so the preference has to outlive the call that set it.
+  securityNotice: boolean('security_notice').notNull().default(true),
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   toNumber: text('to_number').notNull(),          // E.164 destination
@@ -1139,6 +1204,12 @@ export const pricing = pgTable('pricing', {
   // the carriers bill a full minute, so charging by duration would lose money on
   // every one. Micro like the airtime rate, since that's what billing reads.
   voiceOtpUsdMicro: integer('voice_otp_usd_micro').notNull().default(10000),   // $0.01 ≈ ₦16
+  // Per notification UNIT, not per minute: a unit is 160 characters or 30
+  // seconds of audio, whichever comes first. Sold this way because SMS segments
+  // are how this market already thinks about messaging, and because characters
+  // and seconds diverge badly on numerals — a unit billed on whichever is
+  // greater cannot be gamed from either side.
+  voiceNotifyUnitUsdMicro: integer('voice_notify_unit_usd_micro').notNull().default(7500),
   voiceMinuteUsdMinor: integer('voice_minute_usd_minor').notNull().default(1),  // display only — do NOT bill from this
   voiceMinuteUsdMicro: integer('voice_minute_usd_micro').notNull().default(10200),  // $0.0102
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor').notNull().default(200), // $2.00
@@ -1287,7 +1358,11 @@ export const compliance = pgTable('compliance', {
   status: text('status').notNull().default('pending'),  // pending | approved | rejected
   notes: text('notes'),
   submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
-  reviewedAt: timestamp('reviewed_at', { withTimezone: true })
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  // Who decided. Staff approve these, so the record of which of them did is the
+  // accountability — a regulatory decision with no author is worse than a queue
+  // that waits for a superadmin.
+  reviewedBy: text('reviewed_by')
 }, (t) => ({
   tenantIdx: uniqueIndex('compliance_tenant_idx').on(t.tenantId)
 }));
@@ -1390,6 +1465,7 @@ export const regionRates = pgTable('region_rates', {
   // Micro-dollars, matching voice_otp_usd_micro rather than the nano the AI
   // rates use: a verification costs cents, an AI turn thousandths of one.
   voiceOtpUsdMicro: integer('voice_otp_usd_micro'),
+  voiceNotifyUnitUsdMicro: integer('voice_notify_unit_usd_micro'),
   voiceMinuteUsdMicro: integer('voice_minute_usd_micro'),
   notes: text('notes'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
@@ -1727,6 +1803,10 @@ export const voiceNotifications = pgTable('voice_notifications', {
   reason: text('reason'),
   callId: text('call_id'),
   duration: integer('duration'),
+  // How long the synthesised audio runs, measured before dialling. Distinct
+  // from duration, which is how long the call lasted — the unit count turns on
+  // the audio, since that is what we knew before committing any carriage.
+  audioSeconds: numeric('audio_seconds'),
   // Charged on hangup, since duration is not known before the call.
   chargeMinor: integer('charge_minor'),
   // Charged at synthesis, since the vendor bills per character whatever the

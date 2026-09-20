@@ -296,6 +296,29 @@
           </label>
           <button class="btn btn-signal btn-sm" :disabled="intervalBusy" @click="saveInterval">{{ intervalBusy ? 'Saving…' : 'Save' }}</button>
         </div>
+        <!-- Which number their OTP and notification calls leave on. Own by
+             default: a carrier blocks a source number carrying heavy traffic,
+             and one shared number carrying everybody's verification calls is
+             how it gets blocked for all of them at once. Moved to the shared
+             number only when their own is the thing failing. -->
+        <div class="ad-adjust-row">
+          <label class="ad-ovr"><span>OTP &amp; notification caller ID</span>
+            <select :value="data?.tenant?.useOwnNumber === false ? 'shared' : 'own'" class="ad-ctl" :disabled="ownNumBusy"
+                    @change="saveOwnNumber(($event.target as HTMLSelectElement).value === 'own')">
+              <option value="own">Their own number</option>
+              <option value="shared">Platform shared number</option>
+            </select>
+          </label>
+        </div>
+        <!-- One number, overriding whatever they chose or their API asks for.
+             For a workspace whose other lines are failing: blank means they
+             pick, as normal. -->
+        <div class="ad-adjust-row">
+          <label class="ad-ovr"><span>Pin to one number</span>
+            <input v-model="pinnedNum" class="ad-ctl mono" placeholder="Not pinned" :disabled="ownNumBusy" />
+          </label>
+          <button class="btn btn-signal btn-sm" :disabled="ownNumBusy" @click="savePinned">{{ ownNumBusy ? 'Saving…' : 'Save' }}</button>
+        </div>
         <div class="ad-adjust-row" style="margin-top:12px">
           <label class="ad-ovr"><span>AI daily cap ($)</span>
             <input v-model="aiCapForm" type="number" step="0.01" min="0" class="ad-ctl mono" placeholder="platform default" />
@@ -605,7 +628,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue';
+import { ref, computed, reactive, onMounted, watch } from 'vue';
 const toast = useToast();
 import { useRoute } from 'vue-router';
 definePageMeta({ layout: 'admin' });
@@ -770,6 +793,33 @@ async function saveInterval() {
   } catch (e: any) { alert(e?.data?.error?.message || 'Failed'); }
   finally { intervalBusy.value = false; }
 }
+// Which number their OTP and notification calls leave on. Own by default;
+// moved to the shared one when their own is the problem — a fresh DID the
+// carrier has not propagated, or one blocked for reasons that take days.
+const ownNumBusy = ref(false);
+const pinnedNum = ref('');
+watch(() => data.value?.tenant?.otpCallerPinned, (v) => { pinnedNum.value = v || ''; }, { immediate: true });
+async function savePinned() {
+  ownNumBusy.value = true;
+  try {
+    await $fetch(`/api/admin/clients/${route.params.domain}/use-own-number`, {
+      method: 'POST', body: { pinned: pinnedNum.value || null }
+    });
+    alert(pinnedNum.value ? `Pinned to ${pinnedNum.value}.` : 'Pin cleared — they choose again.');
+  } catch (e: any) { alert(e?.data?.statusMessage || 'Failed'); }
+  finally { ownNumBusy.value = false; }
+}
+async function saveOwnNumber(enabled: boolean) {
+  ownNumBusy.value = true;
+  try {
+    await $fetch(`/api/admin/clients/${route.params.domain}/use-own-number`, {
+      method: 'POST', body: { enabled }
+    });
+    alert(enabled ? 'Their calls now go out on their own number.' : 'Their calls now go out on the shared number.');
+  } catch (e: any) { alert(e?.data?.statusMessage || e?.data?.error?.message || 'Failed'); }
+  finally { ownNumBusy.value = false; }
+}
+
 const ppBusy = ref(false);
 
 /** Amounts are written inline all over this page; postpaid needs to show a

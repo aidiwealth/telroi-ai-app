@@ -20,7 +20,11 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{ id?: string; seconds?: number }>(event).catch(() => ({}));
   const id = String(body?.id || '');
   const seconds = Number(body?.seconds || 0);
-  if (!id || seconds <= 0) return { ok: false, reason: 'id and seconds are required' };
+  // Seconds are optional. They were required when every notification played an
+  // audio file we had measured — but an international one is spoken by Telnyx
+  // on their own platform, so there is nothing of ours to measure and the
+  // character count alone decides the unit.
+  if (!id) return { ok: false, reason: 'id is required' };
 
   const db = useDb();
   const [row] = await db.select().from(schema.voiceNotifications)
@@ -43,7 +47,17 @@ export default defineEventHandler(async (event) => {
 
   const pricing = await getPricing(row.tenantId, region);
   const wallet = await getOrCreateWallet(row.tenantId);
-  const charge = notifyCostMinor(seconds, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceMinuteUsdMicro);
+  // Characters and the measured duration, billed on whichever gives more units.
+  // The audio was measured before dialling, so this is the true figure rather
+  // than an estimate — and it is persisted, so a customer querying a two-unit
+  // charge can be shown why.
+  // The audio length, not the connected seconds. A unit is 160 characters or
+  // 30 seconds of audio, and the audio is what we measured before dialling —
+  // a recipient who answers late or a carrier that rounds a partial second
+  // should not change what a message costs. Falls back to the connected time
+  // only if the measurement failed.
+  const audio = Number(row.audioSeconds) || seconds;
+  const charge = notifyCostMinor(row.body.length, audio, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceNotifyUnitUsdMicro);
 
   try {
     // An object, not positional arguments — called the other way, amountMinor

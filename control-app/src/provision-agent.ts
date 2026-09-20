@@ -263,6 +263,7 @@ export function startProvisionAgent(ari: Ari.Client | null = null): http.Server 
             prefix: body.prefix ? String(body.prefix) : undefined,
             callerId: body.callerId ? String(body.callerId).slice(0, 64) : undefined,
             repeatCount: Number(body.repeatCount) || undefined,
+            securityNotice: body.securityNotice !== false,
             timeoutSec: Number(body.timeoutSec) || undefined,
             otpId: body.otpId ? String(body.otpId) : undefined
           });

@@ -74,10 +74,16 @@ export default defineEventHandler(async (event) => {
 
   // Totals are kept in USD (the accounting baseline) plus native breakdowns.
   // SANDBOX entries are NEVER counted in real totals — they're simulated.
-  const totals = { creditUsdMinor: 0, debitUsdMinor: 0, byCategoryUsdMinor: {} as Record<string, number> };
+  // VAT is counted on its own. It is neither income nor spend: it is tax
+  // withheld from a naira top-up and owed to FIRS, and the credit rows already
+  // hold the net of it — so the net below is right without subtracting it
+  // again, and an else that swept it into debits would have understated the
+  // platform by the whole tax take.
+  const totals = { creditUsdMinor: 0, debitUsdMinor: 0, vatUsdMinor: 0, byCategoryUsdMinor: {} as Record<string, number> };
   for (const e of entries) {
     if (e.sandbox) continue;
     if (e.kind === 'credit') totals.creditUsdMinor += e.usdMinor;
+    else if (e.kind === 'vat') { totals.vatUsdMinor += e.usdMinor; continue; }
     else totals.debitUsdMinor += e.usdMinor;
     totals.byCategoryUsdMinor[e.category] = (totals.byCategoryUsdMinor[e.category] || 0) + e.usdMinor;
   }

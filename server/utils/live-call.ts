@@ -40,6 +40,15 @@ export async function widgetConfig(tenantId: string, visitorCountry?: string | n
 // fails we just store nothing. (Cloudflare/edge headers used first when present.)
 export function geoFromEvent(event: any): { country?: string; region?: string; city?: string } {
   const h = (n: string) => getHeader(event, n) || undefined;
+  // Temporary: which geo headers actually arrive. The city field reads a Vercel
+  // header and this runs on DigitalOcean behind Cloudflare, so ninety sessions
+  // have a country and nothing else — and the visitor map has never had a
+  // coordinate to plot.
+  console.log('[geo] headers:', JSON.stringify({
+    cfCountry: h('cf-ipcountry'), cfCity: h('cf-ipcity'),
+    cfLat: h('cf-iplatitude'), cfLng: h('cf-iplongitude'),
+    cfRegion: h('cf-region'), cfTimezone: h('cf-timezone')
+  }));
   return {
     country: h('cf-ipcountry') || h('x-vercel-ip-country'),
     region: h('x-vercel-ip-country-region'),

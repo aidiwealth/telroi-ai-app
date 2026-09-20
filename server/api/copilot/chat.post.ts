@@ -23,6 +23,12 @@ const NAV = `Accurate page map — use these EXACT paths and never invent one:
 - /crm — contacts / CRM
 - /live-call — live call console
 - /apps — integrations (HubSpot, Zoho, etc.)
+- /otp — Voice OTP: send verification codes by phone call, and the delivery log
+- /ai-usage — what the AI has cost: usage and spend per agent
+- /developers — API keys and the developer console
+- /guide — how-to guides for the platform
+- /chat — the in-app chat
+- /status — platform status
 - /settings — plan tier, workspace name/timezone, webhooks, members, compliance (NOT payments — those are in /wallet)`;
 
 function sysPrompt(ctx: string): string {
@@ -38,9 +44,11 @@ function sysPrompt(ctx: string): string {
     '  - knowledge_url {agentId, url} — add a web page to an agent\'s knowledge base',
     '  - knowledge_drive {agentId, url} — add a Google Drive file to an agent\'s knowledge',
     '  - toggle_feature {feature, enabled} — enable/disable a feature',
+    '  - set_agent_greeting {agentId, greeting} — change what an agent says when it answers',
+    '  - send_notification {to, message} — CALL a number and speak a message. This SPENDS from the wallet: one unit per 160 characters or 30 seconds of speech, whichever comes first. Say the number, the message and the unit count back to the user before proposing, and never propose one they did not clearly ask for.',
     '  - buy_number {telnum} — PURCHASE a phone number. This SPENDS money from the wallet. Pass the exact phone number the user chose as telnum (e.g. {"telnum":"2347080673981"}). Only propose after the user picks a specific number from the Available numbers list; if they just say buy a number, LIST the options with prices and ask which one first.',
     'Use the exact agent id from the snapshot for agentId. If a required detail is missing (which number, which agent), ASK instead of proposing. Only ONE action per reply. For anything not in this list (buying numbers, provisioning SIP, payments), explain and link the page — do not propose. Keep your normal reply text above the ACTION line short.',
-    'Be accurate about where things live: payments/funding are on the Wallet page (/wallet), NOT settings. Knowledge base is on /connect inside an agent. If you are not certain which page or how something works, say so plainly and suggest the closest page rather than guessing or inventing steps.',
+    'Be accurate about where things live: payments/funding are on the Wallet page (/wallet), NOT settings. The knowledge base is on /ai, inside an agent — not /connect, which is call-handling flows. If you are not certain which page or how something works, say so plainly and suggest the closest page rather than guessing or inventing steps.',
     'You are strictly a Telroi account assistant. If asked anything unrelated to Telroi or running this account (general knowledge, trivia, world facts, capitals, people, math, coding, opinions, etc.), do NOT answer it \u2014 not even partially, not even as an aside. Never state the fact and then redirect. Instead reply only with a brief redirect, e.g. \"I can only help with your Telroi account \u2014 things like AI agents, numbers, calls, or knowledge bases. What would you like to do?\" Do not include the answer to their off-topic question anywhere in your reply.',
     '',
     NAV,
@@ -56,7 +64,9 @@ const LABELS: Record<string, string> = {
   '/wallet': 'Wallet', '/calls': 'Calls', '/numbers': 'Numbers', '/connect': 'Connect',
   '/vans': 'AI Numbers', '/ai': 'AI Agents', '/sip': 'SIP', '/optimize': 'Optimize',
   '/blacklist': 'Blacklist', '/people': 'People', '/teams': 'Teams', '/crm': 'CRM',
-  '/live-call': 'Live Call', '/apps': 'Apps', '/settings': 'Settings'
+  '/live-call': 'Live Call', '/apps': 'Apps', '/settings': 'Settings',
+  '/otp': 'Voice OTP', '/ai-usage': 'AI Usage', '/developers': 'Developers',
+  '/guide': 'Guides', '/chat': 'Chat', '/status': 'Status'
 };
 
 function previewFor(type: string, a: any): string {

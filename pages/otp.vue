@@ -9,6 +9,17 @@
 
     <div class="filters card card-pad">
       <div class="filter-grid">
+        <!-- Which of their own numbers a verification call comes from. Only
+             shown when they hold more than one: a workspace with a single
+             number has nothing to choose, and an empty select reads as a
+             setting that failed to load. -->
+        <div v-if="callerNumbers.length > 1" class="field mb0">
+          <label>Calls come from</label>
+          <select v-model="callerChoice" class="select" @change="saveCaller">
+            <option :value="null">Any of my numbers</option>
+            <option v-for="n in callerNumbers" :key="n.telnum" :value="n.telnum">{{ n.telnum }}</option>
+          </select>
+        </div>
         <div class="field mb0">
           <label>Period</label>
           <select v-model="days" class="select" @change="onDaysChange">
@@ -77,6 +88,15 @@ const loading = ref(true);
 const items = ref<any[]>([]);
 const summary = reactive<any>({ total: 0, delivered: 0, verified: 0, failed: 0, chargedMinor: 0 });
 const currency = ref('NGN');
+const callerNumbers = ref<any[]>([]);
+const callerChoice = ref<string | null>(null);
+async function saveCaller() {
+  try {
+    await api.post('/api/voice/otp-caller', { telnum: callerChoice.value });
+  } catch (e: any) {
+    alert(e?.data?.error?.message || 'Could not save that choice.');
+  }
+}
 
 function money(minor: number) {
   const n = (Number(minor) || 0) / 100;
@@ -95,6 +115,11 @@ async function load() {
     meta.value = { page: r.page || 1, pages: r.pages || 1, total: r.total || 0, perPage: r.perPage || 50 };
     Object.assign(summary, r.summary || {});
     try { const w = await api.get<any>('/api/wallet'); currency.value = w?.currency || 'NGN'; } catch { /* default */ }
+    try {
+      const c = await api.get<any>('/api/voice/otp-caller');
+      callerNumbers.value = c?.numbers || [];
+      callerChoice.value = c?.chosen || null;
+    } catch { /* the list is a convenience; the page works without it */ }
   } catch { items.value = []; }
   finally { loading.value = false; }
 }

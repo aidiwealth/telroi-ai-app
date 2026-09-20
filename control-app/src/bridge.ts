@@ -223,7 +223,7 @@ export async function bridgeToEndpoint(opts: BridgeOptions): Promise<{ answered:
       endpoint: localForAor(endpoint),
       app: 'telroi',                       // bring the callee into our Stasis app
       appArgs: 'dialed',                   // marker so we know it's an outbound leg
-      callerId: opts.callerIdNum || 'Telroi',
+      callerId: opts.callerIdNum || 'Live Call',
       timeout: ringTimeout
     });
     // Play ringback to the caller so they hear the human's line ringing instead
@@ -374,7 +374,18 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
         const lines = out.split('\n').filter((l) => l.includes('Contact:'));
         log(`dept ${aor}: state=${cs_state(out)} contacts=${lines.length} ${lines.map((l) => l.trim().split(/\s+/)[1] || '').join(' ')}`);
       } catch { /* the dial matters more than the note of it */ }
-      await ch.originate({ endpoint: target, app: 'telroi', appArgs: 'dialed', callerId: opts.callerIdNum || 'Telroi', timeout: ringTimeout });
+      // The name as a variable as well as callerId: the Local channel inherits
+      // the caller's own caller id, which overwrote what we set here — a widget
+      // call reached the phone showing the browser owner's name rather than the
+      // visitor's. The dialplan reads TELROI_CID_NAME and sets it explicitly.
+      await ch.originate({
+        endpoint: target, app: 'telroi', appArgs: 'dialed',
+        callerId: opts.callerIdNum || 'Live Call', timeout: ringTimeout,
+        // Double underscore: a Local channel has two halves and the dialplan
+        // runs on the far one, so a plain variable set here never reaches it.
+        // The prefix makes it inherit across the channels the call creates.
+        variables: { __TELROI_CID_NAME: opts.callerIdNum || 'Live Call' }
+      });
       log(`dept originating to ${target} (ring ${ringTimeout}s)`);
     } catch (err) {
       originateFailures++;

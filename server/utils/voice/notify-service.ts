@@ -86,13 +86,22 @@ async function checkRate(tenantId: string, toNumber: string): Promise<{ ok: bool
 export async function sendVoiceNotification(
   tenantId: string,
   toNumber: string,
-  body: string
+  body: string,
+  fromNumber?: string
 ): Promise<NotifyResult> {
   const db = useDb();
 
   const text = (body || '').trim();
   if (!text) return { ok: false, error: 'empty_message' };
   if (text.length > MAX_NOTIFY_CHARS) return { ok: false, error: 'message_too_long' };
+
+  // As with OTP: a workspace calling people needs a number of its own to call
+  // them from, or the platform's number carries their reputation as well as
+  // their traffic.
+  const { ownsAnyNumber } = await import('./vendors');
+  if (!(await ownsAnyNumber(tenantId))) {
+    return { ok: false, error: 'number_required' };
+  }
 
   const rate = await checkRate(tenantId, toNumber);
   if (!rate.ok) return { ok: false, error: `rate_limited:${rate.reason}`, retryAfterSeconds: rate.retryAfter };
@@ -116,7 +125,11 @@ export async function sendVoiceNotification(
     const pricing = await getPricing(tenantId, region);
     const wallet = await getOrCreateWallet(tenantId);
     // The minimum, since the call has not happened and a longer one costs more.
-    const floor = notifyCostMinor(0, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceMinuteUsdMicro);
+    // What this message will cost if the audio comes in under the ceiling.
+    // The true count is resolved after synthesis, when the file can be
+    // measured — this is the floor, and a wallet that cannot cover it should
+    // stop us before we spend anything on speech.
+    const floor = notifyCostMinor(text.length, undefined, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceNotifyUnitUsdMicro);
     const [t] = await db.select({
       postpaid: schema.tenants.postpaid,
       creditLimitMinor: schema.tenants.creditLimitMinor,
@@ -141,7 +154,7 @@ export async function sendVoiceNotification(
   // against the endpoint without spending carrier minutes.
   const placed = sandboxed
     ? { ok: true as const, providerRef: `sbx_notify_${row.id}` }
-    : await placeNotifyCall({ toNumber, notificationId: row.id, text, tenantId, sipEndpoint });
+    : await placeNotifyCall({ toNumber, notificationId: row.id, text, tenantId, sipEndpoint, fromNumber });
 
   if (!placed.ok) {
     await db.update(schema.voiceNotifications)
@@ -153,8 +166,12 @@ export async function sendVoiceNotification(
     return { ok: false, id: row.id, error: placed.reason };
   }
 
+  // The measured duration, persisted now rather than at hangup: it is what the
+  // unit count was resolved from, and a customer querying a two-unit charge
+  // should be shown the audio length rather than told to trust it.
+  const audioSeconds = (placed as any).durationSeconds || 0;
   await db.update(schema.voiceNotifications)
-    .set({ status: 'dialing', callId: placed.providerRef })
+    .set({ status: 'dialing', callId: placed.providerRef, audioSeconds })
     .where(eq(schema.voiceNotifications.id, row.id));
 
   // The speech, charged now. The vendor billed us for synthesising it whether

@@ -161,11 +161,13 @@
 
         <div class="ad-sub-docs">
           <div><span class="ad-doc-label">Business license</span>
-            <a v-if="s.hasBusinessDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=business`" target="_blank" rel="noopener" class="ad-doc-link">{{ s.businessLicenseName || 'View document' }} →</a>
+            <button v-if="s.hasBusinessDoc" class="ad-doc-link as-btn" @click="openDoc(s.tenantId, 'business')">{{ s.businessLicenseName || 'View document' }} →</button>
+            <button v-if="s.hasBusinessDoc" class="ad-doc-clear" :disabled="busy === s.id" @click="clearDoc(s, 'business')" title="Clear so the client can re-upload">Clear</button>
             <span v-else>—</span>
           </div>
           <div><span class="ad-doc-label">Regulatory license</span>
-            <a v-if="s.hasRegulatoryDoc" :href="`/api/admin/compliance/${s.tenantId}/document?doc=regulatory`" target="_blank" rel="noopener" class="ad-doc-link">{{ s.regulatoryLicenseName || 'View document' }} →</a>
+            <button v-if="s.hasRegulatoryDoc" class="ad-doc-link as-btn" @click="openDoc(s.tenantId, 'regulatory')">{{ s.regulatoryLicenseName || 'View document' }} →</button>
+            <button v-if="s.hasRegulatoryDoc" class="ad-doc-clear" :disabled="busy === s.id" @click="clearDoc(s, 'regulatory')" title="Clear so the client can re-upload">Clear</button>
             <span v-else>—</span>
           </div>
         </div>
@@ -175,6 +177,15 @@
           <button class="btn btn-ghost btn-sm ad-reject" :disabled="busy === s.id" @click="decide(s.id, 'rejected')">Reject</button>
           <button class="btn btn-signal btn-sm" :disabled="busy === s.id" @click="decide(s.id, 'approved')">Approve</button>
         </div>
+        <!-- Its own row, and shown whatever the status: a submission most needs
+             removing once it has been approved on the wrong evidence, which is
+             exactly when the approve/reject row is hidden. Kept quiet and apart
+             from the decision buttons so neither is hit by reaching for the
+             other. -->
+        <div class="ad-sub-danger">
+          <button v-if="s.directorName || s.ninVerifiedAt" class="ad-doc-clear" :disabled="busy === s.id" @click="clearNin(s)">Clear director &amp; NIN</button>
+          <button class="ad-doc-clear ad-danger" :disabled="busy === s.id" @click="deleteSubmission(s)">Delete submission</button>
+        </div>
       </div>
     </div>
   </div>
@@ -182,6 +193,28 @@
     <!-- The wording an acceptance points at, not the current wording. Two
          versions on, those differ, and the register exists to answer which one
          somebody actually saw. -->
+    <!-- Deleting a submission is not something to confirm in a browser dialog:
+         it removes a client's documents and their approval, and the person
+         doing it should see what goes and what stays before they decide. -->
+    <div v-if="deleting" class="modal-overlay" @click.self="deleting = null">
+      <div class="modal acc-modal">
+        <button class="modal-x" @click="deleting = null">&times;</button>
+        <h3 class="acc-h">Delete {{ deleting.officialName || deleting.tenantName || 'this' }}'s submission?</h3>
+        <p class="acc-sub muted">They will need to submit again from the start.</p>
+
+        <div class="acc-facts">
+          <div><span>Removed</span><strong>Documents, director details, NIN and approval status</strong></div>
+          <div><span>Kept</span><strong>The uploaded files, in storage, for our records</strong></div>
+          <div><span>Current status</span><strong>{{ deleting.status }}</strong></div>
+        </div>
+
+        <div class="del-actions">
+          <button class="btn btn-ghost btn-sm" :disabled="busy === deleting.id" @click="deleting = null">Cancel</button>
+          <button class="btn btn-sm del-confirm" :disabled="busy === deleting.id" @click="confirmDelete">{{ busy === deleting.id ? 'Deleting…' : 'Delete submission' }}</button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="viewing" class="modal-overlay" @click.self="viewing = null">
       <div class="modal acc-modal">
         <button class="modal-x" @click="viewing = null">&times;</button>
@@ -297,6 +330,81 @@ async function load() {
   catch { await navigateTo('/admin/login'); }
   finally { pending.value = false; }
 }
+// Clearing a document sends the submission back to pending, because a
+// submission missing a document it was approved on is not an approved one. So
+// it asks first: a stray click should not withdraw somebody's approval.
+async function clearDoc(sub: any, doc: 'business' | 'regulatory' | 'ncc') {
+  const wasApproved = sub.status === 'approved';
+  const warning = wasApproved
+    ? 'This submission is approved. Clearing the document will send it back to pending review. Continue?'
+    : 'Clear this document so the client can upload a replacement?';
+  if (!confirm(warning)) return;
+  busy.value = sub.id;
+  try {
+    await $fetch(`/api/admin/compliance/${sub.tenantId}/document?doc=${doc}`, { method: 'DELETE' });
+    await load();
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || 'Could not clear the document.');
+  } finally {
+    busy.value = null;
+  }
+}
+
+// The director's identity number, separately from the rest. A NIN entered for
+// the wrong person does not invalidate the licences they uploaded, and making
+// somebody resubmit everything to fix one field is a poor answer.
+async function clearNin(sub: any) {
+  const warning = sub.status === 'approved'
+    ? 'This submission is approved. Clearing the director and NIN will send it back to pending review. Continue?'
+    : 'Clear the director name and NIN from this submission?';
+  if (!confirm(warning)) return;
+  busy.value = sub.id;
+  try {
+    await $fetch(`/api/admin/compliance/${sub.tenantId}/nin`, { method: 'DELETE' });
+    await load();
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || 'Could not clear the NIN.');
+  } finally { busy.value = null; }
+}
+
+// The whole submission. Named in the confirmation, because a list of workspaces
+// looks much the same from a distance and this one does not come back.
+// Opens the modal rather than deciding anything. A browser confirm cannot say
+// what is removed and what is kept, and this removes a client's documents and
+// their approval — worth seeing before agreeing to.
+// Fetched and opened as a blob rather than linked. A plain href to an API
+// route was being taken by Nuxt's router as an internal page, which does not
+// exist — so it rendered a 404 that threw its own 500, and a document nobody
+// could open looked like a broken server.
+async function openDoc(tenantId: string, doc: string) {
+  try {
+    const res = await fetch(`/api/admin/compliance/${tenantId}/document?doc=${doc}`, { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    // Released once the new tab has taken it; revoking immediately can race.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || 'Could not open that document.');
+  }
+}
+
+const deleting = ref<any>(null);
+function deleteSubmission(sub: any) { deleting.value = sub; }
+async function confirmDelete() {
+  const sub = deleting.value;
+  if (!sub) return;
+  busy.value = sub.id;
+  try {
+    await $fetch(`/api/admin/compliance/${sub.tenantId}`, { method: 'DELETE' });
+    deleting.value = null;
+    await load();
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || 'Could not delete the submission.');
+  } finally { busy.value = null; }
+}
+
 async function decide(id: string, decision: string) {
   busy.value = id;
   try {
@@ -371,4 +479,19 @@ onMounted(() => { load(); loadForms(); });
 .ad-note-input { flex: 1; padding: 8px 12px; border: 1px solid var(--rule); border-radius: var(--radius); font-size: 13px; }
 .ad-reject { color: #e0664e; border-color: rgba(192,57,43,0.3); }
 .ad-doc-link { color: var(--signal); text-decoration: underline; text-underline-offset: 2px; }
+.as-btn { background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
+/* Quiet by default: clearing a document withdraws an approval, so it should not
+   sit on the page competing with the link to read the document. */
+.ad-doc-clear {
+  margin-left: 10px; padding: 2px 8px; font-size: 12px;
+  color: var(--ink-mute); background: transparent;
+  border: 1px solid var(--rule); border-radius: 6px; cursor: pointer;
+}
+.ad-doc-clear:hover:not(:disabled) { color: var(--danger, #b42318); border-color: var(--danger, #b42318); }
+.ad-doc-clear:disabled { opacity: 0.5; cursor: default; }
+.ad-sub-danger { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.del-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 22px; }
+.del-confirm { background: var(--danger, #b42318); color: #fff; border: none; }
+.del-confirm:hover:not(:disabled) { background: #98200f; }
+.ad-danger { color: var(--danger, #b42318); border-color: rgba(180,35,24,0.3); }
 </style>

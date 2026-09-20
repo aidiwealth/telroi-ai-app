@@ -498,8 +498,9 @@ async function saveAiCap() {
  *  billing uses. These were $10 and $15 in the markup — wrong for a Naira
  *  client, and stale the moment either price changed.
  *
- *  "/user/mo" went with them: billing charges the workspace, not the seat, and
- *  a page promising otherwise is contradicted by the first invoice.
+ *  Per user, as of the move to per-seat billing: the fee is charged for every
+ *  member of the workspace, and a page quoting a flat figure would be
+ *  contradicted by the first invoice of a team of three.
  */
 function planPrice(plan: 'startup' | 'growth') {
   const o = billSummary.value?.planOptions;
@@ -508,7 +509,7 @@ function planPrice(plan: 'startup' | 'growth') {
   const sym = billSummary.value?.currency === 'NGN' ? '₦' : '$';
   return sym + (minor / 100).toLocaleString(undefined, { maximumFractionDigits: 0 });
 }
-const planPer = computed(() => billSummary.value?.planOptions?.interval === 'annual' ? '/yr' : '/mo');
+const planPer = computed(() => billSummary.value?.planOptions?.interval === 'annual' ? '/user/yr' : '/user/mo');
 
 // Both open the topbar's own modals rather than growing a second copy of either
 // form here — the go-live flow in particular has enough in it that two versions
@@ -541,12 +542,17 @@ const walletDisplay = computed(() => {
   const sym = w.currency === 'NGN' ? '₦' : '$';
   return `${sym}${((w.balanceMinor || 0) / 100).toFixed(2)}`;
 });
+// Declared before the function that fills it. It was the other way round, and
+// a call during setup hit the ref before its const had run — the assignment
+// threw into the catch, billSummary stayed null, and the plan cards showed a
+// dash where the price should be while the billing row below them, populated
+// by a later call, worked fine.
+const billSummary = ref<any>(null);
 async function loadBilling() {
   try { card.value = (await api.get<{ card: any }>('/api/payment-method')).card; } catch { card.value = null; }
   try { walletState.value = await api.get('/api/wallet'); } catch { walletState.value = null; }
   try { billSummary.value = await api.get('/api/billing/summary'); } catch { billSummary.value = null; }
 }
-const billSummary = ref<any>(null);
 const recurringDisplay = computed(() => {
   const b = billSummary.value;
   if (!b) return '—';
@@ -659,6 +665,10 @@ onMounted(() => {
   refreshPlan();
   loadCompliance();
   loadAiCap();
+  // The plan cards show prices from this, and they are not on the billing tab —
+  // so waiting for somebody to open billing meant a dash where the price should
+  // be for anyone who landed anywhere else, which is most people.
+  loadBilling();
 });
 
 watch(tab, async (t) => {

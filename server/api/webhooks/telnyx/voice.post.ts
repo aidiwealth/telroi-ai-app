@@ -34,7 +34,10 @@ export default defineEventHandler(async (event) => {
   if (eventType === 'call.speak.ended' && payload.client_state) {
     let st = '';
     try { st = Buffer.from(String(payload.client_state), 'base64').toString('utf8'); } catch { /* not ours */ }
-    if (st.includes('otp-done')) {
+    // A notification ends the call when its text finishes. Without this the
+    // leg stays open after the message has been read, with the recipient
+    // holding a silent line and the carrier still charging for it.
+    if (st.includes('otp-done') || st.includes('notify-done')) {
       try {
         const cc = await import('~/server/utils/telnyx-cc');
         await cc.telnyxHangup(callId);
@@ -106,11 +109,16 @@ export default defineEventHandler(async (event) => {
         const { useDb, schema } = await import('~/server/db');
         const { eq } = await import('drizzle-orm');
         const db = useDb();
-        const [row] = await db.select({ code: schema.voiceOtps.pendingCode })
+        const [row] = await db.select({
+          code: schema.voiceOtps.pendingCode,
+          // Named explicitly, or it arrives undefined and reads as true — which
+          // is the whole fault this change exists to fix.
+          securityNotice: schema.voiceOtps.securityNotice
+        })
           .from(schema.voiceOtps).where(eq(schema.voiceOtps.id, otpId)).limit(1);
         if (row?.code) {
           const cc = await import('~/server/utils/telnyx-cc');
-          await cc.telnyxSpeakCode(callId, row.code, 2);
+          await cc.telnyxSpeakCode(callId, row.code, 2, row.securityNotice !== false);
           // Cleared as soon as it's spoken: it has no further use here, and a
           // live code sitting in a column is a code that can leak.
           await db.update(schema.voiceOtps).set({ pendingCode: null })
@@ -120,6 +128,52 @@ export default defineEventHandler(async (event) => {
         console.error('[telnyx-otp] could not speak the code:', (e as Error)?.message);
       }
       return { ok: true, otp: true };
+    }
+
+    // The same shape for a notification, with the client's own words rather
+    // than a code. International notifications go through Telnyx's platform
+    // because originating our own audio over the trunk produced a call id and
+    // no channel — so these are read in Telnyx's voice, and the duration gate
+    // that governs the Nigerian path does not apply.
+    if (state.startsWith('notify:')) {
+      const notifyId = state.slice(7);
+      try {
+        const { useDb, schema } = await import('~/server/db');
+        const { eq } = await import('drizzle-orm');
+        const db = useDb();
+        const [row] = await db.select({ body: schema.voiceNotifications.body })
+          .from(schema.voiceNotifications).where(eq(schema.voiceNotifications.id, notifyId)).limit(1);
+        if (row?.body) {
+          const cc = await import('~/server/utils/telnyx-cc');
+          await cc.telnyxSpeak(callId, row.body, 'notify-done');
+          // Delivered once it has been spoken. There is no hangup handler on
+          // this path — the dialplan never runs — so nothing else would close
+          // the row, and a notification stuck at dialing is one nobody bills.
+          await db.update(schema.voiceNotifications)
+            .set({ status: 'delivered', answeredAt: new Date() })
+            .where(eq(schema.voiceNotifications.id, notifyId));
+
+          // Charged here too, because the dialplan's hangup handler — which
+          // bills the Nigerian path — never runs on this one. Billed on
+          // characters alone: Telnyx speaks the text itself, so there is no
+          // audio file of ours to measure, and the duration half of the unit
+          // rule has nothing to act on.
+          try {
+            const cfg = useRuntimeConfig() as any;
+            await $fetch('/api/internal/notify-charge', {
+              method: 'POST',
+              baseURL: cfg.public?.appUrl || 'https://app.telroi.ai',
+              headers: { 'x-telroi-internal': (cfg.internalSecret || cfg.provisionAgentSecret || '') as string },
+              body: { id: notifyId, seconds: 0 }
+            });
+          } catch (e) {
+            console.error('[telnyx-notify] not charged:', (e as Error)?.message);
+          }
+        }
+      } catch (e) {
+        console.error('[telnyx-notify] could not speak the message:', (e as Error)?.message);
+      }
+      return { ok: true, notification: true };
     }
   }
 

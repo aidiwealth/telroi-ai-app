@@ -79,7 +79,15 @@ async function sendViaImpl(args: SendArgs) {
   if (cfg.resendApiKey && cfg.emailProvider !== 'console') {
     const { Resend } = await import('resend');
     const resend = new Resend(cfg.resendApiKey);
-    const __r = await resend.emails.send({ from: cfg.emailFrom, to: args.to, subject: args.subject, html: args.html, text: args.text });
+    // A reply-to on the main domain, because the sending subdomain has no
+    // mailbox and never will. Resend flags a no-reply sender for good reason:
+    // an inbox that cannot answer is one that reports spam instead, and our own
+    // emails invite a reply.
+    const __r = await resend.emails.send({
+      from: cfg.emailFrom, to: args.to, subject: args.subject,
+      html: args.html, text: args.text,
+      replyTo: cfg.emailReplyTo || 'techteam@telroi.ai'
+    });
     if ((__r as any)?.error) console.error("[email/resend] rejected", { to: args.to, from: cfg.emailFrom, error: (__r as any).error });
     else console.log("[email/resend] accepted", { to: args.to, id: (__r as any)?.data?.id });
     return;
@@ -95,7 +103,10 @@ const BRAND = {
   ink: '#0A0A0B', inkSoft: '#5b5b62', inkMute: '#8b8b93',
   paper: '#ffffff', paper2: '#f7f6f3', rule: '#e7e5e0',
   signal: '#1a4b72', signal2: '#123857', signalSoft: '#e7eef4',
-  logo: 'https://pub-f138f42d66b748108ebf7432c7314665.r2.dev/telroi-ll.png'
+  // On our own domain rather than an R2 public bucket. An image URL that does
+  // not match the sending domain reads as suspicious to some receivers, Gmail
+  // in particular, and a logo is the one image in every email we send.
+  logo: 'https://telroi.ai/telroi-ll.png'
 };
 
 function socialIcons(social?: { x?: string; linkedin?: string; instagram?: string; facebook?: string }) {
@@ -578,5 +589,25 @@ export async function sendOpsWentLiveEmail(to: string, d: {
     ${para(`On the <strong>${d.plan}</strong> plan.${d.email ? ` ${d.email}` : ''}`)}
     ${para(`Workspace <code>${d.slug}</code>.`)}
   `, { preheader: `${d.name} went live` });
+  await sendVia({ to, subject, html, text });
+}
+
+/** One-off: the signups that were bounced back to the login page.
+ *
+ *  A fault in /api/auth/me meant a brand-new user — who has no workspace until
+ *  onboarding creates one — got a 500 rather than their account, and the guard
+ *  read that as being logged out. Thirteen people entered a valid code and were
+ *  sent back to sign in, over six days, with nothing to tell them why. */
+export async function sendSignupApologyEmail(to: string) {
+  const subject = 'Your Telroi account — please try again';
+  const text = `You tried to create a Telroi account in the last few days and were sent back to the sign-in page after entering your code.\n\nThat was a fault on our side, not anything you did, and it is now fixed.\n\nPlease sign in again at https://app.telroi.ai and you will be able to finish setting up.\n\nSorry for the wasted trip.`;
+  const html = shell(`
+    ${h1('Please try again')}
+    ${para('You tried to create a Telroi account in the last few days and were sent back to the sign-in page after entering your code.')}
+    ${para('That was a fault on our side, not anything you did, and it is now fixed.')}
+    ${button('Sign in to Telroi →', 'https://app.telroi.ai')}
+    ${divider()}
+    <p style="color:${BRAND.inkMute};font-size:12.5px;line-height:1.5;margin:0;">Sorry for the wasted trip. If anything else goes wrong, reply to this email and a person will read it.</p>
+  `, { preheader: 'The sign-up fault is fixed — please try again.' });
   await sendVia({ to, subject, html, text });
 }

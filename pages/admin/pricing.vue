@@ -17,6 +17,14 @@
           <input v-model.number="otp" type="number" step="0.001" min="0" class="ad-input mono" />
           <p class="ad-hint">One price whatever the destination, unless a region below sets its own. Charged when the call is placed, and refused beforehand if the wallet cannot cover it.</p>
         </div>
+        <!-- Per unit, not per minute. A unit is 160 characters or 30 seconds of
+             audio, whichever comes first — sold that way because SMS segments
+             are how this market already thinks about messaging, and because
+             characters and seconds diverge badly on numerals. -->
+        <div class="ad-field"><label>Voice notification ($/unit)</label>
+          <input v-model.number="notifyUnit" type="number" step="0.001" min="0" class="ad-input mono" />
+          <p class="ad-hint">One unit is 160 characters or 30 seconds of audio, whichever is reached first. A longer message costs more units; it is never cut short.</p>
+        </div>
         <div class="ad-field"><label>Number / DID ($/mo)</label>
           <input v-model.number="did" type="number" step="0.01" class="ad-input mono" />
         </div>
@@ -78,6 +86,7 @@
           <tr>
             <th>Region</th>
             <th>Voice OTP ($/verification)</th>
+            <th>Notification ($/unit)</th>
             <th>Airtime ($/min)</th>
             <th>Where the figure came from</th>
             <th></th>
@@ -89,6 +98,10 @@
             <td>
               <input v-model="r._otp" type="number" step="0.001" min="0"
                      class="ad-input mono rg-input" :placeholder="String(otp)" />
+            </td>
+            <td>
+              <input v-model="r._unit" type="number" step="0.001" min="0"
+                     class="ad-input mono rg-input" :placeholder="String(notifyUnit)" />
             </td>
             <td>
               <input v-model="r._min" type="number" step="0.0001" min="0"
@@ -198,6 +211,7 @@ const airtime = ref('0.0102');
 const did = ref(1.70);
 // Dollars here, micro-dollars on the wire. $0.01 is the seeded default.
 const otp = ref(0.01);
+const notifyUnit = ref(0.0075);
 
 /* Region rates. Held as dollars for the form and converted at the edges, the
    same way the global figures are — micro-dollars on the wire because a
@@ -216,6 +230,7 @@ async function loadRegions() {
       // shows the global figure being inherited, where a 0 would look like a
       // deliberate free call.
       _otp: x.voiceOtpUsdMicro == null ? '' : x.voiceOtpUsdMicro / 1000000,
+      _unit: x.voiceNotifyUnitUsdMicro == null ? '' : x.voiceNotifyUnitUsdMicro / 1000000,
       _min: x.voiceMinuteUsdMicro == null ? '' : x.voiceMinuteUsdMicro / 1000000,
       _busy: false
     }));
@@ -233,6 +248,7 @@ async function saveRegion(r: any) {
     await adminApi.post<any>('/api/admin/pricing/regions', {
       region: r.region,
       voiceOtpUsdMicro: r._otp === '' || r._otp == null ? null : Math.round(Number(r._otp) * 1000000),
+      voiceNotifyUnitUsdMicro: r._unit === '' || r._unit == null ? null : Math.round(Number(r._unit) * 1000000),
       voiceMinuteUsdMicro: r._min === '' || r._min == null ? null : Math.round(Number(r._min) * 1000000),
       notes: r.notes || null
     });
@@ -293,6 +309,7 @@ async function load() {
       did.value = pricing.didMonthlyUsdMinor / 100;
       // Micro-dollars on the wire, dollars on the screen.
       otp.value = (pricing.voiceOtpUsdMicro ?? 10000) / 1000000;
+      notifyUnit.value = (pricing.voiceNotifyUnitUsdMicro ?? 7500) / 1000000;
       await loadRegions();
       channel.value = pricing.channelMonthlyUsdMinor / 100;
       startup.value = pricing.planStartupUsdMinor / 100;
@@ -326,6 +343,7 @@ async function save() {
     await adminApi.post('/api/admin/pricing', {
       didMonthlyUsdMinor: Math.round(did.value * 100),
       voiceOtpUsdMicro: Math.round(otp.value * 1000000),
+      voiceNotifyUnitUsdMicro: Math.round(notifyUnit.value * 1000000),
       channelMonthlyUsdMinor: Math.round(channel.value * 100),
       planStartupUsdMinor: Math.round(startup.value * 100),
       planGrowthUsdMinor: Math.round(growth.value * 100),

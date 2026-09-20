@@ -27,7 +27,38 @@ export default defineEventHandler(async (event) => {
     .where(and(eq(schema.memberships.userId, user.id), eq(schema.memberships.tenantId, s.tenantId))).limit(1);
   if (existing) throw apiError('exists', 'That person is already a member of this workspace');
 
+  // Asked before the member exists, not after. A seat that could not be charged
+  // would be a seat used free until the next renewal, and a customer told at
+  // the point of adding — when they are deciding — can top up and carry on.
+  // Finding out later, from a debt on the wallet, is worse for everybody.
+  const { canAffordSeat } = await import('~/server/utils/billing');
+  if (!(await canAffordSeat(s.tenantId))) {
+    throw createError({
+      statusCode: 402,
+      statusMessage: 'insufficient_funds',
+      data: { error: { code: 'insufficient_funds', message: 'Not enough balance to add a team member. Top up your wallet and try again.' } }
+    });
+  }
+
   await db.insert(schema.memberships).values({ userId: user.id, tenantId: s.tenantId, role: p.data.role });
+
+  // Charged for the rest of this cycle, now. Seats are counted at renewal, so
+  // without this a workspace could add ten people the day after billing and
+  // have them free until the next one — and the seat is usable from the moment
+  // it exists, not from the next anniversary.
+  //
+  // Never refused for funds. Turning away a colleague over a few dollars is a
+  // poor way to treat a customer who is growing, and the shortfall sits on the
+  // wallet like any other: the next top-up clears it.
+  try {
+    const { prorateSeat } = await import('~/server/utils/billing');
+    await prorateSeat(s.tenantId, user.id);
+  } catch (e) {
+    // The balance was checked a moment ago, so this is a race or a fault rather
+    // than an ordinary shortfall — logged rather than unwound, since the member
+    // now exists and the next renewal counts them either way.
+    console.error('[members] seat not prorated:', (e as Error)?.message);
+  }
 
   // An invite, not a bare sign-in link. The recipient may never have heard of
   // us: an unexpected login email for an account they didn't create reads like

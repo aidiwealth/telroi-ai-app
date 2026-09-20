@@ -10,7 +10,15 @@ const Body = z.object({
   // Your own code, if you already generate them. We read it out and record the
   // call; verifying it stays with you, since we never hold it in a form we
   // could check against.
-  code: z.string().regex(/^[0-9]{4,10}$/, 'code must be 4 to 10 digits').optional()
+  code: z.string().regex(/^[0-9]{4,10}$/, 'code must be 4 to 10 digits').optional(),
+  // The closing "do not share this code" line. On unless a client turns it off:
+  // it is what stops somebody reading their code to a caller pretending to be
+  // their bank, and it costs about two seconds.
+  security_notice: z.boolean().optional(),
+  // Which of your own numbers the call comes from. Optional: without it we use
+  // the one set in your dashboard, or any number you hold on the carrier
+  // carrying the call. An operator pin overrides this.
+  from: z.string().min(3).optional()
 });
 export default defineEventHandler(async (event) => {
   const ctx = await requireApiKey(event);
@@ -24,8 +32,18 @@ export default defineEventHandler(async (event) => {
     return { object: 'otp', simulated: true, livemode: false, id: `otp_test_${Math.random().toString(36).slice(2, 12)}`, to: p.data.to, status: 'delivered', expires_in: 300, sandbox_code: '000000' };
   }
 
+  if (p.data.from) {
+    const { ownsNumber } = await import('~/server/utils/voice/vendors');
+    if (!(await ownsNumber(ctx.tenantId, p.data.from))) {
+      throw apiError('invalid_from', `${p.data.from} is not a number on your workspace.`, 400);
+    }
+  }
+
   const { sendVoiceOtp } = await import('~/server/utils/voice/otp-service');
-  const r = await sendVoiceOtp(ctx.tenantId, p.data.to, { codeLength: p.data.code_length, language: p.data.language, ownCode: p.data.code });
+  const r = await sendVoiceOtp(ctx.tenantId, p.data.to, { codeLength: p.data.code_length, language: p.data.language, ownCode: p.data.code, securityNotice: p.data.security_notice, fromNumber: p.data.from });
+  if (r.error === 'number_required') {
+    throw apiError('number_required', 'Buy a phone number before sending voice OTPs. Calls go out on your own number so your traffic is not affected by anybody else\'s.', 402);
+  }
   if (!r.ok) {
     if (r.error?.startsWith('rate_limited')) throw apiError('rate_limited', `Too many requests for this number. Retry after ${r.retryAfterSeconds || 60}s.`, 429);
     throw apiError('otp_failed', r.error || 'Could not place the OTP call', 502);

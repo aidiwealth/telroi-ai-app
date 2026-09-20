@@ -128,7 +128,13 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
       const res = await fetch(`https://api.deepgram.com/v1/listen?punctuate=true&model=nova-2&language=${encodeURIComponent((lang.split('-')[0]) || 'en')}`, {
         method: 'POST', headers: { Authorization: `Token ${conn.apiKey}`, 'Content-Type': contentType }, body: audio
       });
-      if (!res.ok) return '';
+      if (!res.ok) {
+        // An empty transcript is indistinguishable from a caller who said
+        // nothing, so a failure here looks like silence on their end rather
+        // than ours — which is how a vendor outage goes unnoticed for hours.
+        console.error(`[ai-brain] Deepgram STT ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`);
+        return '';
+      }
       const d: any = await res.json();
       const dgTx = (d?.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
       const dgLang = lang;
@@ -228,7 +234,7 @@ export async function sttTranscribe(tenantId: string, sttConnId: string | null, 
   } catch { return ''; }
 }
 
-export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string; language?: string } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
+export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, text: string, opts: { voice?: string; language?: string; speed?: number } = {}, allowManaged = false): Promise<{ audio: Buffer; contentType: string } | null> {
   const conn = await resolveConn(tenantId, ttsConnId, ['elevenlabs', 'openai', 'google-cloud']);
   try {
     if (conn?.provider === 'elevenlabs') {
@@ -242,7 +248,10 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
       }
       const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_16000`, {
         method: 'POST', headers: { 'xi-api-key': conn.apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, model_id: (conn.meta.model as string) || 'eleven_multilingual_v2' })
+        body: JSON.stringify({
+          text, model_id: (conn.meta.model as string) || 'eleven_multilingual_v2',
+          ...(opts.speed ? { voice_settings: { speed: opts.speed } } : {})
+        })
       });
       if (!res.ok) {
         // The default voice id is a stock one that not every account carries, so
@@ -255,7 +264,7 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
     if (conn?.provider === 'openai') {
       const res = await fetch('https://api.openai.com/v1/audio/speech', {
         method: 'POST', headers: { Authorization: `Bearer ${conn.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: (conn.meta.model as string) || 'tts-1', voice: opts.voice || 'alloy', input: text, response_format: 'wav' })
+        body: JSON.stringify({ model: (conn.meta.model as string) || 'tts-1', voice: opts.voice || 'alloy', input: text, response_format: 'wav', ...(opts.speed ? { speed: opts.speed } : {}) })
       });
       if (!res.ok) {
         // Silence with no explanation anywhere was the worst of both: the caller
@@ -274,7 +283,7 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: { text }, voice: voice ? { languageCode: lang, name: voice } : { languageCode: lang }, audioConfig: { audioEncoding: 'LINEAR16', sampleRateHertz: 16000 } })
       });
-      if (!res.ok) { console.error(`[ai-brain] Google TTS failed ${res.status}`); return null; }
+      if (!res.ok) { console.error(`[ai-brain] Google TTS failed ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}`); return null; }
       const d: any = await res.json();
       if (!d?.audioContent) return null;
       return { audio: Buffer.from(d.audioContent, 'base64'), contentType: 'audio/wav' };
@@ -389,7 +398,14 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
         headers: { 'x-api-key': llm.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: llm.model, max_tokens: maxTokens || 300, system: sys, messages: history.map((m) => ({ role: m.role, content: m.content })) })
       });
-      if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
+      if (!res.ok) {
+        // The body says what they objected to — a bad key, a model name that
+        // does not exist, a rate limit. Without it a failure here is silence:
+        // the copilot answers "Sorry, I could not respond" and nothing anywhere
+        // says why.
+        console.error(`[ai-brain] anthropic ${res.status} (model ${llm.model}): ${(await res.text().catch(() => '')).slice(0, 300)}`);
+        return { text: null, inputTokens: 0, outputTokens: 0 };
+      }
       const d: any = await res.json();
       const text = Array.isArray(d.content) ? d.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join(' ') : '';
       return { text: (text || '').trim() || null, inputTokens: d.usage?.input_tokens || 0, outputTokens: d.usage?.output_tokens || 0 };
@@ -431,7 +447,13 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
       headers: { Authorization: `Bearer ${llm.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(chatBody)
     });
-    if (!res.ok) return { text: null, inputTokens: 0, outputTokens: 0 };
+    if (!res.ok) {
+      // The same silence the Anthropic branch produced when the account ran out
+      // of credit: a null reply, a copilot saying it could not respond, and an
+      // hour spent finding out why.
+      console.error(`[ai-brain] ${llm.provider} ${res.status} (model ${llm.model}): ${(await res.text().catch(() => '')).slice(0, 300)}`);
+      return { text: null, inputTokens: 0, outputTokens: 0 };
+    }
     const d: any = await res.json();
     return { text: (d.choices?.[0]?.message?.content || '').trim() || null, inputTokens: d.usage?.prompt_tokens || 0, outputTokens: d.usage?.completion_tokens || 0 };
   } catch {

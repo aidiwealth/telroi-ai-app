@@ -36,7 +36,30 @@ export default defineEventHandler(async (event) => {
     // mistake being made elsewhere.
     units: 'Minor units — usdMinor is cents, ngnMinor is kobo. Nano fields are billionths.',
     ngnPerUsd: rate,
+    // Naira prices include VAT. A ₦10,000 top-up credits ₦9,302 and ₦698 is
+    // tax remitted to FIRS — published here rather than discovered at the
+    // wallet, where a client seeing less credit than they paid reads it as a
+    // shortfall rather than a tax they already knew about.
+    // Worth stating here rather than discovered as a 402. Voice calls leave on
+    // the workspace's own number, so there has to be one — and a developer
+    // planning an integration should know that before they build it.
+    requirements: {
+      voiceOtp: 'Requires at least one purchased phone number. Calls go out on your own number.',
+      voiceNotification: 'Requires at least one purchased phone number. Calls go out on your own number.'
+    },
+    vat: {
+      rate: 0.075,
+      inclusive: true,
+      appliesTo: 'NGN',
+      note: 'Prices in naira include 7.5% VAT. A ₦10,000 payment credits ₦9,302 to your wallet; the balance is VAT, shown separately in your wallet history.'
+    },
     plans: {
+      // Per seat. Every member of a workspace has their own sign-in, their own
+      // extension and their own place in the ring group, so a plan is priced
+      // per person rather than per workspace — a figure quoted without that is
+      // one a customer budgets wrong.
+      per: 'seat',
+      note: 'Plan prices are per team member, per month. A member added partway through a month is charged for the days remaining, not the whole month.',
       startup: pair(p.planStartupUsdMinor),
       growth: pair(p.planGrowthUsdMinor),
       // Annual is stored as a price rather than a discount, because "$150 a
@@ -72,20 +95,29 @@ export default defineEventHandler(async (event) => {
       // separately and per character, since a long message costs more to say
       // whatever the call's length, and it costs us whether or not anybody
       // answered. Published together so a quoted rate is not half the price.
+      // Sold by the unit rather than the minute. One unit is 160 characters or
+      // 30 seconds of audio, whichever is reached first — the same shape as a
+      // multipart SMS, which is how this market already counts messages. A
+      // longer message costs more units; it is never cut short.
       voiceNotification: {
-        ...nanoPair(Math.round((Number(p.voiceMinuteUsdMicro) || 10200) * 1000)),
-        minimumBillableSeconds: 60,
-        ttsPerCharacterNanoUsd: Number(p.aiTtsPerCharNano) || 0,
-        maxCharacters: 900
+        ...nanoPair(Math.round((Number(p.voiceNotifyUnitUsdMicro) || 7500) * 1000)),
+        per: 'unit',
+        charactersPerUnit: 160,
+        secondsPerUnit: 30,
+        note: 'One unit is 160 characters or 30 seconds of audio, whichever comes first. The unit count is measured from the synthesised audio before the call is placed, and returned as estimated_units when you submit.'
       },
       channelMonthly: pair(p.channelMonthlyUsdMinor),
       numberMonthly: pair(p.didMonthlyUsdMinor),
       // Flat per call rather than per minute: a carrier bills a whole minute for
       // a fifteen-second OTP, so charging by duration loses money on every one.
       // Sub-cent like airtime, so the nano fields are the real rate.
+      // Nano only. A call costs four tenths of a cent, and rounding that to
+      // the nearest cent published a zero — a client reading usdMinor would
+      // conclude verification calls are free.
       voiceOtpCall: {
-        ...pair(Math.round((Number(p.voiceOtpUsdMicro) || 10000) / 10000)),
-        ...nanoPair(Math.round((Number(p.voiceOtpUsdMicro) || 10000) * 1000))
+        ...nanoPair(Math.round((Number(p.voiceOtpUsdMicro) || 10000) * 1000)),
+        per: 'call',
+        note: 'Charged per call placed, whatever its length — a carrier bills a whole minute for a fifteen-second verification.'
       }
     },
     // Managed AI is charged by what it actually uses, which is why the page says
@@ -96,7 +128,9 @@ export default defineEventHandler(async (event) => {
     // seven turns, so far less speech than an unhurried estimate would suggest.
     ai: {
       note: 'Charged from your wallet when using Telroi-provided AI. Bring your own provider keys and you pay them directly instead.',
-      markupPct: Number(p.aiMarkupPct) || 0,
+      // Not published. What a client pays is the unit rates and the indicative
+      // minute below; how those are composed is ours, and a markup of zero told
+      // anybody who asked that we sell managed AI at cost.
       units: {
         sttPerSecond: nanoPair(p.aiSttPerSecNano),
         ttsPerCharacter: nanoPair(p.aiTtsPerCharNano),

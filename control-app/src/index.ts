@@ -99,12 +99,12 @@ async function inboundCapacity(tenantId: string, log: (m: string) => void): Prom
  */
 async function wakeAndWait(args: {
   tenantId: string; users: string[]; callId: string;
-  from: string; to: string; log: (m: string) => void;
+  from: string; fromName?: string; to: string; log: (m: string) => void;
 }): Promise<void> {
-  const { tenantId, users, callId, from, to, log } = args;
+  const { tenantId, users, callId, from, fromName, to, log } = args;
   if (!users.length) return;
   try {
-    const woke = await pushIncomingCall({ tenantId, callId, from, to });
+    const woke = await pushIncomingCall({ tenantId, callId, from, fromName, to });
     if (!woke) return;
     // Wait for a device rather than a fixed interval: a cold iOS launch takes
     // about 1.7s to start its stack, fetch a token, handshake and register, and
@@ -286,7 +286,20 @@ async function main() {
       return;
     }
     let dialedDid = event.args?.[0] || channel.dialplan?.exten || '';
-    const callerNum = channel.caller?.number || '';
+    // Sotel presents Nigerian callers as 008027016644 — a 00 international
+    // prefix in front of a national number, with no country code between them.
+    // Left alone it reaches the recipient's phone in that form, and a number
+    // nobody can call back is most of the value of caller id gone.
+    //
+    // Only the Nigerian case is corrected. 00 is a real international prefix,
+    // so 0044... is a UK number and must be left as it is; what marks this one
+    // is 00 followed immediately by a Nigerian national number, which starts
+    // with a 0 the carrier has dropped or an 8 or 9 mobile prefix.
+    const rawCaller = channel.caller?.number || '';
+    const callerNum = /^00[89]\d{9}$/.test(rawCaller)
+      ? `+234${rawCaller.slice(2)}`
+      : rawCaller;
+    if (callerNum !== rawCaller) log(`[callerid] ${rawCaller} -> ${callerNum}`);
     const callerName = channel.caller?.name || '';
     const chId = channel.id;
 
@@ -349,10 +362,28 @@ async function main() {
       // extension. Ring that tenant's agents and bridge; anything the DID lookup
       // below would do (route type, blacklist) has already been settled.
       if (widgetTenantId) {
+        // Set on the caller's own channel, before anything is bridged.
+        //
+        // The Local channel that rings each device inherits its caller id from
+        // this one, which for a widget guest is the browser owner's name — so
+        // a visitor's call reached the phone showing whoever the endpoint
+        // belongs to. Passing a name alongside the originate lost to that
+        // inheritance every time; setting it here means the inheritance is the
+        // mechanism rather than the obstacle.
+        try {
+          await channel.setChannelVar({ variable: 'CALLERID(name)', value: 'Live Call' });
+        } catch (e) {
+          log(`  [widget ${chId}] caller id not set: ${(e as Error)?.message}`);
+        }
         const allUsers = resolveTenantEndpoints(widgetTenantId);
         await wakeAndWait({
           tenantId: widgetTenantId, users: allUsers, callId: chId,
-          from: callerNum || '', to: 'Live Call', log
+          // The push reaches a closed app before any INVITE, so CallKit shows
+          // whatever this says and nothing else. Without a name it showed the
+          // SIP username, which tells the person answering nothing — and the
+          // lookup for a named visitor cannot go here, since waiting up to
+          // three seconds on it would delay the wake itself.
+          from: callerNum || '', fromName: 'Live Call', to: 'Live Call', log
         });
         const free = async () => (await filterLiveEndpoints(client, allUsers, log)).map((u) => `PJSIP/${u}`);
         const visitorName = await guestCallerName(String(callerNum || ''));

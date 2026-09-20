@@ -9,7 +9,7 @@
 import { and, eq } from 'drizzle-orm';
 import { useDb, schema } from '~/server/db';
 
-export const SAMPLE_AGENT_NAME = 'Telroi Sample Agent';
+export const SAMPLE_AGENT_NAME = 'Telroi Agent';
 
 const SAMPLE_GREETING =
   "Hi, thanks for calling. I'm a Telroi sample agent — I can take bookings, "
