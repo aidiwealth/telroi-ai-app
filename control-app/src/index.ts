@@ -362,6 +362,19 @@ async function main() {
       // extension. Ring that tenant's agents and bridge; anything the DID lookup
       // below would do (route type, blacklist) has already been settled.
       if (widgetTenantId) {
+        // Set on the caller's own channel, before anything is bridged.
+        //
+        // The Local channel that rings each device inherits its caller id from
+        // this one, which for a widget guest is the browser owner's name — so
+        // a visitor's call reached the phone showing whoever the endpoint
+        // belongs to. Passing a name alongside the originate lost to that
+        // inheritance every time; setting it here means the inheritance is the
+        // mechanism rather than the obstacle.
+        try {
+          await channel.setChannelVar({ variable: 'CALLERID(name)', value: 'Live Call' });
+        } catch (e) {
+          log(`  [widget ${chId}] caller id not set: ${(e as Error)?.message}`);
+        }
         const allUsers = resolveTenantEndpoints(widgetTenantId);
         await wakeAndWait({
           tenantId: widgetTenantId, users: allUsers, callId: chId,
