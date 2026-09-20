@@ -39,7 +39,10 @@ export default defineEventHandler((event) => {
       // so the page waited for an element that was never going to appear, and
       // reported nothing at all. Script and frame were permitted and style was
       // not, which is the same half-permission that broke the captcha.
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://widget.termii.com",
+      // unpkg for Leaflet's stylesheet. Its script was already allowed, so the
+      // map loaded and rendered as scattered broken tiles — a map with no CSS
+      // looks like a fault rather than a block, which is why this sat unnoticed.
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://widget.termii.com https://unpkg.com",
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: https:",
       // WebRTC + API + websocket signaling for the dialer + booking/intercom widgets.
