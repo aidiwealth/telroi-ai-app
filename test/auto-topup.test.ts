@@ -8,7 +8,7 @@ import { encrypt } from '../server/utils/crypto';
 import { AUTO_TOPUP_CONSENT_VERSION } from '../server/utils/auto-topup-attempts';
 import { claimAutoTopupForCharge, settleAutoTopupObservation } from '../server/utils/auto-topup-executor';
 import type { PaymentObservation } from '../server/utils/auto-topup-provider';
-import { debitInTransaction } from '../server/utils/wallet';
+import { debitInTransaction, walletCreditVatMinor } from '../server/utils/wallet';
 import { sendPaymentReceivedEmail } from '../server/utils/email';
 
 vi.mock('../server/utils/email', () => ({
@@ -19,6 +19,13 @@ vi.mock('../server/utils/email', () => ({
 // Financial integration tests must never fall back to DATABASE_URL. The suite
 // only runs against an explicitly selected, migrated database ending in _test.
 const url = process.env.AUTO_TOPUP_TEST_DATABASE_URL;
+
+it('applies the same inclusive NGN VAT to automatic and manual top-ups', () => {
+  const amountMinor = 1_000_000;
+  const automaticVat = walletCreditVatMinor('NGN', 'auto_topup', amountMinor);
+  expect(automaticVat).toBeGreaterThan(0);
+  expect(automaticVat).toBe(walletCreditVatMinor('NGN', 'manual_topup', amountMinor));
+});
 
 describe.skipIf(!url)('auto top-up critical money-safety flow', { timeout: 30_000 }, () => {
   let client: ReturnType<typeof postgres>;

@@ -180,6 +180,14 @@ export async function debit(args: DebitArgs) {
  *  tax. It moves when FIRS moves it, in a commit with a date on it. */
 export const VAT_RATE = 0.075;
 
+/** Inclusive VAT withheld from customer-funded NGN wallet credits. */
+export function walletCreditVatMinor(currency: string, reason: string, amountMinor: number): number {
+  const customerTopup = reason === 'topup' || reason === 'manual_topup' || reason === 'auto_topup';
+  return currency === 'NGN' && customerTopup
+    ? Math.round(amountMinor - amountMinor / (1 + VAT_RATE))
+    : 0;
+}
+
 export async function creditInTransaction(
   tx: Parameters<Parameters<ReturnType<typeof useDb>['transaction']>[0]>[0],
   tenantId: string, amountMinor: number, reason: string, reference: string, meta: Record<string, unknown> = {}
@@ -192,8 +200,7 @@ export async function creditInTransaction(
     if (!wallet) throw apiError('no_wallet', 'No wallet for this workspace', 404);
 
     // VAT is inclusive for real NGN top-ups. The wallet receives the net amount.
-    const vatable = wallet.currency === 'NGN' && (reason === 'topup' || reason === 'manual_topup');
-    const vatMinor = vatable ? Math.round(amountMinor - amountMinor / (1 + VAT_RATE)) : 0;
+    const vatMinor = walletCreditVatMinor(wallet.currency, reason, amountMinor);
     const netMinor = amountMinor - vatMinor;
 
     // Idempotency: a webhook retry with the same reference must not double-credit.
