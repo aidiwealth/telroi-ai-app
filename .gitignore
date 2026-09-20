@@ -5,6 +5,7 @@
 .output
 dist
 node_modules
+server/db/migrations
 
 *.patch
 phase*.sh

@@ -1,1 +1,0 @@
-ALTER TABLE "auto_topup_attempts" ALTER COLUMN "trigger_ledger_id" SET NOT NULL;
