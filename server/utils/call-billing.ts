@@ -22,6 +22,26 @@ export async function chargeCall(opts: {
   const seconds = Math.max(0, Math.floor(opts.seconds || 0));
   if (seconds === 0) return { charged: 0, skipped: 'zero_duration' };
 
+  // Nigerian carriers do not charge us to receive a call, so a client should
+  // not be charged a minute we never paid for. Their AI usage is metered
+  // separately and is unaffected — that cost is real whoever placed the call.
+  //
+  // Carrier calls only. A Live Call from the website never touches a carrier,
+  // so there is no minute to waive and nothing changes for it.
+  // source carries the direction here, not direction — the callers pass it
+  // that way and have since the webhook was the only one reaching this.
+  const inbound = opts.source === 'inbound' || opts.direction === 'inbound';
+  // The carrier, not the number. A call that arrived on Ruach, Kasooko or
+  // Sotel is Nigerian inbound by definition — and the dialled number does not
+  // reach this function, while reading the caller's instead would waive a
+  // Nigerian caller to a US line, which is a call we do pay for.
+  const NG_CARRIERS = ['ruach', 'kasooko', 'sotel'];
+  const ngCarrier = NG_CARRIERS.includes(String(opts.provider || '').toLowerCase());
+  if (inbound && opts.source !== 'live_call' && ngCarrier) {
+    console.log(`[billing] inbound to a Nigerian number — no carrier minute charged (${opts.callId}, ${seconds}s)`);
+    return { charged: 0, skipped: 'inbound_ng_free' };
+  }
+
   const wallet = await getOrCreateWallet(opts.tenantId);
   const pricing = await getPricing(opts.tenantId);
   const amount = voiceCostMinor(seconds, wallet.currency as any, pricing.ngnPerUsd, pricing.voiceMinuteUsdMicro);
