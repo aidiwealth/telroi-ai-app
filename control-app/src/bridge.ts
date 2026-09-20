@@ -381,7 +381,10 @@ export async function bridgeToDepartment(opts: DepartmentBridgeOptions): Promise
       await ch.originate({
         endpoint: target, app: 'telroi', appArgs: 'dialed',
         callerId: opts.callerIdNum || 'Live Call', timeout: ringTimeout,
-        variables: { TELROI_CID_NAME: opts.callerIdNum || 'Live Call' }
+        // Double underscore: a Local channel has two halves and the dialplan
+        // runs on the far one, so a plain variable set here never reaches it.
+        // The prefix makes it inherit across the channels the call creates.
+        variables: { __TELROI_CID_NAME: opts.callerIdNum || 'Live Call' }
       });
       log(`dept originating to ${target} (ring ${ringTimeout}s)`);
     } catch (err) {
