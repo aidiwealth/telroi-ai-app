@@ -7,7 +7,12 @@
 // runner (server/db/run-billing.ts) so the logic lives in exactly one place.
 import { and, eq, lte, sql } from 'drizzle-orm';
 import { schema, useDb } from '../db';
-import { canSpend, chargeCardToWallet } from '~/server/utils/wallet';
+import { canSpend, debitInTransaction } from '~/server/utils/wallet';
+
+function isInsufficientFunds(error: any): boolean {
+  return error?.data?.error?.code === 'insufficient_funds'
+    || error?.cause?.data?.error?.code === 'insufficient_funds';
+}
 
 export interface BillingResult {
   due: number;
@@ -75,55 +80,46 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
         result.skipped++;
         continue;
       }
-      // Before taking their number away, try the card they left with us. A
-      // client who put a card on file did so precisely so their service would
-      // not stop over a wallet nobody was watching — suspending without asking
-      // it first makes the card pointless.
-      //
-      // This only tops the wallet up. The charge below then runs exactly as it
-      // would have, so the debit, the ledger entry and the next billing date
-      // are written in one place rather than two.
-      const shortfall = amount - wallet.balanceMinor;
-      const topped = shortfall > 0
-        ? await chargeCardToWallet({
-            tenantId: sub.tenantId, amountMinor: shortfall,
-            currency: wallet.currency as any, reason: 'number_renewal'
-          }).catch(() => ({ ok: false as const }))
-        : { ok: false as const };
-
-      if (topped.ok) {
-        const [fresh] = await db.select().from(schema.wallets).where(eq(schema.wallets.id, wallet.id)).limit(1);
-        if (fresh && canSpend(t, fresh.balanceMinor, amount)) {
-          wallet.balanceMinor = fresh.balanceMinor;
-        } else {
-          await db.update(schema.numberSubscriptions).set({ status: 'suspended' }).where(eq(schema.numberSubscriptions.id, sub.id));
-          result.suspended++;
-          result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
-          continue;
-        }
-      } else {
-
-        await db.update(schema.numberSubscriptions).set({ status: 'suspended' }).where(eq(schema.numberSubscriptions.id, sub.id));
-        result.suspended++;
-        result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
-        continue;
-      }
+      // Auto top-up is the only unattended saved-card charge path. An
+      // unaffordable renewal is suspended without submitting a second charge.
+      await db.update(schema.numberSubscriptions).set({ status: 'suspended' })
+        .where(eq(schema.numberSubscriptions.id, sub.id));
+      result.suspended++;
+      result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
+      continue;
     }
 
-    const after = wallet.balanceMinor - amount;
     const nextDate = new Date(sub.nextBillingAt); nextDate.setDate(nextDate.getDate() + 30);
-    await db.transaction(async (tx: any) => {
-      await tx.update(schema.wallets).set({ balanceMinor: after, updatedAt: now }).where(eq(schema.wallets.id, wallet.id));
-      await tx.insert(schema.ledger).values({
-        walletId: wallet.id, tenantId: sub.tenantId, kind: 'debit',
-        amountMinor: amount, balanceAfterMinor: after, reason: 'number_monthly',
-        reference: cycleRef, meta: { telnum: sub.telnum, channels: sub.channels }
+    try {
+      const debited = await db.transaction(async (tx: any) => {
+        const movement = await debitInTransaction(tx, {
+          tenantId: sub.tenantId,
+          amountMinor: amount,
+          reason: 'number_monthly',
+          reference: cycleRef,
+          meta: { telnum: sub.telnum, channels: sub.channels }
+        });
+        await tx.update(schema.numberSubscriptions).set({ lastBilledAt: now, nextBillingAt: nextDate })
+          .where(eq(schema.numberSubscriptions.id, sub.id));
+        return movement;
       });
-      await tx.update(schema.numberSubscriptions).set({ lastBilledAt: now, nextBillingAt: nextDate })
+      if (debited.idempotent) {
+        result.skipped++;
+        result.details.push({ telnum: sub.telnum, outcome: 'skipped' });
+      } else {
+        result.charged++;
+        result.details.push({ telnum: sub.telnum, outcome: 'charged', amountMinor: amount, currency: wallet.currency });
+      }
+    } catch (error: any) {
+      // The earlier balance read is only an optimization. debitInTransaction
+      // owns the authoritative wallet lock, so another concurrent debit can
+      // still make this unaffordable before we get it.
+      if (!isInsufficientFunds(error)) throw error;
+      await db.update(schema.numberSubscriptions).set({ status: 'suspended' })
         .where(eq(schema.numberSubscriptions.id, sub.id));
-    });
-    result.charged++;
-    result.details.push({ telnum: sub.telnum, outcome: 'charged', amountMinor: amount, currency: wallet.currency });
+      result.suspended++;
+      result.details.push({ telnum: sub.telnum, outcome: 'suspended' });
+    }
   }
 
   // ── Monthly plan fee ──────────────────────────────────────────────────────
@@ -186,47 +182,30 @@ export async function runMonthlyBilling(db: any, opts?: { now?: Date }): Promise
       billingSuspendedAt: schema.tenants.billingSuspendedAt
     }).from(schema.tenants).where(eq(schema.tenants.id, t.id)).limit(1);
     if (!canSpend(pt, wallet.balanceMinor, planAmount)) {
-      // Ask the card before giving up. This is the recurring revenue, and a
-      // client who left a card left it for exactly this.
-      //
-      // Only while the fee is recently due. A plan fee that cannot be paid is
-      // retried every run, forever — so without a window a declining card would
-      // be presented daily, which providers notice and merchants are judged on.
-      // Five days is long enough for a topped-up wallet or a replaced card, and
-      // short enough to stop on its own.
-      const dueDays = (now.getTime() - new Date(t.planNextBillingAt as any).getTime()) / 86400000;
-      let recovered = false;
-      if (dueDays <= 5) {
-        const shortfall = planAmount - wallet.balanceMinor;
-        const topped = shortfall > 0
-          ? await chargeCardToWallet({
-              tenantId: t.id, amountMinor: shortfall,
-              currency: wallet.currency as any, reason: 'plan_fee'
-            }).catch(() => ({ ok: false as const }))
-          : { ok: false as const };
-        if (topped.ok) {
-          const [fresh] = await db.select().from(schema.wallets).where(eq(schema.wallets.id, wallet.id)).limit(1);
-          if (fresh && canSpend(pt, fresh.balanceMinor, planAmount)) {
-            wallet.balanceMinor = fresh.balanceMinor;
-            recovered = true;
-          }
-        }
-      }
-      if (!recovered) { result.plans.unpaid++; continue; }  // leave anchor; retry next run
+      // Leave the billing anchor in place. A later wallet credit allows the
+      // next run to collect this fee without another saved-card charge path.
+      result.plans.unpaid++;
+      continue;
     }
-    const after = wallet.balanceMinor - planAmount;
-    await db.transaction(async (tx: any) => {
-      await tx.update(schema.wallets).set({ balanceMinor: after, updatedAt: now }).where(eq(schema.wallets.id, wallet.id));
-      await tx.insert(schema.ledger).values({
-        walletId: wallet.id, tenantId: t.id, kind: 'debit',
-        amountMinor: planAmount, balanceAfterMinor: after, reason: 'plan_fee',
-        // The seat count on the entry, so a workspace of five can be shown
-        // five seats at the list price rather than an unexplained multiple.
-        reference: cycleRef, meta: { plan: t.plan, interval, ...seatMeta }
+    try {
+      const debited = await db.transaction(async (tx: any) => {
+        const movement = await debitInTransaction(tx, {
+          tenantId: t.id,
+          amountMinor: planAmount,
+          reason: 'plan_fee',
+          reference: cycleRef,
+          meta: { plan: t.plan, interval, ...seatMeta }
+        });
+        await tx.update(schema.tenants).set({ planLastBilledAt: now, planNextBillingAt: nextDate })
+          .where(eq(schema.tenants.id, t.id));
+        return movement;
       });
-      await tx.update(schema.tenants).set({ planLastBilledAt: now, planNextBillingAt: nextDate }).where(eq(schema.tenants.id, t.id));
-    });
-    result.plans.charged++;
+      if (debited.idempotent) result.plans.skipped++;
+      else result.plans.charged++;
+    } catch (error: any) {
+      if (!isInsufficientFunds(error)) throw error;
+      result.plans.unpaid++;
+    }
   }
 
   return result;

@@ -81,24 +81,6 @@
           </template>
         </div>
 
-        <!-- The card we keep for renewals. Separate from topping up, though it
-             is the same mechanism: there is no way to keep a card without
-             charging it, so the check is a small real payment and the amount
-             stays as credit rather than disappearing. -->
-        <div class="wal-cardfile">
-          <template v-if="savedCard">
-            <div class="wal-cardfile-h">Card on file</div>
-            <p class="wal-cardfile-p">{{ savedCard.brand || 'Card' }} ending {{ savedCard.last4 }} — used for your plan when your wallet is short.</p>
-          </template>
-          <template v-else>
-            <div class="wal-cardfile-h">No card on file</div>
-            <p class="wal-cardfile-p">
-              We charge {{ wallet.currency === 'NGN' ? '₦1,600' : '$1' }} to check the card works, and it goes into your wallet as credit — you keep it. After that we can cover your plan automatically if your balance runs short.
-            </p>
-            <button class="btn btn-ghost btn-sm" :disabled="addingCard" @click="addCard">{{ addingCard ? 'Opening…' : 'Add a card' }}</button>
-          </template>
-        </div>
-
         <!-- Card (Paystack NGN / Stripe USD) -->
         <div v-if="wallet.currency !== 'NGN' || fundTab === 'card'" class="wal-fund-body">
           <div class="wal-quick">
@@ -112,11 +94,29 @@
           <p v-if="minTopupMajor" class="wal-min muted" :class="{ under: belowMinimum }">
             Smallest top-up is {{ wallet.currency === 'NGN' ? '₦' : '$' }}{{ minTopupMajor.toLocaleString() }}.
           </p>
+          <div v-if="savedCard" class="wal-saved-card">
+            Card on file: {{ savedCard.brand || 'Card' }} ending {{ savedCard.last4 }}
+          </div>
+          <label v-if="auth.user?.role === 'owner'" class="wal-save-card">
+            <input v-model="savePaymentMethod" type="checkbox">
+            <span>
+              {{ savedCard
+                ? 'Replace the saved card with the card used for this payment.'
+                : 'Save the card used for this payment for future payments.' }}
+              This does not turn on automatic top-up.
+            </span>
+          </label>
           <button class="btn btn-signal btn-block" :disabled="topping || !amountMajor || belowMinimum" @click="topup">{{ topping ? 'Redirecting…' : `Continue with ${provider}` }}</button>
           <p class="wal-pay-note muted">{{ wallet.currency === 'NGN' ? 'Secured by Paystack' : 'Secured by Stripe' }}.</p>
         </div>
       </div>
     </div>
+
+    <AutoTopupPanel
+      v-if="!pending && !wallet.postpaid && (auth.user?.role === 'owner' || auth.user?.role === 'admin')"
+      :can-edit="auth.user?.role === 'owner'"
+      :refresh-key="autoTopupRefreshKey"
+    />
 
     <!-- Money and invoices split, so a postpaid client isn't scrolling past a
          month of transactions to find what they owe. -->
@@ -415,6 +415,7 @@ function fmtDateTime(iso: string) { return new Date(iso).toLocaleString(undefine
 function describe(reason: string) {
   return ({
     topup: 'Wallet top-up', voice_minute: 'Voice airtime', plan_fee: 'Plan fee',
+    auto_topup: 'Automatic top-up',
     did_monthly: 'Number rental', channel_monthly: 'Voice channel',
     number_monthly: 'Number rental', number_purchase: 'Number purchase',
     ai_managed: 'AI on calls', transcription: 'Transcript', voice_otp: 'Verification call',
@@ -427,8 +428,8 @@ async function loadSummary() {
   const monthStr = monthDate.value.toISOString().slice(0, 7);
   try { summary.value = await api.get<any>('/api/wallet/summary', { month: monthStr }); } catch { /* */ }
 }
-async function load() {
-  pending.value = true;
+async function load(options: { silent?: boolean } = {}) {
+  if (!options.silent) pending.value = true;
   try {
     const [w, l] = await Promise.all([
       api.get<any>('/api/wallet'),
@@ -440,8 +441,13 @@ async function load() {
     ledgerMeta.value = { page: l.page, pages: l.pages, total: l.total, perPage: l.perPage };
     await loadSummary();
     if (w.currency === 'NGN') await loadAccount();
-  } catch (e: any) { toast.err(e.message); }
-  finally { pending.value = false; }
+  } catch (e: any) {
+    // A background confirmation retry can recover on its next poll without
+    // replacing the wallet with an error or loading state.
+    if (!options.silent) toast.err(e.message);
+  } finally {
+    if (!options.silent) pending.value = false;
+  }
 }
 async function loadAccount() {
   try { const r = await api.get<any>('/api/wallet/account'); account.value = r.account; } catch { /* */ }
@@ -463,41 +469,21 @@ function copy(text: string) {
 function changeMonth(delta: number) {
   const d = new Date(monthDate.value); d.setMonth(d.getMonth() + delta); monthDate.value = d; loadSummary();
 }
-/** Leave a card, by paying a small amount with it.
- *
- *  There is no way to keep a card without charging it — Paystack hands back a
- *  reusable authorization on a successful payment and nowhere else, and Stripe
- *  is the same in practice. So the card is checked by using it, and the amount
- *  lands in the wallet as credit rather than disappearing, which is the only
- *  version of this that is fair.
- *
- *  forCard takes the real payment path even in sandbox: a simulated top-up
- *  never reaches a provider, so without it a workspace that has not gone live
- *  could never obtain the card that going live requires.
- */
-const addingCard = ref(false);
 const savedCard = ref<any>(null);
+const savePaymentMethod = ref(false);
+const autoTopupRefreshKey = ref(0);
 async function loadCard() {
   try { savedCard.value = (await api.get<any>('/api/payment-method'))?.card || null; }
   catch { savedCard.value = null; }
 }
-async function addCard() {
-  addingCard.value = true;
-  try {
-    const minor = wallet.value?.currency === 'NGN' ? 160000 : 100;  // ₦1,600 or $1
-    const r = await api.post<{ authorizationUrl: string }>('/api/wallet/topup',
-      { amountMinor: minor, forCard: true, returnTo: '/wallet' });
-    if (r.authorizationUrl) window.location.href = r.authorizationUrl;
-    else toast.err('Could not open the payment page');
-  } catch (e: any) { toast.err(e?.data?.error?.message || e.message); }
-  finally { addingCard.value = false; }
-}
-
 async function topup() {
   topping.value = true;
   try {
     const minor = Math.round(amountMajor.value * 100);
-    const r = await api.post<{ authorizationUrl: string }>('/api/wallet/topup', { amountMinor: minor });
+    const r = await api.post<{ authorizationUrl: string }>('/api/wallet/topup', {
+      amountMinor: minor,
+      savePaymentMethod: savePaymentMethod.value
+    });
     if (r.authorizationUrl) window.location.href = r.authorizationUrl;
     else toast.err('Could not start checkout');
   } catch (e: any) { toast.err(e.message); topping.value = false; }
@@ -515,22 +501,29 @@ onMounted(async () => {
     const before = wallet.value.balanceMinor;
     for (let i = 0; i < 8; i++) {
       await new Promise((r) => setTimeout(r, 2000));
-      await load();
+      await load({ silent: true });
       if (wallet.value.balanceMinor > before) { toast.ok('Payment received'); break; }
     }
+    await loadCard();
+    autoTopupRefreshKey.value++;
     // Drop the reference from the address bar so a refresh doesn't ask again.
     // A slow webhook isn't a failed payment, so nothing is said if it hasn't
     // landed — it will.
-    navigateTo('/wallet', { replace: true });
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('ref');
+    cleanUrl.searchParams.delete('trxref');
+    cleanUrl.searchParams.delete('reference');
+    window.history.replaceState(window.history.state, '',
+      `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
   }
 });
 </script>
 
 <style scoped>
 .wal-bd { display: block; font-size: 11.5px; color: var(--ink-mute); margin-top: 2px; }
-.wal-cardfile { padding: 18px 18px; margin: 26px 26px 30px; border: 1px solid var(--rule); border-radius: var(--radius); }
-.wal-cardfile-h { font-size: 13px; font-weight: 600; color: var(--ink); }
-.wal-cardfile-p { font-size: 12.5px; color: var(--ink-soft); line-height: 1.55; margin: 4px 0 10px; }
+.wal-saved-card { margin-top: 12px; font-size: 12px; color: var(--ink-soft); }
+.wal-save-card { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0 16px; color: var(--ink-soft); font-size: 12.5px; line-height: 1.5; cursor: pointer; }
+.wal-save-card input { width: 16px; height: 16px; margin-top: 2px; flex: none; accent-color: var(--signal); }
 .wal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin: 26px 0 20px; }
 .wal-tab { padding: 10px 16px; font-size: 14px; color: var(--ink-soft); border: 0; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
 .wal-tab.on { color: var(--signal); border-bottom-color: var(--signal); font-weight: 500; }

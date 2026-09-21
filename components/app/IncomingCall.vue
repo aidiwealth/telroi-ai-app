@@ -22,7 +22,8 @@
     </div>
   </transition>
 
-  <!-- Active inbound call: stays until the user hangs up. -->
+  <!-- A separate transition lets the waiting-call bubble appear independently
+       while preserving Vue's one-child-per-transition requirement. -->
   <transition name="ring-slide">
     <!-- Its own bubble above the call, so neither is cramped. Only shown when
          somebody is actually holding — an agent mid-call shouldn't be nagged by
@@ -35,7 +36,10 @@
       </div>
       <button class="ic-queue-next" @click="endAndTakeNext">Take next</button>
     </div>
+  </transition>
 
+  <!-- Active inbound call: stays until the user hangs up. -->
+  <transition name="ring-slide">
     <div v-if="onCall" class="incoming oncall">
       <div class="oncall-dot" aria-hidden="true"></div>
       <div class="incoming-text">

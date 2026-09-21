@@ -21,6 +21,7 @@ services:
       - { key: DATABASE_URL, value: "${db.DATABASE_URL}", type: SECRET }
       - { key: JWT_SECRET, type: SECRET }
       - { key: ENCRYPTION_KEY, type: SECRET }
+      - { key: CRON_SECRET, type: SECRET }
       - { key: EMAIL_PROVIDER, value: resend }
       - { key: RESEND_API_KEY, type: SECRET }
       - { key: EMAIL_FROM, value: "Telroi <hello@telroi.ai>" }

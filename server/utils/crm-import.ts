@@ -3,12 +3,16 @@
 // contacts, updating the job row so the client can show live progress.
 import { eq, sql } from 'drizzle-orm';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+// Use SheetJS's native ESM build. Its CommonJS entry dynamically requires a
+// code-page helper, which Nitro can turn into an invalid C:\\... URL on Windows.
+// @ts-expect-error SheetJS publishes types for `xlsx`, but not its ESM subpath.
+import * as XLSXRuntime from 'xlsx/xlsx.mjs';
 import { useDb, schema } from '../db';
 import { getObject } from './storage';
 import { logEvent } from './logs';
 
 const BATCH = 1000;
+const XLSX = XLSXRuntime as typeof import('xlsx');
 
 // Map common header variants to our contact fields.
 function pick(row: Record<string, any>, keys: string[]): string | undefined {

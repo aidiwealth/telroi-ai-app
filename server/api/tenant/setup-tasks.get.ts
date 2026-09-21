@@ -37,11 +37,11 @@ export default defineEventHandler(async (event) => {
   // whether you're nearly there.
   const steps = [
     {
-      id: 'add-card', owner: 'client', priority: 1, icon: 'credit-card',
+      id: 'save-card', owner: 'client', priority: 1, icon: 'credit-card',
       done: !!card,
       title: 'Add a payment method',
-      desc: 'Save a card so your wallet can top itself up and your service never pauses.',
-      action: { label: 'Add card', to: '/wallet' }
+      desc: 'Choose “Save card” when you top up so your wallet can later top itself up.',
+      action: { label: 'Top up and save card', to: '/wallet' }
     },
     {
       id: 'fund-wallet', owner: 'client', priority: 2, icon: 'wallet',

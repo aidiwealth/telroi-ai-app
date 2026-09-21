@@ -131,8 +131,15 @@ ARI_URL=https://sip.telroi.ai:8089      # protocol+host only; client adds /ari +
 ARI_USERNAME=telroi
 ARI_PASSWORD=<your ARI password>
 ARI_APP_NAME=telroi
+WEBAPP_URL=https://app.telroi.ai
+CRON_SECRET=<same strong value configured on the web app>
+AUTO_TOPUP_CRON_INTERVAL_MS=60000
 DATABASE_URL=<same as main app — local/fast on NYC>
 ```
+
+The control app calls the web app's auto-top-up worker every minute and the
+number grace-expiry worker hourly. Deploy the database migration and provider
+webhooks before starting this scheduler against the updated web app.
 
 ### Prerequisites for this cross-box setup
 1. **Firewall:** the London PBX firewall must allow inbound TCP **8089** from the

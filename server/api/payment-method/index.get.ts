@@ -9,5 +9,5 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.paymentMethods.tenantId, s.tenantId))
     .orderBy(desc(schema.paymentMethods.createdAt)).limit(1);
   if (!pm) return { card: null };
-  return { card: { brand: pm.brand, last4: pm.last4, expMonth: pm.expMonth, expYear: pm.expYear, provider: pm.provider } };
+  return { card: { brand: pm.brand, last4: pm.last4, expMonth: pm.expMonth, expYear: pm.expYear, provider: pm.provider, reusable: pm.reusable } };
 });

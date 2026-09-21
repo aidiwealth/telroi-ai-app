@@ -16,3 +16,5 @@ export function useDb() {
 }
 
 export { schema };
+export type Database = ReturnType<typeof useDb>;
+export type DbTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
