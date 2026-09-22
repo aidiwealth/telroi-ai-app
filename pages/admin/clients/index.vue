@@ -164,10 +164,7 @@ async function load() {
     clients.value = c.clients || [];
     total.value = c.total ?? clients.value.length;
     totalPages.value = c.totalPages ?? 1;
-    try {
-      const s = await $fetch<any>('/api/admin/settings');
-      suffix.value = s.clientDomainSuffix || '';
-    } catch { /* no suffix; the slug stands on its own */ }
+    suffix.value = c.domainSuffix || '';
   } catch (e: any) {
     error.value = e?.data?.error?.message || e?.data?.message || 'Could not load clients.';
   } finally { pending.value = false; }

@@ -75,5 +75,10 @@ export default defineEventHandler(async (event) => {
     };
   });
 
-  return { clients, page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+  // The domain suffix, so the page needs no second call. It used to read it
+  // from /api/admin/settings, which is superadmin-only — staff got a 403 on
+  // every visit and slugs without their suffix.
+  const [ps] = await useDb().select({ suffix: schema.platformSettings.clientDomainSuffix })
+    .from(schema.platformSettings).where(eq(schema.platformSettings.id, 'singleton')).limit(1);
+  return { clients, page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)), domainSuffix: ps?.suffix || '' };
 });
