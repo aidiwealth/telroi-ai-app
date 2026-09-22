@@ -80,8 +80,8 @@
               <td class="mono ad-dim">{{ v.telnum }}</td>
               <td><span class="ad-pip" :class="{ on: v.status === 'live' }">{{ v.status }}</span></td>
               <td class="ad-van-actions">
-                <button v-if="v.status !== 'live'" class="btn btn-ghost btn-xs" :disabled="vanBusy === v.id" @click="setVanStatus(v, 'live')">Activate</button>
-                <button v-else class="btn btn-ghost btn-xs" :disabled="vanBusy === v.id" @click="setVanStatus(v, 'paused')">Pause</button>
+                <button :title="isSuper ? undefined : 'Superadmin only'" v-if="v.status !== 'live'" class="btn btn-ghost btn-xs" :disabled="!isSuper || (vanBusy === v.id)" @click="setVanStatus(v, 'live')">Activate</button>
+                <button :title="isSuper ? undefined : 'Superadmin only'" v-else class="btn btn-ghost btn-xs" :disabled="!isSuper || (vanBusy === v.id)" @click="setVanStatus(v, 'paused')">Pause</button>
               </td>
             </tr>
           </table>
@@ -132,8 +132,8 @@
             <span v-if="v.regionMatch" class="ad-tag on" style="margin-left:6px;font-size:11px">region default</span>
           </label>
           <div class="ad-sip-actions">
-            <button class="btn btn-signal btn-sm" :disabled="savingSip" @click="saveSipVendors(false)">{{ savingSip ? 'Saving…' : 'Save override' }}</button>
-            <button class="btn btn-ghost btn-sm" :disabled="savingSip" @click="saveSipVendors(true)">Clear (auto)</button>
+            <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-signal btn-sm" :disabled="!isSuper || (savingSip)" @click="saveSipVendors(false)">{{ savingSip ? 'Saving…' : 'Save override' }}</button>
+            <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-ghost btn-sm" :disabled="!isSuper || (savingSip)" @click="saveSipVendors(true)">Clear (auto)</button>
           </div>
 
           <div style="margin-top:16px;border-top:1px solid var(--rule);padding-top:14px">
@@ -159,7 +159,7 @@
             <div class="ad-field"><label>Password {{ digSipPwSet ? '· set, leave blank to keep' : '' }}</label>
               <input v-model="digSipPassword" class="ad-input mono" type="password" :placeholder="digSipPwSet ? '••••••••' : 'SIP password'" />
             </div>
-            <button class="btn btn-signal btn-sm" :disabled="savingDigSip" @click="saveSipAccount">{{ savingDigSip ? 'Saving…' : 'Save SIP account' }}</button>
+            <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-signal btn-sm" :disabled="!isSuper || (savingDigSip)" @click="saveSipAccount">{{ savingDigSip ? 'Saving…' : 'Save SIP account' }}</button>
             <span v-if="digSipMsg" class="ad-hint" style="margin-left:8px">{{ digSipMsg }}</span>
           </div>
         </section>
@@ -222,9 +222,9 @@
             <div v-for="f in telroiOneFeatures" :key="f.key" class="ad-feat-row">
               <span class="ad-feat-label" :class="{ on: ent.features[f.key] }">{{ f.label }}</span>
               <div class="ad-feat-actions">
-                <button class="ad-feat-btn" :class="{ sel: ovr[f.key] === true }" @click="setFeature(f.key, true)">On</button>
-                <button class="ad-feat-btn" :class="{ sel: ovr[f.key] === false }" @click="setFeature(f.key, false)">Off</button>
-                <button class="ad-feat-btn dim" :class="{ sel: ovr[f.key] === undefined }" @click="setFeature(f.key, null)" title="Use plan default">Auto</button>
+                <button :title="isSuper ? undefined : 'Superadmin only'" :disabled="!isSuper" class="ad-feat-btn" :class="{ sel: ovr[f.key] === true }" @click="setFeature(f.key, true)">On</button>
+                <button :title="isSuper ? undefined : 'Superadmin only'" :disabled="!isSuper" class="ad-feat-btn" :class="{ sel: ovr[f.key] === false }" @click="setFeature(f.key, false)">Off</button>
+                <button :disabled="!isSuper" class="ad-feat-btn dim" :class="{ sel: ovr[f.key] === undefined }" @click="setFeature(f.key, null)" title="Use plan default">Auto</button>
               </div>
             </div>
           </div>
@@ -240,7 +240,7 @@
           <select v-model="countryEdit" class="ad-ctl ad-ctl-grow">
             <option v-for="c in countryOptions" :key="c" :value="c">{{ c }}</option>
           </select>
-          <button class="btn btn-signal btn-sm" :disabled="countryBusy || countryEdit === (data.tenant.country || '')" @click="saveCountry">
+          <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-signal btn-sm" :disabled="!isSuper || (countryBusy || countryEdit === (data.tenant.country || ''))" @click="saveCountry">
             {{ countryBusy ? '…' : 'Save' }}
           </button>
         </div>
@@ -298,7 +298,7 @@
               <option value="annual">Annually</option>
             </select>
           </label>
-          <button class="btn btn-signal btn-sm" :disabled="intervalBusy" @click="saveInterval">{{ intervalBusy ? 'Saving…' : 'Save' }}</button>
+          <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-signal btn-sm" :disabled="!isSuper || (intervalBusy)" @click="saveInterval">{{ intervalBusy ? 'Saving…' : 'Save' }}</button>
         </div>
         <!-- Which number their OTP and notification calls leave on. Own by
              default: a carrier blocks a source number carrying heavy traffic,
@@ -327,7 +327,7 @@
           <label class="ad-ovr"><span>AI daily cap ($)</span>
             <input v-model="aiCapForm" type="number" step="0.01" min="0" class="ad-ctl mono" placeholder="platform default" />
           </label>
-          <button class="btn btn-ghost btn-sm" :disabled="aiCapBusy" @click="saveAiCap">{{ aiCapBusy ? 'Saving…' : 'Save cap' }}</button>
+          <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-ghost btn-sm" :disabled="!isSuper || (aiCapBusy)" @click="saveAiCap">{{ aiCapBusy ? 'Saving…' : 'Save cap' }}</button>
         </div>
         <p class="ad-hint">Blank uses the platform figure. 0 removes the ceiling for this client — worth doing only where somebody expects real volume, since it is what stops a robocaller running up their bill.</p>
         <p class="ad-hint">Takes effect at their next billing date — they finish the period they have paid for, and the new interval applies from then. Annual prices are set under Pricing, globally or for this client alone.</p>
@@ -357,7 +357,7 @@
               <option :value="30">30 days</option>
             </select>
           </label>
-          <button class="btn btn-signal btn-sm" :disabled="ppBusy" @click="savePostpaid">{{ ppBusy ? '…' : 'Save' }}</button>
+          <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-signal btn-sm" :disabled="!isSuper || (ppBusy)" @click="savePostpaid">{{ ppBusy ? '…' : 'Save' }}</button>
         </div>
         <p v-if="ppForm.postpaid" class="ad-none" style="margin-top:10px">
           Calls stop once the balance reaches −{{ money(ppForm.creditLimit || 0) }}. Currently
@@ -458,9 +458,9 @@
           <div v-for="f in featureList" :key="f.key" class="ad-feat-row">
             <span class="ad-feat-label" :class="{ on: ent.features[f.key] }">{{ f.label }}</span>
             <div class="ad-feat-actions">
-              <button class="ad-feat-btn" :class="{ sel: ovr[f.key] === true }" @click="setFeature(f.key, true)">On</button>
-              <button class="ad-feat-btn" :class="{ sel: ovr[f.key] === false }" @click="setFeature(f.key, false)">Off</button>
-              <button class="ad-feat-btn dim" :class="{ sel: ovr[f.key] === undefined }" @click="setFeature(f.key, null)" title="Use plan default">Auto</button>
+              <button :title="isSuper ? undefined : 'Superadmin only'" :disabled="!isSuper" class="ad-feat-btn" :class="{ sel: ovr[f.key] === true }" @click="setFeature(f.key, true)">On</button>
+              <button :title="isSuper ? undefined : 'Superadmin only'" :disabled="!isSuper" class="ad-feat-btn" :class="{ sel: ovr[f.key] === false }" @click="setFeature(f.key, false)">Off</button>
+              <button :disabled="!isSuper" class="ad-feat-btn dim" :class="{ sel: ovr[f.key] === undefined }" @click="setFeature(f.key, null)" title="Use plan default">Auto</button>
             </div>
           </div>
         </div>
@@ -589,7 +589,7 @@
             <input v-model="delSlug" class="ad-ctl" :placeholder="data.tenant.slug" autocomplete="off" />
           </label>
           <div class="ad-danger-actions">
-            <button class="btn btn-danger btn-sm" :disabled="delSlug !== data.tenant.slug || delBusy" @click="deleteWorkspace">
+            <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-danger btn-sm" :disabled="!isSuper || (delSlug !== data.tenant.slug || delBusy)" @click="deleteWorkspace">
               {{ delBusy ? 'Deleting…' : 'Delete permanently' }}
             </button>
             <button class="btn btn-ghost btn-sm" :disabled="delBusy" @click="delConfirm = false; delSlug = ''">Cancel</button>
