@@ -157,9 +157,8 @@ async function load() {
   try {
     const params = new URLSearchParams({ page: String(page.value), pageSize: '50' });
     if (search.value.trim()) params.set('q', search.value.trim());
-    // Clients list is the only required call. The settings fetch is optional
-    // (only supplies the domain suffix) and is superadmin-only, so we fetch it
-    // separately and ignore a 403 — staff still get the full clients page.
+    // One call: the list carries the domain suffix too, so staff — who cannot
+    // read the superadmin settings — see full domains without a failed request.
     const c = await $fetch<any>(`/api/admin/clients?${params.toString()}`);
     clients.value = c.clients || [];
     total.value = c.total ?? clients.value.length;
