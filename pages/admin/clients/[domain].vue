@@ -251,7 +251,11 @@
       <!-- Wallet control -->
       <section class="ad-panel ad-control">
         <h3 class="ad-panel-h">Wallet control</h3>
-        <div class="ad-adjust-row">
+        <!-- Superadmin only, as the endpoint enforces. Adjusting a balance
+             creates or removes money, and staff saw a button that failed with
+             a bare 403 rather than being told. -->
+        <p v-if="!isSuper" class="muted">Balance adjustments are superadmin-only.</p>
+        <div v-else class="ad-adjust-row">
           <select v-model="adjust.direction" class="ad-ctl">
             <option value="credit">Credit (add)</option>
             <option value="debit">Debit (remove)</option>
@@ -797,6 +801,16 @@ async function saveInterval() {
 // moved to the shared one when their own is the problem — a fresh DID the
 // carrier has not propagated, or one blocked for reasons that take days.
 const ownNumBusy = ref(false);
+// Who is looking, so controls only a superadmin can use are not offered to
+// staff. Defaults to false: a failed lookup hides the control rather than
+// showing one that will be refused.
+const isSuper = ref(false);
+onMounted(async () => {
+  try {
+    const r = await $fetch<any>('/api/admin/me');
+    isSuper.value = r?.admin?.role === 'superadmin';
+  } catch { /* stays hidden */ }
+});
 const pinnedNum = ref('');
 watch(() => data.value?.tenant?.otpCallerPinned, (v) => { pinnedNum.value = v || ''; }, { immediate: true });
 async function savePinned() {
