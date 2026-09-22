@@ -6,7 +6,7 @@
 // switching back safe, since a client who paid for a year keeps the year.
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { requireSuperAdmin } from '~/server/utils/platform';
+import { requirePlatformAdmin } from '~/server/utils/platform';
 import { apiError } from '~/server/utils/api';
 import { resolveTenantByDomain } from '~/server/utils/resolve-tenant';
 import { useDb, schema } from '~/server/db';
@@ -15,7 +15,7 @@ import { logEvent } from '~/server/utils/logs';
 const Body = z.object({ interval: z.enum(['monthly', 'annual']) });
 
 export default defineEventHandler(async (event) => {
-  const admin = await requireSuperAdmin(event);
+  const admin = await requirePlatformAdmin(event);
   const t = await resolveTenantByDomain(decodeURIComponent(getRouterParam(event, 'domain')!));
   if (!t) throw apiError('not_found', 'Workspace not found', 404);
 

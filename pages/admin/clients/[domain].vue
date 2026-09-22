@@ -254,8 +254,7 @@
         <!-- Superadmin only, as the endpoint enforces. Adjusting a balance
              creates or removes money, and staff saw a button that failed with
              a bare 403 rather than being told. -->
-        <p v-if="!isSuper" class="muted">Balance adjustments are superadmin-only.</p>
-        <div v-else class="ad-adjust-row">
+        <div class="ad-adjust-row">
           <select v-model="adjust.direction" class="ad-ctl">
             <option value="credit">Credit (add)</option>
             <option value="debit">Debit (remove)</option>
@@ -298,7 +297,7 @@
               <option value="annual">Annually</option>
             </select>
           </label>
-          <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-signal btn-sm" :disabled="!isSuper || (intervalBusy)" @click="saveInterval">{{ intervalBusy ? 'Saving…' : 'Save' }}</button>
+          <button class="btn btn-signal btn-sm" :disabled="intervalBusy" @click="saveInterval">{{ intervalBusy ? 'Saving…' : 'Save' }}</button>
         </div>
         <!-- Which number their OTP and notification calls leave on. Own by
              default: a carrier blocks a source number carrying heavy traffic,
@@ -327,7 +326,7 @@
           <label class="ad-ovr"><span>AI daily cap ($)</span>
             <input v-model="aiCapForm" type="number" step="0.01" min="0" class="ad-ctl mono" placeholder="platform default" />
           </label>
-          <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-ghost btn-sm" :disabled="!isSuper || (aiCapBusy)" @click="saveAiCap">{{ aiCapBusy ? 'Saving…' : 'Save cap' }}</button>
+          <button class="btn btn-ghost btn-sm" :disabled="aiCapBusy" @click="saveAiCap">{{ aiCapBusy ? 'Saving…' : 'Save cap' }}</button>
         </div>
         <p class="ad-hint">Blank uses the platform figure. 0 removes the ceiling for this client — worth doing only where somebody expects real volume, since it is what stops a robocaller running up their bill.</p>
         <p class="ad-hint">Takes effect at their next billing date — they finish the period they have paid for, and the new interval applies from then. Annual prices are set under Pricing, globally or for this client alone.</p>
@@ -357,7 +356,7 @@
               <option :value="30">30 days</option>
             </select>
           </label>
-          <button :title="isSuper ? undefined : 'Superadmin only'" class="btn btn-signal btn-sm" :disabled="!isSuper || (ppBusy)" @click="savePostpaid">{{ ppBusy ? '…' : 'Save' }}</button>
+          <button class="btn btn-signal btn-sm" :disabled="ppBusy" @click="savePostpaid">{{ ppBusy ? '…' : 'Save' }}</button>
         </div>
         <p v-if="ppForm.postpaid" class="ad-none" style="margin-top:10px">
           Calls stop once the balance reaches −{{ money(ppForm.creditLimit || 0) }}. Currently

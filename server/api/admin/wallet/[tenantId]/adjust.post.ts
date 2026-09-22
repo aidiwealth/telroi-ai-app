@@ -13,7 +13,7 @@ const Body = z.object({
 
 export default defineEventHandler(async (event) => {
   const admin = await requirePlatformAdmin(event);
-  if (admin.role !== 'superadmin') throw apiError('forbidden', 'Superadmin required', 403);
+  // Staff run billing; the record of who acted is the control, not rank.
   const tenantId = getRouterParam(event, 'tenantId')!;
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'direction, amountMinor and reason required');
