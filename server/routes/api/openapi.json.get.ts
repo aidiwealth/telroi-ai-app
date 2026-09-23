@@ -66,11 +66,11 @@ export default defineEventHandler((event) => {
               language: { type: 'string', description: 'BCP-47 language for the spoken prompt.', example: 'en-US' },
               from: { type: 'string', description: 'Which of your own numbers the call comes from, in E.164. Must be a number on your workspace or the request is refused. Omit it and we use the number set in your dashboard, or any you hold on the carrier carrying the call. An operator can pin a workspace to one number, which overrides this.', example: '+2348012345678' },
               security_notice: { type: 'boolean', default: true, description: 'Whether the call ends with "Do not share this code with anyone." On unless you turn it off: it is what stops somebody reading their code to a caller pretending to be their bank. Turning it off saves about two seconds.', example: true },
-              code: { type: 'string', pattern: '^[0-9]{4,10}$', description: 'Your own code, if you generate them. We read it out and record the call; verifying it stays with you. When set, `code_length` is ignored and no `expires_at` is returned — how long it stays valid is your decision.', example: '483920' }
+              code: { type: ['string', 'integer'], pattern: '^[0-9]{4,10}$', description: 'Your own code, if you generate them, as a string ("483920") or a number (483920). We read it out and record the call; verifying it stays with you. When set, `code_length` is ignored and no `expires_at` is returned — how long it stays valid is your decision.', example: '483920' }
             }
           }, examples: {
             default: { summary: 'We generate the code', value: { to: '+2348012345678', code_length: 6, from: '+2347080673987', security_notice: true } },
-            ownCode: { summary: 'You supply the code', value: { to: '+2348012345678', code: '483920' } },
+            ownCode: { summary: 'You supply the code (string or number)', value: { to: '+2348012345678', code: 483920 } },
             fromNumber: { summary: 'Choose which of your numbers calls', value: { to: '+2348012345678', code_length: 6, from: '+2347080673987' } },
             noNotice: { summary: 'Without the closing security line', value: { to: '+2348012345678', code_length: 6, security_notice: false } }
           } } } },

@@ -27,7 +27,12 @@ export default defineEventHandler(async (event) => {
 
   const p = Body.safeParse(await readBody(event));
   if (!p.success) {
-    throw apiError('invalid', `to (E.164 destination) and message (up to ${MAX_NOTIFY_CHARS} characters) are required`);
+    // Name the field that failed rather than always blaming to/message — the
+    // same misleading error the OTP endpoint had, where a bad from or a mistyped
+    // field sent the caller after the wrong thing.
+    const first = p.error.issues[0];
+    const field = first?.path?.join('.') || 'body';
+    throw apiError('invalid', `${field}: ${first?.message || 'invalid'}`);
   }
 
   const { hasFeature } = await import('~/server/utils/entitlements');
