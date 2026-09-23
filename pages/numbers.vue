@@ -384,14 +384,14 @@ async function releaseNumber(sub: any) {
     const r = await api.post<any>(`/api/numbers/${sub.id}/release`, {});
     toast.ok(r.message || 'Number released');
     await loadSubs();
-  } catch (e: any) { toast.err(e.message); }
+  } catch (e: any) { toast.err(e?.data?.error?.message || e?.message); }
 }
 async function reclaimNumber(sub: any) {
   try {
     const r = await api.post<any>(`/api/numbers/${sub.id}/reclaim`, {});
     toast.ok(r.message || 'Number re-activated');
     await loadSubs();
-  } catch (e: any) { toast.err(e.message); }
+  } catch (e: any) { toast.err(e?.data?.error?.message || e?.message); }
 }
 function closeAdjust() { adjust.value = { sub: null, next: 1 }; }
 async function confirmAdjust() {
@@ -475,7 +475,7 @@ function onCategory(key: string) {
 async function openBuy() {
   showBuy.value = true; picked.value = null;
   try { const r = await api.get<any>('/api/numbers/available'); available.value = r.numbers || []; }
-  catch (e: any) { toast.err(e.message); }
+  catch (e: any) { toast.err(e?.data?.error?.message || e?.message); }
 }
 
 // ── The indemnity ────────────────────────────────────────────────────────────
@@ -627,7 +627,11 @@ async function doPurchase() {
     const res = await api.get<{ items: TelroiNumber[] }>('/api/voice/numbers');
     numbers.value = res.items || [];
   } catch (e: any) {
-    toast.err(e.message?.includes('insufficient') ? 'Wallet balance too low — top up first.' : e.message);
+    // The server's reason, not the status line. e.message on a failed $fetch is
+    // "[POST] /api/numbers/purchase 403" — so a client refused for compliance,
+    // an unaccepted indemnity or a number taken a moment earlier saw a bare
+    // status or nothing at all, which reads as the button doing nothing.
+    toast.err(e?.data?.error?.message || e?.data?.message || e?.message || 'Could not buy that number.');
   } finally { buying.value = false; }
 }
 
@@ -697,7 +701,7 @@ onMounted(async () => {
         airtimePerMin.value = conv(pr.voiceMinuteUsdMinor ?? 1.02);
       }
     } catch { /* keep $2 default */ }
-  } catch (e: any) { toast.err(e.message); }
+  } catch (e: any) { toast.err(e?.data?.error?.message || e?.message); }
   finally { pending.value = false; }
 });
 </script>
