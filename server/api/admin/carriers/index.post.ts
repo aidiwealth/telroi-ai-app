@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
   const webhookSecret = raw.webhookSecret ? String(raw.webhookSecret) : null;
   const codecs = Array.isArray(raw.codecs) && raw.codecs.length ? raw.codecs.map(String) : null;
   const enabled = raw.enabled !== false;
+  const callerIdFormat = raw.callerIdFormat === 'national' ? 'national' : 'e164';
 
   const db = useDb();
   const [existing] = await db.select().from(schema.carriers).where(eq(schema.carriers.name, name)).limit(1);
@@ -57,7 +58,7 @@ export default defineEventHandler(async (event) => {
       await agentCarrierUpsert({
         name, displayName, prefix, sipGateway, sipGateway2, sipPort, transport,
         sipDomain: sipDomain || undefined, authUser: authUser || undefined,
-        authPass: authPassPlain, codecs: codecs || undefined
+        authPass: authPassPlain, codecs: codecs || undefined, callerIdFormat
       });
       pushed = true;
     } catch (e: any) {
@@ -69,7 +70,7 @@ export default defineEventHandler(async (event) => {
   const values: any = {
     name, displayName, prefix, region, sipGateway, sipGateway2, sipPort, transport,
     sipDomain, authUser, authPassEnc, fromUser: null, callerId: null,
-    codecs: codecs ?? ['ulaw', 'alaw'], webhookSecretEnc, enabled,
+    codecs: codecs ?? ['ulaw', 'alaw'], webhookSecretEnc, enabled, callerIdFormat,
     status: pushed ? 'live' : (isScaffold ? 'scaffold' : 'disabled'),
     pushedAt: pushed ? new Date() : (existing?.pushedAt ?? null),
     updatedAt: new Date()

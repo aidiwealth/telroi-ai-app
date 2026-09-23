@@ -1698,6 +1698,10 @@ export interface ConnectWorkflow {
 // The authoritative Asterisk config is generated on the PBX by the provisioning
 // agent (carrier-core.ts); this table is the app-side record + secrets store.
 export const carriers = pgTable('carriers', {
+  // How caller ID is presented to this carrier: 'e164' (234XXXXXXXXXX, the
+  // default) or 'national' (0XXXXXXXXXX). Ruach rewrites E.164 and wants the
+  // national form.
+  callerIdFormat: text('caller_id_format').notNull().default('e164'),
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull().unique(),       // slug: lowercase a-z0-9 (e.g. "ruach")
   displayName: text('display_name').notNull(),

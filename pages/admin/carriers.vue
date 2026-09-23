@@ -146,6 +146,13 @@
           </div>
           <div class="ad-field"><label>SIP domain (optional)</label><input v-model="form.sipDomain" class="ad-input mono" placeholder="blank = use gateway" /></div>
           <div class="ad-field"><label>Auth username</label><input v-model="form.authUser" class="ad-input mono" placeholder="blank for IP-auth" /></div>
+          <div class="ad-field"><label>Caller ID format</label>
+            <select v-model="form.callerIdFormat" class="ad-input">
+              <option value="e164">E.164 — 234XXXXXXXXXX (default)</option>
+              <option value="national">National — 0XXXXXXXXXX</option>
+            </select>
+            <span class="ad-hint">Most carriers use E.164. Ruach rewrites E.164, so set it to national.</span>
+          </div>
           <div class="ad-field"><label>Auth password {{ editingCarrier?.authPassSet ? '· set' : '' }}</label>
             <input v-model="form.authPass" type="password" class="ad-input mono" :placeholder="editingCarrier?.authPassSet ? '•••••••• (blank to keep)' : 'blank for IP-auth'" />
           </div>
@@ -192,7 +199,7 @@ const error = ref('');
 const blankForm = () => ({
   name: '', displayName: '', prefix: '', region: 'NG',
   sipGateway: '', sipGateway2: '', sipPort: 5060, transport: 'udp', sipDomain: '',
-  authUser: '', authPass: '', webhookSecret: '', enabled: true
+  authUser: '', authPass: '', webhookSecret: '', enabled: true, callerIdFormat: 'e164'
 });
 const form = reactive(blankForm());
 
@@ -234,6 +241,7 @@ function edit(c: Carrier) {
   form.region = c.region; form.sipGateway = c.sipGateway; form.sipGateway2 = c.sipGateway2 || ''; form.sipPort = c.sipPort;
   form.transport = c.transport; form.sipDomain = c.sipDomain || '';
   form.authUser = c.authUser || ''; form.enabled = c.enabled;
+  form.callerIdFormat = (c as any).callerIdFormat || 'e164';
   form.authPass = ''; form.webhookSecret = '';
   isEdit.value = true; editingCarrier.value = c; error.value = ''; modalOpen.value = true;
 }

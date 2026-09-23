@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   return rows.map((c: any) => ({
     id: c.id, name: c.name, displayName: c.displayName, prefix: c.prefix,
     region: c.region, sipGateway: c.sipGateway, sipPort: c.sipPort,
-    transport: c.transport, sipDomain: c.sipDomain, authUser: c.authUser,
+    transport: c.transport, sipDomain: c.sipDomain, authUser: c.authUser, callerIdFormat: c.callerIdFormat,
     fromUser: c.fromUser, callerId: c.callerId, codecs: c.codecs,
     enabled: c.enabled, status: c.status, pushedAt: c.pushedAt,
     authPassSet: !!c.authPassEnc, webhookSecretSet: !!c.webhookSecretEnc

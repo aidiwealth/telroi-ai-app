@@ -192,6 +192,7 @@ export interface CarrierAgentInput {
   sipGateway: string; sipPort?: number; transport?: string; sipDomain?: string;
   authUser?: string; authPass?: string; fromUser?: string; callerId?: string;
   codecs?: string[];
+  callerIdFormat?: 'e164' | 'national';
 }
 export async function agentCarrierUpsert(input: CarrierAgentInput): Promise<{ name: string; prefix: string; pjsipPath: string; extensionsPath: string }> {
   const j = await agentCall('/carrier/upsert', input);

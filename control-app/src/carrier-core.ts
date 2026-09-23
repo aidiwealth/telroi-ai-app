@@ -44,6 +44,11 @@ export interface CarrierInput {
   fromUser?: string;
   callerId?: string;
   codecs?: string[];
+  // How to present caller ID to this carrier. 'e164' sends 234XXXXXXXXXX as the
+  // per-customer DID lookup stores it (Kasooko, Telnyx, the default). 'national'
+  // converts it to 0XXXXXXXXXX — Ruach rewrites an E.164 caller ID and asked for
+  // the national form, so it is set per carrier rather than for everyone.
+  callerIdFormat?: 'e164' | 'national';
 }
 
 function assertName(name: string): void {
@@ -155,7 +160,12 @@ exten => ${dialRoutine},1,NoOp(${c.displayName || c.name} out -> \${DEST})
  same => n,Set(CHANNEL(hangup_handler_push)=telroi-log,s,1(${c.name}))
  same => n,Set(CID=\${ODBC_CALLERID_FOR(\${CHANNEL(endpoint)},${c.name})})
  same => n,GotoIf($["\${CID}"=""]?nodid)
- same => n,Set(CALLERID(num)=\${CID})
+${c.callerIdFormat === 'national'
+  ? ` ; ${c.displayName || c.name} rewrites an E.164 caller ID, so present the\n`
+    + ` ; national form: strip a leading 234 and replace with 0. A number already\n`
+    + ` ; in another shape is left as-is.\n`
+    + ` same => n,Set(CID=\${IF($["\${CID:0:3}"="234"]?0\${CID:3}:\${CID})})\n`
+  : ''} same => n,Set(CALLERID(num)=\${CID})
  same => n,Set(CALLERID(name)=Telroi)
  same => n,Set(TELROI_START=\${EPOCH})
  same => n,Dial(PJSIP/${c.name}-endpoint/sip:\${DEST}@${useAuthDomain},60)
