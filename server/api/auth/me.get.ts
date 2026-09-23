@@ -52,5 +52,5 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return { user: { id: s.userId, email: s.email, role: s.role, name: u.name || null, copilotOnboarded: !!u.copilotOnboarded, missedSeenAt: seen?.seenAt || null }, tenant };
+  return { user: { id: s.userId, email: s.email, role: s.role, name: u.name || null, copilotOnboarded: !!u.copilotOnboarded, missedSeenAt: seen?.seenAt || null, impersonatedBy: s.impersonatedBy || null }, tenant };
 });

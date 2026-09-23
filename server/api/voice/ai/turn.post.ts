@@ -198,7 +198,12 @@ export default defineEventHandler(async (event) => {
   const nameMatch = reply.match(/\[name:([^\]]+)\]/i);
   if (nameMatch) {
     callerName = nameMatch[1].trim().slice(0, 80);
-    reply = reply.replace(/\[name:[^\]]+\]/ig, '').trim();
+    // Strip the tag from clean, the text we speak — reply is const and the
+    // untouched original, matching how [transfer] and [end] are handled below.
+    // Reassigning reply threw "Assignment to constant variable" and crashed the
+    // turn after the LLM had already produced an answer: the caller gave a name,
+    // the agent had a reply ready, and it was never spoken.
+    clean = clean.replace(/\[name:[^\]]+\]/ig, '').trim();
   }
 
   // Write the name to their contact. The caller's number is not in this payload

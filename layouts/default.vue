@@ -1,5 +1,14 @@
 <template>
   <div class="shell" :class="{ 'mobile-open': mobileOpen }">
+    <!-- Impossible to miss on purpose. Support is inside a client's live
+         account with full access; the danger is acting on their data while
+         thinking it is your own. A corner toast would not stop that — a bar
+         across every page does. -->
+    <div v-if="auth.user?.impersonatedBy" class="imp-bar">
+      Viewing <strong>{{ auth.user.name || auth.tenant?.name || 'this workspace' }}</strong> as support.
+      Changes affect their live account.
+      <button class="imp-exit" @click="exitImpersonation">Exit</button>
+    </div>
     <AppSidebar :collapsed="collapsed" :mobile-open="mobileOpen" @toggle="onToggleSidebar" @close-mobile="mobileOpen = false" />
     <!-- Mobile drawer overlay -->
     <div class="shell-overlay" @click="mobileOpen = false"></div>
@@ -53,6 +62,12 @@ useHead({
     : []
 });
 const route = useRoute();
+async function exitImpersonation() {
+  // End the impersonated session and return to admin. A full load, since the
+  // cookie is changing identity.
+  try { await $fetch('/api/auth/logout', { method: 'POST' }); } catch { /* leave anyway */ }
+  window.location.href = '/admin/clients';
+}
 const router = useRouter();
 
 // On mobile the hamburger opens/closes the slide-in drawer; on desktop it
@@ -140,4 +155,22 @@ onMounted(() => {
   .shell-panel { border-top-left-radius: 0; margin-top: 0; border-left: none; }
   .shell-inner { padding: 24px 20px 60px; }
 }
+
+/* Support impersonation bar — deliberately loud, fixed above everything. */
+.imp-bar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  background: #b42318; color: #fff;
+  font-size: 13px; text-align: center;
+  padding: 8px 16px;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+}
+.imp-bar strong { font-weight: 700; }
+.imp-exit {
+  background: #fff; color: #b42318; border: none;
+  padding: 3px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.imp-exit:hover { opacity: 0.9; }
+/* Push the app down so the bar never covers the topbar. */
+.shell:has(.imp-bar) .shell-panel { margin-top: 36px; }
+
 </style>

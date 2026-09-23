@@ -21,6 +21,10 @@ export interface SessionClaims {
   email: string;
   tenantId: string | null;
   role: string | null;
+  // Set only on an admin impersonation session. Carries the admin's email so
+  // the client-side banner can name who is in the account, and so anything
+  // reading the session can tell a real client login from a support one.
+  impersonatedBy?: string;
 }
 
 function secret(): Uint8Array {

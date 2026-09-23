@@ -60,6 +60,12 @@
         </section>
 
         <!-- Team -->
+        <section v-if="isSuper" class="ad-panel">
+          <h3 class="ad-panel-h">Support access</h3>
+          <p class="muted" style="margin:0 0 10px">Log in as this workspace to see what they see and fix issues directly. Every session is recorded.</p>
+          <button class="btn btn-ghost btn-sm" :disabled="impBusy" @click="impersonate">{{ impBusy ? 'Opening…' : 'Log in as this client' }}</button>
+        </section>
+
         <section class="ad-panel">
           <h3 class="ad-panel-h">Team <span class="ad-count">{{ data.team.length }}</span></h3>
           <table v-if="data.team.length" class="ad-mini">
@@ -804,6 +810,19 @@ const ownNumBusy = ref(false);
 // staff. Defaults to false: a failed lookup hides the control rather than
 // showing one that will be refused.
 const isSuper = ref(false);
+const impBusy = ref(false);
+async function impersonate() {
+  impBusy.value = true;
+  try {
+    const r = await $fetch<any>(`/api/admin/clients/${route.params.domain}/impersonate`, { method: 'POST' });
+    // Full page load, not client-side nav: the session cookie has changed from
+    // admin to client, and the app must re-read who it is from scratch.
+    window.location.href = '/';
+  } catch (e: any) {
+    alert(e?.data?.statusMessage || e?.data?.message || 'Could not open that account.');
+    impBusy.value = false;
+  }
+}
 onMounted(async () => {
   try {
     const r = await $fetch<any>('/api/admin/me');
