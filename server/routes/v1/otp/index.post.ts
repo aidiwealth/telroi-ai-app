@@ -10,7 +10,9 @@ const Body = z.object({
   // Your own code, if you already generate them. We read it out and record the
   // call; verifying it stays with you, since we never hold it in a form we
   // could check against.
-  code: z.string().regex(/^[0-9]{4,10}$/, 'code must be 4 to 10 digits').optional(),
+  // A number or a string — clients send 55675 unquoted as often as "55675",
+  // and rejecting the number for being the wrong JSON type helped no one.
+  code: z.union([z.string(), z.number()]).transform((v) => String(v)).refine((v) => /^[0-9]{4,10}$/.test(v), 'code must be 4 to 10 digits').optional(),
   // The closing "do not share this code" line. On unless a client turns it off:
   // it is what stops somebody reading their code to a caller pretending to be
   // their bank, and it costs about two seconds.
@@ -24,7 +26,14 @@ export default defineEventHandler(async (event) => {
   const ctx = await requireApiKey(event);
   if (!hasScope(ctx, 'otp:write')) throw apiError('forbidden', 'Key lacks otp:write', 403);
   const p = Body.safeParse(await readBody(event));
-  if (!p.success) throw apiError('invalid', 'to (E.164 destination) is required');
+  if (!p.success) {
+    // Name the field that failed. This used to say "to is required" for every
+    // validation error, so a bad code or a mistyped field sent the caller
+    // hunting the wrong thing.
+    const first = p.error.issues[0];
+    const field = first?.path?.join('.') || 'body';
+    throw apiError('invalid', `${field}: ${first?.message || 'invalid'}`);
+  }
 
   if (ctx.env === 'sandbox') {
     // Test keys never place a real call. Return a realistic object; code 000000
