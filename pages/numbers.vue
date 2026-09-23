@@ -495,7 +495,7 @@ const stepLabels = computed(() => needsIndemnity.value
   : ['Number', 'Use', 'Confirm']);
 
 const categoryLabels = computed(() => buy.value.categories
-  .map((k) => USE_CATEGORIES.find((c) => c.key === k)?.label || k).join(', '));
+  .map((k) => USE_CATEGORIES.value.find((c) => c.key === k)?.label || k).join(', '));
 
 const canAdvance = computed(() => {
   if (step.value === 0) return !!picked.value;
