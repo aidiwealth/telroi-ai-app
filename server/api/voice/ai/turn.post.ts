@@ -99,9 +99,12 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!userText) {
-    const nudge = 'Sorry, I did not catch that. Could you say that again?';
-    const tts = await ttsSynthesize(tenantId, agent.ttsConnId, nudge, { language: agent.language }, agent.tier === 'managed');
-    return { reply: nudge, audioBase64: tts ? tts.audio.toString('base64') : null, audioContentType: tts?.contentType || null, history, action: 'continue' };
+    // Empty transcript. Do not speak here — let the adapter decide. On a phone
+    // call, re-prompting after every silence talks over a caller who is
+    // thinking, and Whisper still occasionally returns empty on real speech.
+    // The adapter stays quiet for the first empties and only nudges after a few
+    // in a row, so a thoughtful pause is not interrogated.
+    return { reply: '', audioBase64: null, audioContentType: null, history, action: 'empty' };
   }
 
   const nextHistory: ChatMessage[] = [...history, { role: 'user', content: userText }];

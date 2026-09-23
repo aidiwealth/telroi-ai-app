@@ -119,6 +119,11 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
     // stream open for a moment, and without this latch the adapter kept
     // transcribing the agent's conversation and even re-issuing transfers.
     let handedOff = false;
+    // Consecutive turns that transcribed to nothing. A caller thinking, or a
+    // brief line noise the gate let through, should not be interrogated — stay
+    // quiet and keep listening, and only check in after a few in a row. Any real
+    // transcript resets it.
+    let emptyStreak = 0;
     // A trialling workspace's calls are capped in length, so one long
     // conversation can't spend the whole allowance on its own. Zero = no limit.
     const startedAt = Date.now();
@@ -193,15 +198,46 @@ export function attachTelnyxMedia(server: http.Server, path = '/telnyx-media') {
       }, FILLER_DELAY_MS);
       const pcm = Buffer.concat(buf);
       const peak = peakEnergy; const avg = sumEnergy / Math.max(1, energyCount);
+      const durSec = pcm.length / 2 / 8000;
       resetTurn();
+      // A single loud blip crosses SPEECH_ON and opens a turn, but a real
+      // utterance sustains energy. 0.52s at avg 60 with one peak is a cough or a
+      // line noise spike, not speech — and Whisper, handed near-silence, invents
+      // "Thank you", "Bye", a Korean news sign-off. Each invention is rejected
+      // downstream, the agent says "Sorry, I didn't catch that", and a turn is
+      // burned. Drop it here so it never reaches STT.
+      if (durSec < 0.6 || avg < 150) {
+        log(`turn: ${durSec.toFixed(2)}s speech, energy avg=${avg.toFixed(0)} peak=${peak.toFixed(0)} -> dropped (below speech floor)`);
+        clearTimeout(fillerTimer);
+        busy = false;
+        return;
+      }
       const wav = pcm16ToWav(pcm, 8000);
-      log(`turn: ${(pcm.length / 2 / 8000).toFixed(2)}s speech, energy avg=${avg.toFixed(0)} peak=${peak.toFixed(0)} -> STT`);
+      log(`turn: ${durSec.toFixed(2)}s speech, energy avg=${avg.toFixed(0)} peak=${peak.toFixed(0)} -> STT`);
       const t = await callTurn({
         agentId: meta.agentId, tenantId: meta.tenantId, telnum: meta.telnum,
         callId, history, audioBase64: wav.toString('base64'), audioContentType: 'audio/wav'
       });
       replied = true; clearTimeout(fillerTimer);
+      if (t && t.action === 'empty') {
+        // Nothing was said. Stay silent for the first two; on the third in a row
+        // check in once, gently, rather than the old "Sorry, I didn't catch
+        // that" on every pause.
+        emptyStreak++;
+        log(`empty turn (${emptyStreak} in a row) — ${emptyStreak >= 3 ? 'checking in' : 'staying quiet'}`);
+        if (emptyStreak >= 3) {
+          emptyStreak = 0;
+          const chk = await callTurn({
+            agentId: meta.agentId, tenantId: meta.tenantId, telnum: meta.telnum, callId,
+            say: 'Are you still there?'
+          }).catch(() => null);
+          if (chk?.audioBase64) await speak(chk.audioBase64, chk.audioContentType, 'CHECK');
+        }
+        busy = false;
+        return;
+      }
       if (t) {
+        emptyStreak = 0;
         log(`TRANSCRIPT/REPLY: reply="${String(t.reply || '').slice(0, 120)}" audio=${t.audioBase64 ? 'yes' : 'no'} action=${t.action || 'continue'}`);
         if (Array.isArray(t.history)) history = t.history;
         await speak(t.audioBase64, t.audioContentType, 'REPLY');
