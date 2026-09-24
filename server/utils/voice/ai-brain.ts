@@ -9,6 +9,7 @@ import { and, eq } from 'drizzle-orm';
 import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 import { useRuntimeConfig } from '#imports';
+import { DEFAULT_OPENAI_BASE_URL, resolveOpenAiBaseUrl } from '../openai-base-url';
 
 export type LlmProvider = 'anthropic' | 'openai' | 'google' | 'grok';
 
@@ -17,6 +18,7 @@ export interface ResolvedLlm {
   apiKey: string;
   model: string;
   managed: boolean;
+  baseUrl?: string;
 }
 
 export interface ChatMessage { role: 'user' | 'assistant'; content: string; }
@@ -43,7 +45,10 @@ export async function resolveAgentLlm(tenantId: string, llmConnId: string | null
         const apiKey = decrypt(conn.apiKeyEnc);
         const meta = (conn.meta || {}) as Record<string, any>;
         const model = (meta.model as string) || defaultModelFor(conn.provider as LlmProvider);
-        return { provider: conn.provider as LlmProvider, apiKey, model, managed: false };
+        let baseUrl: string | undefined;
+        try { baseUrl = conn.provider === 'openai' ? resolveOpenAiBaseUrl(meta.baseUrl) : undefined; }
+        catch { return null; } // Invalid endpoints must not silently switch to a managed provider.
+        return { provider: conn.provider as LlmProvider, apiKey, model, managed: false, ...(baseUrl ? { baseUrl } : {}) };
       } catch { /* fall through to managed */ }
     }
   }
@@ -71,12 +76,24 @@ export async function llmReply(llm: ResolvedLlm, systemPrompt: string, history: 
 // ── STT / TTS for the turn loop ─────────────────────────────────────────────
 export interface ResolvedSpeech { provider: string; apiKey: string; managed: boolean; meta: Record<string, any>; }
 
+function supportsOpenAiSpeech(meta: Record<string, any>): boolean {
+  try { return resolveOpenAiBaseUrl(meta.baseUrl) === DEFAULT_OPENAI_BASE_URL; }
+  catch { return false; }
+}
+
 async function resolveConn(tenantId: string, connId: string | null, kinds: string[]): Promise<ResolvedSpeech | null> {
   if (connId) {
     const [conn] = await useDb().select().from(schema.aiConnections)
       .where(and(eq(schema.aiConnections.id, connId), eq(schema.aiConnections.tenantId, tenantId))).limit(1);
     if (conn && kinds.includes(conn.provider)) {
-      try { return { provider: conn.provider, apiKey: decrypt(conn.apiKeyEnc), managed: false, meta: (conn.meta || {}) as any }; }
+      const meta = (conn.meta || {}) as Record<string, any>;
+      if (conn.provider === 'openai') {
+        if (!supportsOpenAiSpeech(meta)) {
+          console.warn('[ai-brain] OpenAI-compatible connection cannot be used for speech');
+          return null;
+        }
+      }
+      try { return { provider: conn.provider, apiKey: decrypt(conn.apiKeyEnc), managed: false, meta }; }
       catch (e) { console.error(`[ai-brain] resolveConn decrypt failed for ${conn.provider}: ${(e as Error)?.message}`); }
     } else if (!conn) {
       console.error(`[ai-brain] resolveConn: no connection ${connId} for tenant ${tenantId}`);
@@ -315,14 +332,22 @@ export async function resolveDefaultConnections(tenantId: string): Promise<Defau
     .where(eq(schema.aiConnections.tenantId, tenantId));
   const usable = rows.filter((r) => r.status === 'ok');
   const pool = usable.length ? usable : rows;
-  const pick = (prefs: string[]): string | null => {
-    for (const p of prefs) { const c = pool.find((r) => r.provider === p); if (c) return c.id; }
+  const pick = (prefs: string[], role: 'llm' | 'speech'): string | null => {
+    for (const p of prefs) {
+      const c = pool.find((r) => {
+        if (r.provider !== p) return false;
+        if (role !== 'speech' || r.provider !== 'openai') return true;
+        const meta = (r.meta || {}) as Record<string, any>;
+        return supportsOpenAiSpeech(meta);
+      });
+      if (c) return c.id;
+    }
     return null;
   };
   return {
-    llmConnId: pick(['anthropic', 'openai', 'google', 'grok']),
-    sttConnId: pick(['deepgram', 'openai', 'google-cloud']),
-    ttsConnId: pick(['elevenlabs', 'openai', 'google-cloud'])
+    llmConnId: pick(['anthropic', 'openai', 'google', 'grok'], 'llm'),
+    sttConnId: pick(['deepgram', 'openai', 'google-cloud'], 'speech'),
+    ttsConnId: pick(['elevenlabs', 'openai', 'google-cloud'], 'speech')
   };
 }
 
@@ -431,7 +456,7 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
       return { text: (text || '').trim() || null, inputTokens: d.usageMetadata?.promptTokenCount || 0, outputTokens: d.usageMetadata?.candidatesTokenCount || 0 };
     }
     const isGrok = llm.provider === 'grok';
-    const chatBase = isGrok ? 'https://api.x.ai/v1' : 'https://api.openai.com/v1';
+    const chatBase = isGrok ? 'https://api.x.ai/v1' : resolveOpenAiBaseUrl(llm.baseUrl);
     // Grok 4.x is reasoning-first: it spends output tokens on hidden reasoning
     // before the visible reply, so a low max_tokens can leave nothing to say.
     // Give it headroom and request no reasoning effort (best-effort — ignored by
@@ -443,6 +468,7 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
     };
     if (isGrok) chatBody.reasoning_effort = 'none';
     const res = await fetch(`${chatBase}/chat/completions`, {
+      redirect: 'error',
       method: 'POST',
       headers: { Authorization: `Bearer ${llm.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(chatBody)
@@ -467,8 +493,9 @@ export interface AgentTier { llm: 'byok' | 'managed' | 'unavailable'; stt: 'byok
 export async function resolveAgentTier(tenantId: string, agent: { llmConnId: string | null; sttConnId: string | null; ttsConnId: string | null; tier?: string }): Promise<AgentTier> {
   const conns = await useDb().select().from(schema.aiConnections)
     .where(eq(schema.aiConnections.tenantId, tenantId));
-  const okConn = (id: string | null, providers: string[]) =>
-    !!id && conns.some((c) => c.id === id && providers.includes(c.provider) && c.status === 'ok');
+  const okConn = (id: string | null, providers: string[], speech = false) =>
+    !!id && conns.some((c) => c.id === id && providers.includes(c.provider) && c.status === 'ok' &&
+      (!speech || c.provider !== 'openai' || supportsOpenAiSpeech((c.meta || {}) as Record<string, any>)));
   const c = useRuntimeConfig() as any;
   const hasManagedLlm = !!((c.managedAnthropicKey as string) || (c.managedOpenaiKey as string) || (c.anthropicApiKey as string) || (c.openaiApiKey as string));
   const hasManagedSpeech = !!((c.managedOpenaiKey as string) || (c.openaiApiKey as string) || (c.telroiSpeechUrl as string));
@@ -478,7 +505,7 @@ export async function resolveAgentTier(tenantId: string, agent: { llmConnId: str
     return byok ? 'byok' : 'unavailable';
   };
   const llm = role(okConn(agent.llmConnId, ['anthropic', 'openai', 'google', 'grok']), hasManagedLlm);
-  const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai', 'google-cloud']), hasManagedSpeech);
-  const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai', 'google-cloud']), hasManagedSpeech);
+  const stt = role(okConn(agent.sttConnId, ['deepgram', 'openai', 'google-cloud'], true), hasManagedSpeech);
+  const tts = role(okConn(agent.ttsConnId, ['elevenlabs', 'openai', 'google-cloud'], true), hasManagedSpeech);
   return { llm, stt, tts, anyManaged: [llm, stt, tts].includes('managed') };
 }

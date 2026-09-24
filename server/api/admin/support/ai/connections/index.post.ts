@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_OPENAI_BASE_URL, resolveOpenAiBaseUrl } from '~/server/utils/openai-base-url';
 import { requirePlatformAdmin } from '~/server/utils/platform';
 import { apiError } from '~/server/utils/api';
 import { ensureSupportWorkspace } from '~/server/utils/support';
@@ -15,6 +16,13 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) throw apiError('invalid', 'Provider and API key required');
   const db = useDb();
   const meta = { ...(parsed.data.meta ?? {}) } as Record<string, any>;
+  if (parsed.data.provider === 'openai') {
+    try { meta.baseUrl = resolveOpenAiBaseUrl(meta.baseUrl); }
+    catch (e) { throw apiError('invalid', (e as Error).message); }
+    if (meta.baseUrl !== DEFAULT_OPENAI_BASE_URL && !parsed.data.model?.trim() && !meta.model?.trim()) {
+      throw apiError('invalid', 'Model is required for a custom OpenAI-compatible base URL');
+    }
+  }
   if (parsed.data.model?.trim()) meta.model = parsed.data.model.trim();
   const [row] = await db.insert(schema.aiConnections).values({
     tenantId: ws.tenantId, provider: parsed.data.provider,

@@ -6,6 +6,8 @@
 dist
 node_modules
 server/db/migrations
+playwright-report
+test-results
 
 *.patch
 phase*.sh

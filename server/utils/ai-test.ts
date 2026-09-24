@@ -2,13 +2,16 @@
 // Minimal authenticated pings to validate a customer's own AI provider key.
 // These do the cheapest possible call that proves the key works.
 
+import { resolveOpenAiBaseUrl } from './openai-base-url';
+
 type Provider = 'openai' | 'anthropic' | 'deepgram' | 'elevenlabs' | 'google' | 'google-cloud' | 'grok';
 
 export async function testAiKey(provider: Provider, apiKey: string, meta: Record<string, any> = {}): Promise<{ ok: boolean; detail?: string }> {
   try {
     switch (provider) {
       case 'openai': {
-        const r = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${apiKey}` } });
+        const baseUrl = resolveOpenAiBaseUrl(meta?.baseUrl);
+        const r = await fetch(`${baseUrl}/models`, { redirect: 'error', headers: { Authorization: `Bearer ${apiKey}` } });
         return { ok: r.ok, detail: r.ok ? undefined : `HTTP ${r.status}` };
       }
       case 'grok': {
