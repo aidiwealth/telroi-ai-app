@@ -9,6 +9,10 @@ const allowedBaseUrls = new Set([
   'https://api.moonshot.cn/v1',
   'https://api.groq.com/openai/v1',
   'https://openrouter.ai/api/v1',
+  'https://integrate.api.nvidia.com/v1',
+  'https://api.mistral.ai/v1',
+  'https://api.cerebras.ai/v1',
+  'https://api.together.xyz/v1',
   'https://dashscope.aliyuncs.com/compatible-mode/v1',
   'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
   'https://dashscope-us.aliyuncs.com/compatible-mode/v1'

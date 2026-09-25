@@ -19,6 +19,7 @@
         <span class="card-title">Your connections</span>
         <button class="btn btn-signal btn-sm" @click="showAdd = !showAdd">{{ showAdd ? 'Cancel' : '+ Add key' }}</button>
       </div>
+      <p class="muted" style="margin: 0 18px 12px">Testing a custom chat URL sends a short request to its selected model; your provider may charge for it.</p>
 
       <!-- Add form -->
       <Transition name="expand">

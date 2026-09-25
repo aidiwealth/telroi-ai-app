@@ -2,7 +2,7 @@
 // Minimal authenticated pings to validate a customer's own AI provider key.
 // These do the cheapest possible call that proves the key works.
 
-import { resolveOpenAiBaseUrl } from './openai-base-url';
+import { DEFAULT_OPENAI_BASE_URL, resolveOpenAiBaseUrl } from './openai-base-url';
 
 type Provider = 'openai' | 'anthropic' | 'deepgram' | 'elevenlabs' | 'google' | 'google-cloud' | 'grok';
 
@@ -11,6 +11,26 @@ export async function testAiKey(provider: Provider, apiKey: string, meta: Record
     switch (provider) {
       case 'openai': {
         const baseUrl = resolveOpenAiBaseUrl(meta?.baseUrl);
+        const model = typeof meta?.model === 'string' ? meta.model.trim() : '';
+        if (baseUrl !== DEFAULT_OPENAI_BASE_URL) {
+          if (!model) return { ok: false, detail: 'A model is required to test this chat endpoint' };
+          const r = await fetch(`${baseUrl}/chat/completions`, {
+            redirect: 'error',
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: 'user', content: 'Reply with only: ok' }],
+              max_tokens: 256
+            })
+          });
+          if (!r.ok) return { ok: false, detail: `HTTP ${r.status}` };
+          const data = await r.json().catch(() => null);
+          const reply = data?.choices?.[0]?.message?.content;
+          return typeof reply === 'string' && reply.trim()
+            ? { ok: true }
+            : { ok: false, detail: 'Unexpected chat completion response' };
+        }
         const r = await fetch(`${baseUrl}/models`, { redirect: 'error', headers: { Authorization: `Bearer ${apiKey}` } });
         return { ok: r.ok, detail: r.ok ? undefined : `HTTP ${r.status}` };
       }
