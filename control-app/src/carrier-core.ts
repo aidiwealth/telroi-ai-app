@@ -168,7 +168,11 @@ ${c.callerIdFormat === 'national'
   : ''} same => n,Set(CALLERID(num)=\${CID})
  same => n,Set(CALLERID(name)=Telroi)
  same => n,Set(TELROI_START=\${EPOCH})
- same => n,Dial(PJSIP/${c.name}-endpoint/sip:\${DEST}@${useAuthDomain},60)
+${c.callerIdFormat === 'national'
+  ? ` ; ${c.displayName || c.name} wants the dialled number national too: DEST is\n`
+    + ` ; normalised to 234XXXXXXXXXX above; strip 234, prefix 0, for the trunk.\n`
+    + ` same => n,Set(DIALDEST=\${IF($["\${DEST:0:3}"="234"]?0\${DEST:3}:\${DEST})})\n`
+  : ` same => n,Set(DIALDEST=\${DEST})\n`} same => n,Dial(PJSIP/${c.name}-endpoint/sip:\${DIALDEST}@${useAuthDomain},60)
 ${c.sipGateway2 ? ` ; The carrier's second SBC. Their maintenance windows move traffic to it, and
  ; a trunk that only knows the primary fails at exactly the moment failover was
  ; meant to help. Only retried when the first was unreachable — a busy or
@@ -177,7 +181,7 @@ ${c.sipGateway2 ? ` ; The carrier's second SBC. Their maintenance windows move t
  same => n,GotoIf($["\${DIALSTATUS}"="CONGESTION"]?second)
  same => n,Goto(logit)
  same => n(second),NoOp(${c.displayName || c.name} primary unreachable — trying secondary)
- same => n,Dial(PJSIP/${c.name}-endpoint/sip:\${DEST}@${c.sipGateway2}:${port},60)
+ same => n,Dial(PJSIP/${c.name}-endpoint/sip:\${DIALDEST}@${c.sipGateway2}:${port},60)
  same => n(logit),NoOp(dial finished: \${DIALSTATUS})
 ` : ''} same => n,Hangup()
  same => n(nodid),NoOp(Rejected: caller owns no DID on ${c.name} — buy/select a DID or contact support)
