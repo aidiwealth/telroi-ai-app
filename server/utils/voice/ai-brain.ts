@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm';
 import { useDb, schema } from '../../db';
 import { decrypt } from '../crypto';
 import { useRuntimeConfig } from '#imports';
-import { DEFAULT_OPENAI_BASE_URL, resolveOpenAiBaseUrl } from '../openai-base-url';
+import { DEFAULT_OPENAI_BASE_URL, openAiTokenLimitField, resolveOpenAiBaseUrl } from '../openai-base-url';
 
 export type LlmProvider = 'anthropic' | 'openai' | 'google' | 'grok';
 
@@ -463,7 +463,7 @@ export async function llmReplyWithUsage(llm: ResolvedLlm, systemPrompt: string, 
     // models that force reasoning, but the higher budget still covers us).
     const chatBody: any = {
       model: llm.model,
-      max_tokens: isGrok ? 1500 : (maxTokens || 300),
+      [isGrok ? 'max_tokens' : openAiTokenLimitField(chatBase)]: isGrok ? 1500 : (maxTokens || 300),
       messages: [{ role: 'system', content: sys }, ...history.map((m) => ({ role: m.role, content: m.content }))]
     };
     if (isGrok) chatBody.reasoning_effort = 'none';
