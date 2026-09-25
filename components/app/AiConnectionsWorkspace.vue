@@ -19,6 +19,7 @@
         <span class="card-title">Your connections</span>
         <button class="btn btn-signal btn-sm" @click="showAdd = !showAdd">{{ showAdd ? 'Cancel' : '+ Add key' }}</button>
       </div>
+      <p class="muted" style="margin: 0 18px 12px">Testing a custom chat URL sends a short request to its selected model; your provider may charge for it.</p>
 
       <!-- Add form -->
       <Transition name="expand">
@@ -28,10 +29,11 @@
               <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.label }}</option>
             </select>
             <input v-model="draft.apiKey" class="input mono" type="password" placeholder="API key" @keyup.enter="add" />
-            <button class="btn btn-dark" :disabled="adding || draft.apiKey.length < 8" @click="add">{{ adding ? 'Saving…' : 'Save' }}</button>
+            <button class="btn btn-dark" :disabled="adding || draft.apiKey.length < 8 || (hasCustomBaseUrl(draft.baseUrl) && !draft.model.trim())" @click="add">{{ adding ? 'Saving…' : 'Save' }}</button>
           </div>
-          <input v-model="draft.model" class="input mono conn-model" :placeholder="'Model (optional) — ' + modelPlaceholder(draft.provider)" @keyup.enter="add" />
-          <p class="add-note muted">Keys are encrypted at rest (AES-256-GCM) and never displayed again. Leave model blank to use the provider's recommended default.</p>
+          <input v-model="draft.model" class="input mono conn-model" :placeholder="draft.provider === 'openai' && hasCustomBaseUrl(draft.baseUrl) ? 'Model name required for this provider' : 'Model (optional) — ' + modelPlaceholder(draft.provider)" @keyup.enter="add" />
+          <input v-if="draft.provider === 'openai'" v-model="draft.baseUrl" class="input mono conn-model" placeholder="Base URL (optional) — https://api.openai.com/v1" @keyup.enter="add" />
+          <p class="add-note muted">Keys are encrypted at rest (AES-256-GCM) and never displayed again. Leave model blank to use the provider's recommended default. A custom base URL is used for chat only.</p>
         </div>
       </Transition>
 
@@ -61,10 +63,11 @@
             <td colspan="5">
               <div class="edit-form">
                 <label class="edit-fld"><span>Model (optional)</span><input v-model="connEdit.model" class="input mono" :placeholder="modelPlaceholder(c.provider)" /></label>
+                <label v-if="c.provider === 'openai'" class="edit-fld"><span>Base URL</span><input v-model="connEdit.baseUrl" class="input mono" placeholder="https://api.openai.com/v1" /></label>
                 <label class="edit-fld"><span>Replace key (optional)</span><input v-model="connEdit.apiKey" class="input mono" type="password" placeholder="Leave blank to keep current key" /></label>
                 <div class="edit-actions">
                   <button class="btn btn-ghost btn-sm" @click="editingConn = null">Cancel</button>
-                  <button class="btn btn-dark btn-sm" :disabled="savingConnEdit" @click="saveConnEdit(c.id)">{{ savingConnEdit ? 'Saving…' : 'Save changes' }}</button>
+                  <button class="btn btn-dark btn-sm" :disabled="savingConnEdit || (hasCustomBaseUrl(connEdit.baseUrl) && !connEdit.model.trim())" @click="saveConnEdit(c.id)">{{ savingConnEdit ? 'Saving…' : 'Save changes' }}</button>
                 </div>
               </div>
             </td>
@@ -175,7 +178,8 @@
                 <label class="edit-fld"><span>Speech-to-text</span>
                   <select v-model="agentEdit.sttConnId" class="select">
                     <option value="">— None —</option>
-                    <option v-for="c in connections" :key="'stt'+c.id" :value="c.id">{{ c.provider }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
+                    <option v-if="isChatOnlyConnection(agentEdit.sttConnId)" :value="agentEdit.sttConnId" disabled>{{ connectionLabel(agentEdit.sttConnId) }} (chat only — reassign)</option>
+                    <option v-for="c in roleConnections('stt')" :key="'stt'+c.id" :value="c.id">{{ connectionLabel(c.id) }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
                   </select>
                 </label>
                 <label class="edit-fld"><span>Language model</span>
@@ -187,7 +191,8 @@
                 <label class="edit-fld"><span>Text-to-speech</span>
                   <select v-model="agentEdit.ttsConnId" class="select">
                     <option value="">— None —</option>
-                    <option v-for="c in connections" :key="'tts'+c.id" :value="c.id">{{ c.provider }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
+                    <option v-if="isChatOnlyConnection(agentEdit.ttsConnId)" :value="agentEdit.ttsConnId" disabled>{{ connectionLabel(agentEdit.ttsConnId) }} (chat only — reassign)</option>
+                    <option v-for="c in roleConnections('tts')" :key="'tts'+c.id" :value="c.id">{{ connectionLabel(c.id) }}{{ c.status !== 'ok' ? ' (' + c.status + ')' : '' }}</option>
                   </select>
                 </label>
                 <label class="edit-fld"><span>Language</span>
@@ -276,7 +281,7 @@ const props = withDefaults(defineProps<{ apiBase?: string; agentsBase?: string }
 const api = useApi();
 const toast = useToast();
 
-interface Conn { id: string; provider: string; keyMasked: string; status: string; lastTestedAt: string | null; }
+interface Conn { id: string; provider: string; keyMasked: string; status: string; lastTestedAt: string | null; meta?: Record<string, any>; }
 interface AgentTier { llm: string; stt: string; tts: string; anyManaged: boolean; }
 interface Agent { id: string; name: string; greeting?: string | null; tier?: AgentTier; sttConnId?: string | null; llmConnId?: string | null; ttsConnId?: string | null; language?: string; }
 function tierLabel(t?: string): string { return t === 'byok' ? 'Your key' : t === 'managed' ? 'Managed' : 'Not set'; }
@@ -288,7 +293,7 @@ function tierTitle(role: string, t?: string): string {
 }
 
 const providers = [
-  { id: 'openai', label: 'OpenAI', role: 'LLM · STT · TTS' },
+  { id: 'openai', label: 'OpenAI / compatible', role: 'LLM · OpenAI also supports speech' },
   { id: 'anthropic', label: 'Anthropic (Claude)', role: 'LLM reasoning' },
   { id: 'google', label: 'Google Gemini', role: 'LLM reasoning' },
   { id: 'google-cloud', label: 'Google Cloud Speech', role: 'Speech-to-text · Text-to-speech' },
@@ -302,7 +307,7 @@ const connections = ref<Conn[]>([]);
 const showAdd = ref(false);
 const adding = ref(false);
 const testing = ref<string | null>(null);
-const draft = reactive({ provider: 'openai', apiKey: '', model: '' });
+const draft = reactive({ provider: 'openai', apiKey: '', model: '', baseUrl: '' });
 function modelPlaceholder(provider: string): string {
   switch (provider) {
     case 'openai': return 'default: gpt-4o-mini';
@@ -327,21 +332,52 @@ const wizardStep = ref(1);
 const showAdvanced = ref(false);
 // BYOK: which provider the client chose for each role. '' = use our auto-pick.
 const roleChoice = reactive({ stt: '', llm: '', tts: '' });
+function hasCustomBaseUrl(value: string): boolean {
+  const baseUrl = String(value || '').trim().replace(/\/+$/, '');
+  return !!baseUrl && baseUrl !== 'https://api.openai.com/v1';
+}
+function normalizeBaseUrl(value: string): string {
+  return String(value || '').trim().replace(/\/+$/, '') || 'https://api.openai.com/v1';
+}
 // Map a role's chosen (or auto) provider to a concrete connection id to send.
+function supportsRole(conn: Conn, role: 'stt' | 'llm' | 'tts'): boolean {
+  if (role === 'llm' || conn.provider !== 'openai') return true;
+  return !hasCustomBaseUrl(String(conn.meta?.baseUrl || ''));
+}
 function roleConnId(role: 'stt' | 'llm' | 'tts'): string | undefined {
-  const provider = roleChoice[role] || roleProvider(role)?.id;
-  if (!provider) return undefined;
-  const conn = connections.value.find((x) => x.provider === provider && x.status === 'ok');
+  const selectedId = roleChoice[role];
+  const conn = connections.value.find((x) => x.id === selectedId && x.status === 'ok' && supportsRole(x, role)) || roleProvider(role);
   return conn?.id;
 }
 const ROLE_PREF = { stt: ['deepgram', 'openai', 'google-cloud'], llm: ['anthropic', 'openai', 'google', 'grok'], tts: ['elevenlabs', 'openai', 'google-cloud'] };
-function connectedOk(provider: string): boolean { return connections.value.some((c) => c.provider === provider && c.status === 'ok'); }
-function roleProvider(role: 'stt' | 'llm' | 'tts'): { id: string; label: string } | null {
-  for (const p of ROLE_PREF[role]) { if (connectedOk(p)) return { id: p, label: label(p) }; }
+function roleProvider(role: 'stt' | 'llm' | 'tts'): Conn | null {
+  for (const p of ROLE_PREF[role]) {
+    const conn = connections.value.find((c) => c.provider === p && c.status === 'ok' && supportsRole(c, role));
+    if (conn) return conn;
+  }
   return null;
 }
 function roleOptions(role: 'stt' | 'llm' | 'tts'): { id: string; label: string }[] {
-  return ROLE_PREF[role].filter(connectedOk).map((p) => ({ id: p, label: label(p) }));
+  return ROLE_PREF[role].flatMap((provider) => connections.value
+    .filter((conn) => conn.provider === provider && conn.status === 'ok' && supportsRole(conn, role))
+    .map((conn) => ({ id: conn.id, label: connectionLabel(conn.id) })));
+}
+function connectionLabel(id: string | null | undefined): string {
+  const conn = connections.value.find((c) => c.id === id);
+  if (!conn) return 'Connection';
+  if (conn.provider !== 'openai' || !hasCustomBaseUrl(String(conn.meta?.baseUrl || ''))) return label(conn.provider);
+  const baseUrl = String(conn.meta?.baseUrl || '').trim();
+  let host = baseUrl;
+  try { host = new URL(baseUrl).hostname; } catch { /* invalid endpoints are rejected by the API */ }
+  const model = String(conn.meta?.model || '').trim();
+  return `OpenAI-compatible (${host}${model ? ` · ${model}` : ''})`;
+}
+function isChatOnlyConnection(id: string | null | undefined): boolean {
+  const conn = connections.value.find((c) => c.id === id);
+  return !!conn && conn.provider === 'openai' && !supportsRole(conn, 'stt');
+}
+function roleConnections(role: 'stt' | 'tts'): Conn[] {
+  return connections.value.filter((conn) => supportsRole(conn, role));
 }
 function resetWizard() {
   wizardStep.value = 1; showAdvanced.value = false;
@@ -403,8 +439,9 @@ async function add() {
   try {
     const cbody: any = { provider: draft.provider, apiKey: draft.apiKey.trim() };
     if (draft.model.trim()) cbody.model = draft.model.trim();
+    if (draft.provider === 'openai' && draft.baseUrl.trim()) cbody.meta = { baseUrl: draft.baseUrl.trim() };
     await api.post(props.apiBase, cbody);
-    draft.apiKey = ''; draft.model = '';
+    draft.apiKey = ''; draft.model = ''; draft.baseUrl = '';
     showAdd.value = false;
     toast.ok('Key saved securely');
     await load();
@@ -413,14 +450,17 @@ async function add() {
 }
 
 const editingConn = ref<string | null>(null);
-const connEdit = reactive({ model: '', apiKey: '' });
+const connEdit = reactive({ model: '', apiKey: '', baseUrl: '' });
+const initialBaseUrl = ref('https://api.openai.com/v1');
 const savingConnEdit = ref(false);
-function startEditConn(c: Conn) { editingConn.value = c.id; connEdit.model = (c.meta as any)?.model || ''; connEdit.apiKey = ''; }
+function startEditConn(c: Conn) { editingConn.value = c.id; connEdit.model = String(c.meta?.model || ''); connEdit.baseUrl = String(c.meta?.baseUrl || ''); initialBaseUrl.value = normalizeBaseUrl(connEdit.baseUrl); connEdit.apiKey = ''; }
 async function saveConnEdit(id: string) {
   savingConnEdit.value = true;
   try {
     const body: any = { model: connEdit.model.trim() };
     if (connEdit.apiKey.trim()) body.apiKey = connEdit.apiKey.trim();
+    const conn = connections.value.find((c) => c.id === id);
+    if (conn?.provider === 'openai' && normalizeBaseUrl(connEdit.baseUrl) !== initialBaseUrl.value) body.meta = { baseUrl: connEdit.baseUrl.trim() || null };
     await api.put(`${props.apiBase}/${id}`, body);
     editingConn.value = null; toast.ok('Connection updated'); await load();
   } catch (e: any) { toast.err(e.message); }
