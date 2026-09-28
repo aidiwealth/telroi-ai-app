@@ -39,19 +39,34 @@ export async function liveCallCount(tenantId: string): Promise<number> {
   // 2. Dialer / carrier call events still in progress. Guard against stale rows
   //    (no end + started within the last 2h) so a crashed call doesn't wedge a
   //    channel forever.
-  const since = new Date(Date.now() - 20 * 60 * 1000); // 20 min — a stuck/crashed call shouldn't wedge a channel longer than this
   //    Widget calls are excluded here: they write an lc_<sessionId> event for the
   //    very session counted above, so including both made one conversation eat
   //    two channels — a client with three could hold a single web call and then
   //    be told every line was busy.
-  const events = await db.select({ id: schema.callEvents.id, callid: schema.callEvents.callid })
+  //
+  //    Age guard, tiered by status. A ringing/initiated row is pre-answer: no
+  //    real inbound call rings past the 40s dial timeout, so anything older than
+  //    2 minutes is a dead call that never cleaned up and must not hold a channel.
+  //    An answered/in-progress row is a live conversation and gets a longer
+  //    window. The old single 20-min guard let a dead ringing row eat a channel
+  //    for 20 minutes — two of those stranded a 2-channel tenant, every new call
+  //    told the line was busy while nothing was actually on it.
+  const ringSince = new Date(Date.now() - 2 * 60 * 1000);    // pre-answer: 2 min
+  const talkSince = new Date(Date.now() - 60 * 60 * 1000);   // in a call: 60 min
+  const events = await db.select({ id: schema.callEvents.id, callid: schema.callEvents.callid, status: schema.callEvents.status, startedAt: schema.callEvents.startedAt })
     .from(schema.callEvents)
     .where(and(
       eq(schema.callEvents.tenantId, tenantId),
       inArray(schema.callEvents.status, ['ringing', 'in-progress', 'initiated', 'answered']),
-      gte(schema.callEvents.startedAt, since)
+      gte(schema.callEvents.startedAt, talkSince)
     ));
-  const nonWidget = events.filter((e) => !String(e.callid || '').startsWith('lc_'));
+  const live = events.filter((e) => {
+    const started = e.startedAt ? new Date(e.startedAt as any) : null;
+    if (!started) return false;
+    const preAnswer = e.status === 'ringing' || e.status === 'initiated';
+    return started >= (preAnswer ? ringSince : talkSince);
+  });
+  const nonWidget = live.filter((e) => !String(e.callid || '').startsWith('lc_'));
   return sessions.length + nonWidget.length;
 }
 

@@ -991,6 +991,10 @@ async function main() {
             // No resolvable destination endpoint. Do NOT bridge to a stray/fallback
             // endpoint — play a polite no-service message and hang up.
             log(`     Person route -> ${effTarget} did not resolve to an endpoint :: no destination, playing no-service`);
+            // logCall is fire-and-forget (returns void), so the missed status may
+            // not commit before the hangup below — the row can stay 'ringing'.
+            // The capacity count guards against that: a ringing row older than
+            // 2 minutes no longer counts, so a lost write cannot strand a channel.
             logCall({ tenantId: route.tenantId, callid: chId, phone: callerNum, status: 'missed', direction: 'in', raw: { reason: 'no_destination_endpoint' } });
             await playAndHangup(client, channel, 'sound:ss-noservice');
             break;
