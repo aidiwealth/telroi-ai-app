@@ -307,6 +307,21 @@ export async function ttsSynthesize(tenantId: string, ttsConnId: string | null, 
     }
     if (!allowManaged) return null;
     const c = useRuntimeConfig() as any;
+    // Managed ElevenLabs first: a platform key and a configured voice, so a
+    // managed agent speaks the brand voice. Without this, managed TTS fell
+    // through to OpenAI's alloy — an American voice on every sample-agent call,
+    // no matter what voice was set on any connection.
+    const ek = c.managedElevenKey as string;
+    const ev = (opts.voice || c.managedElevenVoice) as string;
+    if (ek && ev) {
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ev}?output_format=pcm_16000`, {
+        method: 'POST', headers: { 'xi-api-key': ek, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, model_id: (c.managedElevenModel as string) || 'eleven_multilingual_v2', ...(opts.speed ? { voice_settings: { speed: opts.speed } } : {}) })
+      });
+      if (res.ok) return { audio: Buffer.from(await res.arrayBuffer()), contentType: 'audio/l16; rate=16000' };
+      console.error(`[ai-brain] managed ElevenLabs TTS failed ${res.status} (voice ${ev}): ${(await res.text().catch(() => '')).slice(0, 200)}`);
+      // Fall through to the existing fallbacks rather than returning silence.
+    }
     const base = c.telroiSpeechUrl as string;
     if (base) {
       const res = await fetch(`${base}/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice: opts.voice }) });

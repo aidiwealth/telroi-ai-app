@@ -57,6 +57,11 @@ export default defineNuxtConfig({
     managedLlmModel: process.env.MANAGED_LLM_MODEL || '',
     managedAnthropicKey: process.env.MANAGED_ANTHROPIC_KEY || process.env.ANTHROPIC_API_KEY || '',
     managedOpenaiKey: process.env.MANAGED_OPENAI_KEY || process.env.OPENAI_API_KEY || '',
+    // Managed ElevenLabs: platform key + voice, so managed agents (the sample
+    // agent, any tier=managed) speak the brand voice rather than OpenAI's alloy.
+    managedElevenKey: process.env.MANAGED_ELEVEN_KEY || '',
+    managedElevenVoice: process.env.MANAGED_ELEVEN_VOICE || '',
+    managedElevenModel: process.env.MANAGED_ELEVEN_MODEL || 'eleven_multilingual_v2',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     costSttPerSec: process.env.COST_STT_PER_SEC || '',
