@@ -242,6 +242,19 @@ export function logOutbound(input: OutboundLogInput): void {
       if (!ep?.tenantId) { console.error(`[call-log] logOutbound: no tenant for ${username}`); return; }
       const callid = input.callid || `out-${username}-${input.startEpoch || Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = input.startEpoch ? new Date(input.startEpoch * 1000) : new Date();
+
+      // If this outbound call was recorded (the dialplan runs MixMonitor only
+      // when the number has record_outbound on), collect the file. Not awaited —
+      // it settles and uploads on its own, and uploadRecording no-ops when no
+      // file exists, so it is safe to call for every outbound call.
+      import('./recording-upload.ts').then(({ uploadRecording }) => uploadRecording({
+        callid,
+        tenantId: ep.tenantId!,
+        telnum: null,
+        phone: input.dialed ? normalizePhone(input.dialed) : null,
+        direction: 'out',
+        durationSeconds: input.duration ?? null
+      })).catch(() => { /* a lost recording must not disturb call logging */ });
       const status = mapDialStatus(input.dialstatus, input.hangupcause, input.duration);
 
       // Through the web app, so the call is charged. A direct insert goes around
