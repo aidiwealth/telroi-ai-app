@@ -1407,6 +1407,8 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   region: text('region').notNull().default('NG'),
   provider: text('provider').notNull().default('telroi'), // carried from inventory; invisible to customer
   channels: integer('channels').notNull().default(1),
+  rotationEnabled: boolean('rotation_enabled').notNull().default(false),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
   status: text('status').notNull().default('active'),  // active | suspended | cancelled
   cancelledAt: timestamp('cancelled_at', { withTimezone: true }),      // when the client released it
   graceEndsAt: timestamp('grace_ends_at', { withTimezone: true }),     // inventory returns to pool after this

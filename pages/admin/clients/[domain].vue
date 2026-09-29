@@ -54,8 +54,10 @@
               <td class="ad-dim">{{ provLabel(n.provider) }}</td>
               <td class="ad-dim">{{ n.channels }}ch</td>
               <td><span class="ad-pip" :class="{ on: n.status === 'active' }">{{ n.status }}</span></td>
+              <td><label class="ad-rot"><input type="checkbox" :checked="n.rotationEnabled" @change="toggleRotation(n)" /> rotate</label></td>
             </tr>
           </table>
+          <p v-if="data.numbers.length" class="ad-hint" style="margin-top:8px">Tick 2+ numbers on the same carrier to rotate caller ID across them — each call uses the least-recently-used, spreading volume so no one number trips a carrier block.</p>
           <p v-else class="ad-none">No numbers purchased.</p>
         </section>
 
@@ -811,6 +813,12 @@ const ownNumBusy = ref(false);
 // showing one that will be refused.
 const isSuper = ref(false);
 const impBusy = ref(false);
+async function toggleRotation(n: any) {
+  try {
+    await $fetch(`/api/admin/clients/${route.params.domain}/rotation`, { method: 'POST', body: { telnum: n.telnum, enabled: !n.rotationEnabled } });
+    n.rotationEnabled = !n.rotationEnabled;
+  } catch (e: any) { alert(e?.data?.statusMessage || 'Could not update rotation.'); }
+}
 async function impersonate() {
   impBusy.value = true;
   try {

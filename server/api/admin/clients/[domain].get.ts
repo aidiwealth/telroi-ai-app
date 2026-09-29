@@ -86,7 +86,7 @@ export default defineEventHandler(async (event) => {
       postpaidSince: tenant.postpaidSince, paymentTermsDays: tenant.paymentTermsDays,
       paymentProviderOverride: tenant.paymentProviderOverride || null, sandbox: tenant.sandboxMode, country: tenant.country || null, businessPhone: tenant.businessPhone || null, requiresProvisioning: requiresProvisioning(tenant.country) },
     wallet: wallet ? { balanceMinor: wallet.balanceMinor, currency: wallet.currency, plan: wallet.plan } : null,
-    numbers: subs.map((n) => ({ id: n.id, telnum: n.telnum, region: n.region, provider: n.provider, channels: n.channels, status: n.status, departmentId: n.departmentId })),
+    numbers: subs.map((n) => ({ id: n.id, telnum: n.telnum, region: n.region, provider: n.provider, channels: n.channels, status: n.status, departmentId: n.departmentId, rotationEnabled: n.rotationEnabled })),
     vans: vans.map((v) => ({ id: v.id, name: v.name, telnum: v.telnum, status: v.status, provider: v.provider, escalateTo: v.escalateTo })),
     flows: flows.map((f) => ({ name: f.name })),
     ai: ai.map((a) => ({ provider: a.provider })),
