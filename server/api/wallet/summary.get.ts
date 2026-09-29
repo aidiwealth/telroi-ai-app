@@ -19,8 +19,21 @@ export default defineEventHandler(async (event) => {
   let moneyIn = 0, moneyOut = 0, in3 = 0, out3 = 0;
   for (const r of rows) {
     const inMonth = r.createdAt >= start && r.createdAt < end;
-    if (r.kind === 'credit') { if (inMonth) moneyIn += r.amountMinor; in3 += r.amountMinor; }
-    else { if (inMonth) moneyOut += r.amountMinor; out3 += r.amountMinor; }
+    const reason = String(r.reason || '').toLowerCase();
+    // A refund is a reversal of a charge, not income — counting it as money-in
+    // overstated both what the client paid and their usage. VAT is held for the
+    // tax authority, not a charge or a top-up, so it belongs in neither total
+    // (the same treatment as the admin finance view). Both are still visible in
+    // the transaction list; they just don't inflate the two summary tiles.
+    const isRefund = reason.includes('refund');
+    const isVat = r.kind === 'vat' || reason.includes('vat');
+    if (isVat) continue;
+    if (r.kind === 'credit') {
+      if (isRefund) continue;   // reversal, not money-in
+      if (inMonth) moneyIn += r.amountMinor; in3 += r.amountMinor;
+    } else {
+      if (inMonth) moneyOut += r.amountMinor; out3 += r.amountMinor;
+    }
   }
   return {
     month: monthStr,
