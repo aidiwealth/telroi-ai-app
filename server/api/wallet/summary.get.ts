@@ -19,22 +19,22 @@ export default defineEventHandler(async (event) => {
   let moneyIn = 0, moneyOut = 0, in3 = 0, out3 = 0;
   for (const r of rows) {
     const inMonth = r.createdAt >= start && r.createdAt < end;
-    const reason = String(r.reason || '').toLowerCase();
-    // A refund is a reversal of a charge, not income — counting it as money-in
-    // overstated both what the client paid and their usage. VAT is held for the
-    // tax authority, not a charge or a top-up, so it belongs in neither total
-    // (the same treatment as the admin finance view). Both are still visible in
-    // the transaction list; they just don't inflate the two summary tiles.
-    const isRefund = reason.includes('refund');
-    const isVat = r.kind === 'vat' || reason.includes('vat');
-    if (isVat) continue;
+    const isRefund = String(r.reason || '').toLowerCase().includes('refund');
+    // The two tiles reconcile with the balance: money-in minus money-out equals
+    // the wallet. Every credit that added funds is money-in, every debit that
+    // removed them is money-out — VAT included, because on the client's own
+    // wallet VAT is their money that left (the admin finance view excludes it
+    // because there it isn't our revenue; different view, different treatment).
+    // A refund is the exception: a reversal of a charge, so it nets against
+    // money-out (showing true net usage) rather than counting as income.
     if (r.kind === 'credit') {
-      if (isRefund) continue;   // reversal, not money-in
-      if (inMonth) moneyIn += r.amountMinor; in3 += r.amountMinor;
+      if (isRefund) { if (inMonth) moneyOut -= r.amountMinor; out3 -= r.amountMinor; }
+      else { if (inMonth) moneyIn += r.amountMinor; in3 += r.amountMinor; }
     } else {
       if (inMonth) moneyOut += r.amountMinor; out3 += r.amountMinor;
     }
   }
+  moneyOut = Math.max(0, moneyOut); out3 = Math.max(0, out3);
   return {
     month: monthStr,
     moneyInMinor: moneyIn, moneyOutMinor: moneyOut,
