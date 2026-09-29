@@ -687,7 +687,7 @@ onMounted(async () => {
     try { channels.value = await api.get('/api/numbers/channels'); } catch { /* */ }
     await loadSubs();
     try { agents.value = await api.get<any[]>('/api/agents'); } catch { /* */ }
-    try { departments.value = await api.get<any[]>('/api/departments'); } catch { /* */ }
+    try { const r = await api.get<{ departments: any[] }>('/api/departments'); departments.value = r?.departments || []; } catch { /* */ }
     try { escalationTargets.value = (await api.get<{ targets: any[] }>('/api/voice/escalation-targets')).targets || []; } catch { /* */ }
     try {
       loadGoLive();
