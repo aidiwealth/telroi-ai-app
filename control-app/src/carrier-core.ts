@@ -168,6 +168,12 @@ ${c.callerIdFormat === 'national'
   : ''} same => n,Set(CALLERID(num)=\${CID})
  same => n,Set(CALLERID(name)=Telroi)
  same => n,Set(TELROI_START=\${EPOCH})
+ ; Outbound recording, only when the presenting number has record_outbound on.
+ ; MixMonitor writes <uniqueid>.wav to the monitor dir; logOutbound collects it
+ ; on hangup and uploads with direction=out. The notice plays first as evidence.
+ same => n,Set(RECOUT=\${ODBC_RECORD_OUTBOUND_FOR(\${CHANNEL(endpoint)},${c.name})})
+ same => n,ExecIf($["\${RECOUT}"="1"]?Playback(telroi-recording-notice))
+ same => n,ExecIf($["\${RECOUT}"="1"]?MixMonitor(\${UNIQUEID}.wav))
 ${c.callerIdFormat === 'national'
   ? ` ; ${c.displayName || c.name} wants the dialled number national too: DEST is\n`
     + ` ; normalised to 234XXXXXXXXXX above; strip 234, prefix 0, for the trunk.\n`
