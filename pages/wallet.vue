@@ -413,6 +413,14 @@ function part(m: number) { return money.parts(m, wallet.value.currency); }
 function fmtDate(iso: string) { return new Date(iso).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: '2-digit' }); }
 function fmtDateTime(iso: string) { return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); }
 function describe(reason: string) {
+  const r = String(reason || '');
+  // Prefixed reasons (admin_debit:VAT..., admin_credit:refund...) need matching
+  // before the exact-key map, or they fall through to the raw text.
+  const low = r.toLowerCase();
+  if (low.includes('vat')) return 'VAT';
+  if (low.includes('refund')) return 'Refund';
+  if (low.startsWith('admin_credit')) return 'Credit from Telroi';
+  if (low.startsWith('admin_debit')) return 'Adjustment';
   return ({
     topup: 'Wallet top-up', voice_minute: 'Voice airtime', plan_fee: 'Plan fee',
     auto_topup: 'Automatic top-up',
@@ -420,7 +428,7 @@ function describe(reason: string) {
     number_monthly: 'Number rental', number_purchase: 'Number purchase',
     ai_managed: 'AI on calls', transcription: 'Transcript', voice_otp: 'Verification call',
     manual_topup: 'Credit from Telroi', sandbox_topup: 'Test funds'
-  } as any)[reason] || reason.replace(/_/g, ' ');
+  } as any)[r] || r.replace(/_/g, ' ');
 }
 
 
