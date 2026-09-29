@@ -447,6 +447,17 @@ export async function ownCallerId(tenantId: string, provider: string, requested?
   }
   if (!useOwn) return null;
 
+  // Rotation, if enabled: the same atomic LRU pick the dialplan uses, sharing
+  // one function and one last_used_at state so a call via API/SIP/notify all
+  // advance the same rotation and never cluster on one number. A requested
+  // number still wins (below) — rotation is the default pick, not an override.
+  if (!requested) {
+    const { sql } = await import('drizzle-orm');
+    const rot = await db.execute(sql`select next_rotating_caller_id(${tenantId}::uuid, ${provider}) as num`);
+    const num = (rot as any)?.rows?.[0]?.num || (rot as any)?.[0]?.num;
+    if (num) return num;   // rotation active — a number was claimed and stamped
+  }
+
   const rows = await db.select({ telnum: schema.numberSubscriptions.telnum })
     .from(schema.numberSubscriptions)
     .where(and(
