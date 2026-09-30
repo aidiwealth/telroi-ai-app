@@ -448,14 +448,25 @@ export async function ownCallerId(tenantId: string, provider: string, requested?
   if (!useOwn) return null;
 
   // Rotation, if enabled: the same atomic LRU pick the dialplan uses, sharing
-  // one function and one last_used_at state so a call via API/SIP/notify all
-  // advance the same rotation and never cluster on one number. A requested
-  // number still wins (below) — rotation is the default pick, not an override.
-  if (!requested) {
+  // one function and one last_used_at state so a call never clusters on one
+  // number. Rotation wins even over a requested number when that request points
+  // at a number in the rotating pool — a client who turned rotation on to spread
+  // volume (and avoid a carrier/NCC block on one line) should not have it
+  // defeated by a preference or an API `from` naming one pool number. An explicit
+  // request for a number OUTSIDE the pool is still honoured below as an override.
+  {
     const { sql } = await import('drizzle-orm');
-    const rot = await db.execute(sql`select next_rotating_caller_id(${tenantId}::uuid, ${provider}) as num`);
-    const num = (rot as any)?.rows?.[0]?.num || (rot as any)?.[0]?.num;
-    if (num) return num;   // rotation active — a number was claimed and stamped
+    const digits = (requested || '').replace(/[^0-9]/g, '').slice(-9);
+    let requestedInPool = false;
+    if (digits) {
+      const pool = await db.execute(sql`select 1 from number_subscriptions where tenant_id=${tenantId}::uuid and provider=${provider} and status='active' and rotation_enabled=true and right(regexp_replace(telnum,'[^0-9]','','g'),9)=${digits} limit 1`);
+      requestedInPool = !!((pool as any)?.rows?.length || (pool as any)?.length);
+    }
+    if (!requested || requestedInPool) {
+      const rot = await db.execute(sql`select next_rotating_caller_id(${tenantId}::uuid, ${provider}) as num`);
+      const num = (rot as any)?.rows?.[0]?.num || (rot as any)?.[0]?.num;
+      if (num) return num;
+    }
   }
 
   const rows = await db.select({ telnum: schema.numberSubscriptions.telnum })
