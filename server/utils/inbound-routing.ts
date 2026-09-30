@@ -77,6 +77,9 @@ export async function resolveInboundRoute(tenantId: string, telnum: string): Pro
     .where(and(eq(schema.numberSubscriptions.tenantId, tenantId), eq(schema.numberSubscriptions.telnum, telnum))).limit(1);
   if (!sub) return { type: 'none', telnum, provider: 'telroi' };
   const provider = sub.provider;
+  // Outbound-only line (e.g. voice OTP): the client turned inbound off, so an
+  // incoming call is refused rather than routed.
+  if ((sub as any).inboundEnabled === false) return { type: 'none', telnum, provider };
   if (sub.routeType === 'ai') {
     // A ceiling on what AI can spend in a day. A client cannot choose who rings
     // their number, and an agent that listens, reasons and speaks for a

@@ -131,6 +131,27 @@
             <button class="modal-x" @click="editing = null">✕</button>
           </div>
           <h2 class="drawer-num mono">{{ editing.telnum }}</h2>
+
+          <!-- Outbound-only: a line used only to place calls (e.g. voice OTP)
+               can refuse incoming ones. When off, incoming calls are rejected
+               before ringing and the routing choices below do not apply. -->
+          <label class="num-rec">
+            <input type="checkbox" v-model="editing.inboundEnabled" />
+            <span>
+              <strong>Accept incoming calls on this number</strong>
+              <span class="num-rec-note">Turn off for an outbound-only line, such as a voice-OTP number. Incoming calls are then refused before ringing.</span>
+            </span>
+          </label>
+
+          <label class="num-rec">
+            <input type="checkbox" v-model="editing.recordOutbound" />
+            <span>
+              <strong>Record calls made from this number</strong>
+              <span class="num-rec-note">The person you call hears a notice when they answer, before you are connected — they did not choose a recorded line, so they are told.</span>
+            </span>
+          </label>
+
+          <template v-if="editing.inboundEnabled">
           <div class="field">
             <label>Route incoming calls to</label>
             <select v-model="editing.routeType" class="select">
@@ -147,14 +168,6 @@
           <!-- Separate from inbound, because the obligations differ: somebody
                who rings you chose a recorded line, somebody you ring did not.
                They are told when they answer, before the conversation. -->
-          <label class="num-rec">
-            <input type="checkbox" v-model="editing.recordOutbound" />
-            <span>
-              <strong>Record calls made from this number</strong>
-              <span class="num-rec-note">The person you call hears a notice when they answer, before you are connected — they did not choose a recorded line, so they are told.</span>
-            </span>
-          </label>
-
           <label class="num-rec">
             <input type="checkbox" v-model="editing.recordCalls" />
             <span>
@@ -202,6 +215,7 @@
               <label>Escalate after (seconds, 0 = on intent)</label>
               <input v-model.number="editing.escalateAfter" type="number" min="0" max="600" class="input mono" />
             </div>
+          </template>
           </template>
 
           <button class="btn btn-signal btn-block" :disabled="savingRoute" @click="save">{{ savingRoute ? 'Saving…' : 'Save routing' }}</button>
@@ -651,6 +665,7 @@ function edit(n: TelroiNumber) {
     routeType: sub.routeType || 'person',
     recordCalls: !!sub.recordCalls,
     recordOutbound: !!sub.recordOutbound,
+    inboundEnabled: sub.inboundEnabled !== false,
     target: sub.routeTarget || '',
     departmentId: sub.departmentId || '',
     agentId: sub.routeAgentId || '',
@@ -671,7 +686,8 @@ async function save() {
       escalateTo: editing.value.escalateTo || undefined,
       escalateAfter: editing.value.escalateAfter || 0,
       recordCalls: !!editing.value.recordCalls,
-      recordOutbound: !!editing.value.recordOutbound
+      recordOutbound: !!editing.value.recordOutbound,
+      inboundEnabled: editing.value.inboundEnabled !== false
     });
     toast.ok('Routing saved');
     editing.value = null;

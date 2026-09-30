@@ -20,7 +20,8 @@ const Body = z.object({
   escalateTo: z.string().optional(),
   escalateAfter: z.number().int().min(0).max(600).optional(),
   recordCalls: z.boolean().optional(),
-  recordOutbound: z.boolean().optional()
+  recordOutbound: z.boolean().optional(),
+  inboundEnabled: z.boolean().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -56,7 +57,8 @@ export default defineEventHandler(async (event) => {
     routeEscalateTo: (d.routeType === 'ai' && d.escalateTo && d.escalateTo !== '__all') ? d.escalateTo : null,
     routeEscalateAfter: d.routeType === 'ai' ? (d.escalateAfter || 0) : 0,
     ...(d.recordCalls === undefined ? {} : { recordCalls: d.recordCalls }),
-    ...(d.recordOutbound === undefined ? {} : { recordOutbound: d.recordOutbound })
+    ...(d.recordOutbound === undefined ? {} : { recordOutbound: d.recordOutbound }),
+    ...(d.inboundEnabled === undefined ? {} : { inboundEnabled: d.inboundEnabled })
   }).where(eq(schema.numberSubscriptions.id, sub.id));
 
   // For AI routing, sync a VAN under the hood so the AI runtime + escalation use

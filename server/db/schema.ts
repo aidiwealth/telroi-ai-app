@@ -1431,6 +1431,10 @@ export const numberSubscriptions = pgTable('number_subscriptions', {
   // second party did not choose a recorded line, so they are told when they
   // answer and a client opts into that deliberately rather than inheriting it.
   recordOutbound: boolean('record_outbound').notNull().default(false),
+  // On by default. Turned off for outbound-only lines (e.g. a voice-OTP
+  // number): incoming calls to it are refused before ringing, rather than
+  // hitting a route.
+  inboundEnabled: boolean('inbound_enabled').notNull().default(true),
   // What the client declared this number is for, at purchase. Kept on the
   // number so an operator answering a carrier can see it without going through
   // the acceptance register.
