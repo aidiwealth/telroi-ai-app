@@ -281,6 +281,9 @@
         <p class="ad-none" style="margin-bottom:12px">Leave blank to use global rates. Values in dollars.</p>
         <div class="ad-adjust-row">
           <label class="ad-ovr"><span>Airtime/min</span><input v-model="priceOvr.voice" type="number" step="0.0001" class="ad-ctl mono" placeholder="global" /></label>
+          <label class="ad-ovr"><span>Voice OTP/call</span><input v-model="priceOvr.otp" type="number" step="0.0001" class="ad-ctl mono" placeholder="global" /></label>
+          <label class="ad-ovr"><span>Notification/unit</span><input v-model="priceOvr.notify" type="number" step="0.0001" class="ad-ctl mono" placeholder="global" /></label>
+          <label class="ad-ovr"><span>VAT %</span><input v-model="priceOvr.vat" type="number" step="0.01" class="ad-ctl mono" placeholder="7.5" /></label>
           <label class="ad-ovr"><span>DID/mo</span><input v-model="priceOvr.did" type="number" step="0.01" class="ad-ctl mono" placeholder="global" /></label>
           <label class="ad-ovr"><span>Channel/mo</span><input v-model="priceOvr.channel" type="number" step="0.01" class="ad-ctl mono" placeholder="global" /></label>
           <!-- Blank means the platform price, which is what "global" says. A
@@ -771,6 +774,7 @@ async function saveCountry() {
 const ovr = ref<Record<string, boolean>>({});
 const priceOvr = ref({
   voice: '' as any, did: '' as any, channel: '' as any,
+  otp: '' as any, notify: '' as any, vat: '' as any,
   // Declared here so they are '' rather than undefined. The save reads
   // `x === ''` to mean "no override", and undefined would fall through to
   // Number(undefined) — NaN, and a rejected save.
@@ -1180,6 +1184,9 @@ async function loadWallet() {
              : o.override.voiceMinuteUsdMinor != null ? (o.override.voiceMinuteUsdMinor / 100) : '',
         did: o.override.didMonthlyUsdMinor != null ? (o.override.didMonthlyUsdMinor / 100) : '',
         channel: o.override.channelMonthlyUsdMinor != null ? (o.override.channelMonthlyUsdMinor / 100) : '',
+        otp: o.override.voiceOtpUsdMicro != null ? (o.override.voiceOtpUsdMicro / 1000000) : '',
+        notify: o.override.voiceNotifyUnitUsdMicro != null ? (o.override.voiceNotifyUnitUsdMicro / 1000000) : '',
+        vat: o.override.vatRate != null ? (Number(o.override.vatRate) * 100) : '',
         // Loaded, not left blank: the save reads '' as "no override", so a form
         // that failed to show an existing rate would clear it the moment
         // anybody pressed save on something else.
@@ -1210,6 +1217,11 @@ async function saveOverride() {
   try {
     await $fetch(`/api/admin/pricing/${tid}`, { method: 'POST', body: {
       voiceMinuteUsdMicro: priceOvr.value.voice === '' ? null : Math.round(Number(priceOvr.value.voice) * 1000000),
+      // Per OTP call and per notification unit, in micro-USD like airtime.
+      voiceOtpUsdMicro: priceOvr.value.otp === '' ? null : Math.round(Number(priceOvr.value.otp) * 1000000),
+      voiceNotifyUnitUsdMicro: priceOvr.value.notify === '' ? null : Math.round(Number(priceOvr.value.notify) * 1000000),
+      // VAT entered as a percent (7.5), stored as a rate (0.075). Null = platform default.
+      vatRate: priceOvr.value.vat === '' ? null : (Number(priceOvr.value.vat) / 100),
       didMonthlyUsdMinor: priceOvr.value.did === '' ? null : Math.round(Number(priceOvr.value.did) * 100),
       channelMonthlyUsdMinor: priceOvr.value.channel === '' ? null : Math.round(Number(priceOvr.value.channel) * 100),
       // Blank means the platform price, not free — null is the absence of an

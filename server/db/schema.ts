@@ -1488,6 +1488,8 @@ export const pricingOverrides = pgTable('pricing_overrides', {
   voiceMinuteUsdMinor: integer('voice_minute_usd_minor'),          // legacy, unused for billing
   voiceMinuteUsdMicro: integer('voice_minute_usd_micro'),          // the one billing honours
   voiceOtpUsdMicro: integer('voice_otp_usd_micro'),               // per OTP call, not per minute
+  voiceNotifyUnitUsdMicro: integer('voice_notify_unit_usd_micro'),  // per notification unit
+  vatRate: numeric('vat_rate', { precision: 5, scale: 4 }),          // per-tenant VAT (e.g. 0.0750); null = platform default
   channelMonthlyUsdMinor: integer('channel_monthly_usd_minor'),
   didMonthlyUsdMinor: integer('did_monthly_usd_minor'),
   transcriptionMinuteUsdMicro: integer('transcription_minute_usd_micro'),

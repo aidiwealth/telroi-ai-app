@@ -54,6 +54,7 @@ export async function getPricing(tenantId?: string, region?: string) {
     // Per OTP call rather than per minute — the carriers bill a whole minute for
     // a fifteen-second call, so duration billing would lose money on every one.
     voiceOtpUsdMicro: ov.voiceOtpUsdMicro ?? base.voiceOtpUsdMicro,
+    voiceNotifyUnitUsdMicro: ov.voiceNotifyUnitUsdMicro ?? base.voiceNotifyUnitUsdMicro,
     channelMonthlyUsdMinor: ov.channelMonthlyUsdMinor ?? base.channelMonthlyUsdMinor,
     didMonthlyUsdMinor: ov.didMonthlyUsdMinor ?? base.didMonthlyUsdMinor
   };

@@ -181,10 +181,11 @@ export async function debit(args: DebitArgs) {
 export const VAT_RATE = 0.075;
 
 /** Inclusive VAT withheld from customer-funded NGN wallet credits. */
-export function walletCreditVatMinor(currency: string, reason: string, amountMinor: number): number {
+export function walletCreditVatMinor(currency: string, reason: string, amountMinor: number, rate: number = VAT_RATE): number {
   const customerTopup = reason === 'topup' || reason === 'manual_topup' || reason === 'auto_topup';
-  return currency === 'NGN' && customerTopup
-    ? Math.round(amountMinor - amountMinor / (1 + VAT_RATE))
+  const r = (typeof rate === 'number' && rate >= 0) ? rate : VAT_RATE;
+  return currency === 'NGN' && customerTopup && r > 0
+    ? Math.round(amountMinor - amountMinor / (1 + r))
     : 0;
 }
 
@@ -200,7 +201,14 @@ export async function creditInTransaction(
     if (!wallet) throw apiError('no_wallet', 'No wallet for this workspace', 404);
 
     // VAT is inclusive for real NGN top-ups. The wallet receives the net amount.
-    const vatMinor = walletCreditVatMinor(wallet.currency, reason, amountMinor);
+    // A per-client VAT rate overrides the platform default when set.
+    let vatRate = VAT_RATE;
+    try {
+      const [ov] = await tx.select({ r: schema.pricingOverrides.vatRate })
+        .from(schema.pricingOverrides).where(eq(schema.pricingOverrides.tenantId, tenantId)).limit(1);
+      if (ov?.r != null) vatRate = Number(ov.r);
+    } catch { /* no override row = platform rate */ }
+    const vatMinor = walletCreditVatMinor(wallet.currency, reason, amountMinor, vatRate);
     const netMinor = amountMinor - vatMinor;
 
     // Idempotency: a webhook retry with the same reference must not double-credit.
@@ -231,7 +239,7 @@ export async function creditInTransaction(
       // The gross and the tax recorded alongside the net, so a client querying
       // why ₦10,000 credited ₦9,302 can be shown the arithmetic rather than
       // told to trust it.
-      meta: { ...fxMeta, ...meta, ...(vatMinor ? { grossMinor: amountMinor, vatMinor, vatRate: VAT_RATE } : {}) },
+      meta: { ...fxMeta, ...meta, ...(vatMinor ? { grossMinor: amountMinor, vatMinor, vatRate } : {}) },
       // Callers marked simulated money in the meta and left the column false, so
       // the two disagreed and anything filtering on the column counted play money
       // as real. Set it here rather than trusting every caller to remember.
