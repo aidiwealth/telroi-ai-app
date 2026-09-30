@@ -206,9 +206,18 @@ exten => _X.,1,NoOp(Inbound from ${c.displayName || c.name} -> DID \${EXTEN} fro
  ; through and lets Stasis decide, exactly as before.
  same => n,Set(HELD=\${ODBC_DID_EXISTS(\${EXTEN})})
  same => n,GotoIf($["\${HELD}" = "0"]?notours)
+ ; Outbound-only line (e.g. voice OTP): the client turned inbound off. Tell the
+ ; caller rather than dropping silently.
+ same => n,Set(INOK=\${ODBC_INBOUND_ENABLED_FOR(\${EXTEN})})
+ same => n,GotoIf($["\${INOK}" = "0"]?noinbound)
  same => n,Stasis(telroi,\${EXTEN})
  same => n,Hangup()
  same => n(notours),NoOp(DID \${EXTEN} is not one of ours - dropping)
+ same => n,Hangup(1)
+ same => n(noinbound),NoOp(DID \${EXTEN} is outbound-only — telling caller)
+ same => n,Answer()
+ same => n,Wait(1)
+ same => n,Playback(telroi-no-inbound)
  same => n,Hangup(1)
 `;
 }
