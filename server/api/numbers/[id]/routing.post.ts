@@ -13,7 +13,7 @@ import { requireTenantManager, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 
 const Body = z.object({
-  routeType: z.enum(['person', 'department', 'ai']),
+  routeType: z.enum(['person', 'department', 'ai']).optional(),
   target: z.string().optional(),          // person: extension/user id
   departmentId: z.string().uuid().optional(),
   agentId: z.string().uuid().optional(),  // ai
@@ -36,10 +36,27 @@ export default defineEventHandler(async (event) => {
   if (!sub) throw apiError('not_found', 'Number not found', 404);
 
   const d = p.data;
-  // Validate per type.
-  if (d.routeType === 'person' && !d.target) throw apiError('invalid', 'Choose who to route to');
-  if (d.routeType === 'department' && !d.departmentId) throw apiError('invalid', 'Choose a department');
-  if (d.routeType === 'ai' && !d.agentId) throw apiError('invalid', 'Choose an AI agent');
+  const inboundOff = d.inboundEnabled === false;
+  // Route validation only matters when the number accepts inbound. An
+  // outbound-only line (e.g. voice OTP) has no incoming route to choose, so the
+  // save just records inboundEnabled=false and leaves routing as-is.
+  if (!inboundOff) {
+    if (!d.routeType) throw apiError('invalid', 'A route type is required');
+    if (d.routeType === 'person' && !d.target) throw apiError('invalid', 'Choose who to route to');
+    if (d.routeType === 'department' && !d.departmentId) throw apiError('invalid', 'Choose a department');
+    if (d.routeType === 'ai' && !d.agentId) throw apiError('invalid', 'Choose an AI agent');
+  }
+
+  // Persist. When inbound is off, only the inbound_enabled flag and the record
+  // flags change — the route fields are left as they are (nothing to route).
+  if (inboundOff) {
+    await db.update(schema.numberSubscriptions).set({
+      inboundEnabled: false,
+      ...(d.recordCalls === undefined ? {} : { recordCalls: d.recordCalls }),
+      ...(d.recordOutbound === undefined ? {} : { recordOutbound: d.recordOutbound })
+    }).where(eq(schema.numberSubscriptions.id, sub.id));
+    return { ok: true, inboundEnabled: false };
+  }
 
   // Persist unified routing on the subscription (single source of truth).
   await db.update(schema.numberSubscriptions).set({
