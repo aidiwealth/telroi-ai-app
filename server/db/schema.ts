@@ -317,6 +317,10 @@ export const tenants = pgTable('tenants', {
   // the one above: pinning would otherwise discard what the client chose, and
   // unpinning could not give it back.
   otpCallerPinned: text('otp_caller_pinned'),
+  // Per-tenant default for the "do not share this code" line on voice OTP.
+  // The API's security_notice param still overrides per call; this is the
+  // default when the API doesn't specify. Default true (the safe behaviour).
+  otpSecurityNotice: boolean('otp_security_notice').notNull().default(true),
   postpaid: boolean('postpaid').notNull().default(false),
   creditLimitMinor: bigint('credit_limit_minor', { mode: 'number' }),
   billingDay: integer('billing_day'),

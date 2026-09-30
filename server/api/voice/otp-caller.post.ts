@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { requireTenant, apiError } from '~/server/utils/api';
 import { useDb, schema } from '~/server/db';
 
-const Body = z.object({ telnum: z.string().min(3).nullable() });
+const Body = z.object({ telnum: z.string().min(3).nullable().optional(), securityNotice: z.boolean().optional() });
 
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
@@ -33,7 +33,11 @@ export default defineEventHandler(async (event) => {
     if (!owned) throw apiError('not_found', 'That number is not on your workspace.', 404);
   }
 
-  await db.update(schema.tenants).set({ otpCallerTelnum: p.data.telnum })
-    .where(eq(schema.tenants.id, s.tenantId));
-  return { ok: true, telnum: p.data.telnum };
+   const patch: any = {};
+  if (p.data.telnum !== undefined) patch.otpCallerTelnum = p.data.telnum;
+  if (p.data.securityNotice !== undefined) patch.otpSecurityNotice = p.data.securityNotice;
+  if (Object.keys(patch).length) {
+    await db.update(schema.tenants).set(patch).where(eq(schema.tenants.id, s.tenantId));
+  }
+  return { ok: true, ...patch };
 });

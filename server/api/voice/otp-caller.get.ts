@@ -21,8 +21,8 @@ export default defineEventHandler(async (event) => {
       eq(schema.numberSubscriptions.status, 'active')
     ));
 
-  const [t] = await db.select({ chosen: schema.tenants.otpCallerTelnum })
+  const [t] = await db.select({ chosen: schema.tenants.otpCallerTelnum, securityNotice: schema.tenants.otpSecurityNotice })
     .from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
 
-  return { numbers, chosen: t?.chosen || null };
+  return { numbers, chosen: t?.chosen || null, securityNotice: t?.securityNotice !== false };
 });

@@ -21,6 +21,13 @@
           </select>
         </div>
         <div class="field mb0">
+          <label class="lbl">
+            <input type="checkbox" v-model="securityNotice" @change="saveSecurityNotice" />
+            End OTP calls with "Please do not share this code"
+          </label>
+          <span class="muted" style="font-size:12px">On by default. It's what stops someone reading their code to a caller pretending to be their bank. Your API's security_notice still overrides this per call.</span>
+        </div>
+        <div class="field mb0">
           <label>Period</label>
           <select v-model="days" class="select" @change="onDaysChange">
             <option :value="1">Today</option>
@@ -90,11 +97,19 @@ const summary = reactive<any>({ total: 0, delivered: 0, verified: 0, failed: 0, 
 const currency = ref('NGN');
 const callerNumbers = ref<any[]>([]);
 const callerChoice = ref<string | null>(null);
+const securityNotice = ref(true);
 async function saveCaller() {
   try {
     await api.post('/api/voice/otp-caller', { telnum: callerChoice.value });
   } catch (e: any) {
     alert(e?.data?.error?.message || 'Could not save that choice.');
+  }
+}
+async function saveSecurityNotice() {
+  try {
+    await api.post('/api/voice/otp-caller', { securityNotice: securityNotice.value });
+  } catch (e: any) {
+    alert(e?.data?.error?.message || 'Could not save that setting.');
   }
 }
 
@@ -119,6 +134,7 @@ async function load() {
       const c = await api.get<any>('/api/voice/otp-caller');
       callerNumbers.value = c?.numbers || [];
       callerChoice.value = c?.chosen || null;
+      securityNotice.value = c?.securityNotice !== false;
     } catch { /* the list is a convenience; the page works without it */ }
   } catch { items.value = []; }
   finally { loading.value = false; }

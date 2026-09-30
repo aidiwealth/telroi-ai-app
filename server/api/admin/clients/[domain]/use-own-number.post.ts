@@ -26,7 +26,8 @@ import { useDb, schema } from '~/server/db';
 // operator has pinned it to one of them.
 const Body = z.object({
   enabled: z.boolean().optional(),
-  pinned: z.string().max(32).nullable().optional()
+  pinned: z.string().max(32).nullable().optional(),
+  securityNotice: z.boolean().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -46,6 +47,7 @@ export default defineEventHandler(async (event) => {
   const patch: any = {};
   if (p.data.enabled !== undefined) patch.useOwnNumber = p.data.enabled;
   if (p.data.pinned !== undefined) patch.otpCallerPinned = p.data.pinned || null;
+  if (p.data.securityNotice !== undefined) patch.otpSecurityNotice = p.data.securityNotice;
   if (!Object.keys(patch).length) return { ok: true, unchanged: true };
   await db.update(schema.tenants).set(patch).where(eq(schema.tenants.id, t.id));
   console.log(`[client] ${t.name} caller id changed (by ${admin.email}): ${JSON.stringify(patch)}`);

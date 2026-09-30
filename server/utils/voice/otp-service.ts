@@ -149,13 +149,23 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
   const ownCode = opts.ownCode?.trim();
   const code = ownCode || genCode(len);
   const expiresAt = new Date(Date.now() + p.ttlSeconds * 1000);
+
+  // The security notice: the API's security_notice wins when the caller set it;
+  // otherwise the tenant's dashboard default; otherwise on. Resolved once and
+  // used both on the stored row and the placed call.
+  let effNotice = opts.securityNotice;
+  if (effNotice === undefined) {
+    const [tt] = await db.select({ n: schema.tenants.otpSecurityNotice })
+      .from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+    effNotice = tt?.n ?? true;
+  }
   const [row] = await db.insert(schema.voiceOtps).values({
     tenantId, toNumber, codeHash: sha256(code), codeLength: ownCode ? ownCode.length : len,
     clientSupplied: !!ownCode,
     status: 'calling', maxAttempts: p.maxAttempts, expiresAt,
     // Stored, not just passed on: Telnyx speaks when it answers, long after
     // this request has returned, so the preference has to outlive it.
-    securityNotice: opts.securityNotice !== false
+    securityNotice: effNotice !== false
   }).returning({ id: schema.voiceOtps.id });
 
   // Stored against the row before dialling: a carrier that speaks the code over
@@ -167,7 +177,7 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
 
   const placed = sandboxed
     ? { ok: true as const, providerRef: `sbx_otp_${row.id}` }
-    : await placeOtpCall({ tenantId, toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec, securityNotice: opts.securityNotice, fromNumber: opts.fromNumber });
+    : await placeOtpCall({ tenantId, toNumber, code, otpId: row.id, language: opts.language, repeatCount: p.repeatCount, callTimeoutSec: p.callTimeoutSec, securityNotice: effNotice, fromNumber: opts.fromNumber });
   if (!placed.ok) {
     await db.update(schema.voiceOtps).set({ status: 'failed', reason: placed.reason }).where(eq(schema.voiceOtps.id, row.id));
     void import('../webhooks-out').then(({ emitWebhook }) => emitWebhook(tenantId, 'otp.failed', {

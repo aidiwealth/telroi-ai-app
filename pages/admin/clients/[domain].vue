@@ -331,6 +331,14 @@
           <button class="btn btn-signal btn-sm" :disabled="ownNumBusy" @click="savePinned">{{ ownNumBusy ? 'Saving…' : 'Save' }}</button>
         </div>
         <div class="ad-adjust-row" style="margin-top:12px">
+          <label class="ad-ovr"><span>OTP security notice</span>
+            <select v-model="otpNotice" class="ad-ctl" :disabled="ownNumBusy" @change="saveOtpNotice">
+              <option :value="true">On — "do not share this code"</option>
+              <option :value="false">Off</option>
+            </select>
+          </label>
+        </div>
+        <div class="ad-adjust-row" style="margin-top:12px">
           <label class="ad-ovr"><span>AI daily cap ($)</span>
             <input v-model="aiCapForm" type="number" step="0.01" min="0" class="ad-ctl mono" placeholder="platform default" />
           </label>
@@ -839,6 +847,18 @@ onMounted(async () => {
 });
 const pinnedNum = ref('');
 watch(() => data.value?.tenant?.otpCallerPinned, (v) => { pinnedNum.value = v || ''; }, { immediate: true });
+const otpNotice = ref(true);
+watch(() => data.value?.tenant?.otpSecurityNotice, (v) => { otpNotice.value = v !== false; }, { immediate: true });
+async function saveOtpNotice() {
+  ownNumBusy.value = true;
+  try {
+    await $fetch(`/api/admin/clients/${route.params.domain}/use-own-number`, {
+      method: 'POST', body: { securityNotice: otpNotice.value }
+    });
+    alert(otpNotice.value ? 'OTP calls will end with the "do not share" notice.' : 'OTP calls will not include the security notice.');
+  } catch (e: any) { alert(e?.data?.statusMessage || 'Failed'); }
+  finally { ownNumBusy.value = false; }
+}
 async function savePinned() {
   ownNumBusy.value = true;
   try {
