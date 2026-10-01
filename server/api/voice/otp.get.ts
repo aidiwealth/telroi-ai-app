@@ -59,12 +59,30 @@ export default defineEventHandler(async (event) => {
     clientSupplied: !!r.clientSupplied
   }));
 
+  // Summary over the WHOLE window, not the current page — building it from the
+  // 50-row page capped every figure at the page size (50 shown while thousands
+  // were sent). A grouped count over all matching rows, plus the ledger sum for
+  // what OTP actually cost in the period.
+  const byStatus = await db.select({ status: schema.voiceOtps.status, c: sql<number>`count(*)` })
+    .from(schema.voiceOtps)
+    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since)))
+    .groupBy(schema.voiceOtps.status);
+  const cnt = (pred: (st: string) => boolean) =>
+    byStatus.filter((r) => pred(String(r.status))).reduce((n, r) => n + Number(r.c), 0);
+  const [{ charged }] = await db.select({ charged: sql<number>`coalesce(sum(${schema.ledger.amountMinor}),0)` })
+    .from(schema.ledger)
+    .where(and(
+      eq(schema.ledger.tenantId, s.tenantId),
+      eq(schema.ledger.kind, 'debit'),
+      sql`${schema.ledger.reference} like 'otp_%'`,
+      gte(schema.ledger.createdAt, since)
+    ));
   const summary = {
-    total: items.length,
-    delivered: items.filter((i) => i.status === 'delivered' || i.status === 'verified').length,
-    verified: items.filter((i) => i.verified).length,
-    failed: items.filter((i) => i.status === 'failed').length,
-    chargedMinor: items.reduce((n, i) => n + (i.chargedMinor || 0), 0)
+    total: Number(total),
+    delivered: cnt((st) => st === 'delivered' || st === 'verified'),
+    verified: cnt((st) => st === 'verified'),
+    failed: cnt((st) => st === 'failed'),
+    chargedMinor: Number(charged) || 0
   };
 
   // The existing shape kept, with paging alongside it: wrapping in paged()
