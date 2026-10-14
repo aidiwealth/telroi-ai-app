@@ -1005,6 +1005,18 @@ export const apiKeys = pgTable('api_keys', {
   revokedAt: timestamp('revoked_at', { withTimezone: true })
 });
 
+// Short-lived map: a call's id -> the sub-account that placed it. Written when
+// an API call is originated (the sub-account id is known then) and read by
+// logOutbound when the PBX reports the finished call (a later, separate request
+// that otherwise has no idea which sub-account placed it). Rows are disposable;
+// a daily sweep removes old ones.
+export const callSubaccountMap = pgTable('call_subaccount_map', {
+  callid: text('callid').primaryKey(),
+  subAccountId: uuid('sub_account_id').notNull(),
+  tenantId: uuid('tenant_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 // ---------- Sub-accounts (Termii-style reseller hierarchy) ----------
 // A sub-account is a child of a tenant. The tenant (e.g. Termii) creates and
 // owns them; every sub-account's usage is billed to the tenant's single wallet.
@@ -1836,6 +1848,7 @@ export const adminCopilotConversations = pgTable('admin_copilot_conversations', 
 export const voiceNotifications = pgTable('voice_notifications', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull(),
+  subAccountId: uuid('sub_account_id'),  // sub-account attribution (nullable)
   toNumber: text('to_number').notNull(),
   body: text('body').notNull(),
   status: text('status').notNull().default('queued'),

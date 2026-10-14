@@ -3,6 +3,14 @@ import { z } from 'zod';
 import { requireApiKey, hasScope } from '~/server/utils/apikey-auth';
 import { apiError } from '~/server/utils/api';
 import { telroiFor } from '~/server/utils/tenant';
+import { useDb, schema } from '~/server/db';
+
+// Remember which sub-account placed this call so logOutbound can tag the
+// call_events row when the PBX reports the finished call later.
+async function tagCallSubAccount(ctx: { subAccountId: string | null; tenantId: string }, callid?: string) {
+  if (!ctx.subAccountId || !callid) return;
+  try { await useDb().insert(schema.callSubaccountMap).values({ callid, subAccountId: ctx.subAccountId, tenantId: ctx.tenantId }).onConflictDoNothing(); } catch { /* best-effort */ }
+}
 const Body = z.object({ phone: z.string().min(3), from: z.string().optional(), user: z.string().optional(), group: z.string().optional() });
 export default defineEventHandler(async (event) => {
   const ctx = await requireApiKey(event);
@@ -30,9 +38,11 @@ export default defineEventHandler(async (event) => {
   if (p.data.from) {
     const { placeCall } = await import('~/server/utils/call-router');
     const res = await placeCall({ tenantId: ctx.tenantId, fromTelnum: p.data.from, to: p.data.phone, user: p.data.user, group: p.data.group });
+    await tagCallSubAccount(ctx, (res as any)?.callid);
     return { object: 'call', livemode: true, ...res };
   }
   const client = await telroiFor(ctx.tenantId);
   const res = await client.makeCall({ phone: p.data.phone, user: p.data.user, group: p.data.group });
+  await tagCallSubAccount(ctx, (res as any)?.callid);
   return { object: 'call', livemode: true, ...res };
 });

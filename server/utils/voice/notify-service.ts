@@ -87,7 +87,8 @@ export async function sendVoiceNotification(
   tenantId: string,
   toNumber: string,
   body: string,
-  fromNumber?: string
+  fromNumber?: string,
+  subAccountId?: string | null
 ): Promise<NotifyResult> {
   const db = useDb();
 
@@ -147,7 +148,7 @@ export async function sendVoiceNotification(
   const sipEndpoint = ep?.u || '';
 
   const [row] = await db.insert(schema.voiceNotifications)
-    .values({ tenantId, toNumber, body: text, status: 'queued', ttsChars: text.length })
+    .values({ tenantId, subAccountId: subAccountId || null, toNumber, body: text, status: 'queued', ttsChars: text.length })
     .returning();
 
   // A sandbox workspace gets a plausible id and no call, so a trial can build

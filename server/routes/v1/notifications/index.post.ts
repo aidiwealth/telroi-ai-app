@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const { sendVoiceNotification } = await import('~/server/utils/voice/notify-service');
-  const r = await sendVoiceNotification(ctx.tenantId, p.data.to, p.data.message, p.data.from);
+  const r = await sendVoiceNotification(ctx.tenantId, p.data.to, p.data.message, p.data.from, ctx.subAccountId);
   if (!r.ok) {
     if (r.error === 'number_required') {
       throw apiError('number_required', 'Buy a phone number before sending voice notifications. Calls go out on your own number so your traffic is not affected by anybody else\'s.', 402);

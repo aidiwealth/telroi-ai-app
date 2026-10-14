@@ -55,6 +55,7 @@ export async function upsertCallEvent(input: CallEventInput) {
 
     const [row] = await db.insert(schema.callEvents).values({
       tenantId: input.tenantId, callid: input.callid, carrier: input.carrier || null,
+      subAccountId: (input as any).subAccountId || null,
       type: input.direction || 'in', direction: input.direction || 'in',
       // Canonical, so a call record and the contact it belongs to are the same
       // number. Our carrier presents inbound callers as 00 plus the national
