@@ -251,6 +251,7 @@ if (import.meta.client) loadSubs?.();
 const activeSub = useActiveSubAccount();
 const subAccounts = ref<any[]>([]);
 async function loadSubs() {
+  if (!auth.tenant?.subAccountsEnabled) { subAccounts.value = []; return; }
   try { const r = await $fetch<any>('/api/tenant/sub-accounts'); subAccounts.value = r.subAccounts || []; }
   catch { subAccounts.value = []; }
 }

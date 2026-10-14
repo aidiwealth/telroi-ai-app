@@ -27,7 +27,8 @@ import { useDb, schema } from '~/server/db';
 const Body = z.object({
   enabled: z.boolean().optional(),
   pinned: z.string().max(32).nullable().optional(),
-  securityNotice: z.boolean().optional()
+  securityNotice: z.boolean().optional(),
+  subAccountsEnabled: z.boolean().optional()
 });
 
 export default defineEventHandler(async (event) => {
@@ -48,6 +49,7 @@ export default defineEventHandler(async (event) => {
   if (p.data.enabled !== undefined) patch.useOwnNumber = p.data.enabled;
   if (p.data.pinned !== undefined) patch.otpCallerPinned = p.data.pinned || null;
   if (p.data.securityNotice !== undefined) patch.otpSecurityNotice = p.data.securityNotice;
+  if (p.data.subAccountsEnabled !== undefined) patch.subAccountsEnabled = p.data.subAccountsEnabled;
   if (!Object.keys(patch).length) return { ok: true, unchanged: true };
   await db.update(schema.tenants).set(patch).where(eq(schema.tenants.id, t.id));
   console.log(`[client] ${t.name} caller id changed (by ${admin.email}): ${JSON.stringify(patch)}`);

@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia';
 
 interface MeUser { id: string; email: string; role: string | null; }
-interface MeTenant { id: string; name: string; slug: string; timezone: string; country?: string | null; onboardingStep: number; provisioned: boolean; sandbox?: boolean; }
+interface MeTenant { id: string; name: string; slug: string; timezone: string; country?: string | null; onboardingStep: number; provisioned: boolean; sandbox?: boolean; subAccountsEnabled?: boolean; }
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({

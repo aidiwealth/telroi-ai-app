@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="page-head">
+    <div class="page-head sa-head">
       <div>
         <h1 class="page-title">Sub-accounts</h1>
         <p class="page-sub">Create and manage customer accounts under your workspace. Every sub-account’s usage is billed to your one wallet; each gets its own API key, and sees only its own data.</p>
@@ -72,7 +72,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useAuthStore } from '~/stores/auth';
 const api = useApi();
+const _auth = useAuthStore();
+if (import.meta.client && _auth.tenant && !_auth.tenant.subAccountsEnabled) navigateTo('/');
 const subs = ref<any[]>([]);
 const pending = ref(true);
 const showCreate = ref(false);
@@ -120,6 +123,9 @@ onMounted(load);
 </script>
 
 <style scoped>
+.sa-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+.sa-head .btn { flex: none; margin-top: 2px; }
+
 .keybox { background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 10px; }
 .keyval { display: block; word-break: break-all; font-size: 12px; margin-top: 4px; }
 </style>

@@ -321,6 +321,7 @@ export const tenants = pgTable('tenants', {
   // The API's security_notice param still overrides per call; this is the
   // default when the API doesn't specify. Default true (the safe behaviour).
   otpSecurityNotice: boolean('otp_security_notice').notNull().default(true),
+  subAccountsEnabled: boolean('sub_accounts_enabled').notNull().default(false),
   postpaid: boolean('postpaid').notNull().default(false),
   creditLimitMinor: bigint('credit_limit_minor', { mode: 'number' }),
   billingDay: integer('billing_day'),

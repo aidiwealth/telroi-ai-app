@@ -2,12 +2,13 @@
 import { and, eq, desc, ilike, or, sql, inArray, isNull, isNotNull } from 'drizzle-orm';
 import { useDb, schema } from '../db';
 
-export async function listContacts(tenantId: string, opts: { q?: string; status?: string; sources?: string[]; limit?: number; offset?: number; archived?: boolean } = {}) {
+export async function listContacts(tenantId: string, opts: { q?: string; status?: string; sources?: string[]; limit?: number; offset?: number; archived?: boolean; subAccountId?: string | null } = {}) {
   const db = useDb();
   const conds: any[] = [eq(schema.crmContacts.tenantId, tenantId)];
   // Deleted contacts never appear. Archived ones only when asked for, so the
   // board shows the people somebody is actually working with.
   conds.push(isNull(schema.crmContacts.deletedAt));
+  if (opts.subAccountId) conds.push(eq(schema.crmContacts.subAccountId, opts.subAccountId));
   conds.push(opts.archived ? isNotNull(schema.crmContacts.archivedAt) : isNull(schema.crmContacts.archivedAt));
   if (opts.status && opts.status !== 'all') conds.push(eq(schema.crmContacts.status, opts.status));
   if (opts.sources && opts.sources.length) conds.push(inArray(schema.crmContacts.source, opts.sources));

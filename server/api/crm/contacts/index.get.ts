@@ -19,6 +19,7 @@ export default defineEventHandler(async (event) => {
   // anything that wants it; the board simply asks for the lot.
   const p = pageParams(event, 200);
   const { items, total } = await listContacts(s.tenantId, {
+    subAccountId: (q.sub_account_id as string) || null,
     q: q.q as string,
     status: q.status as string,
     sources: q.sources ? String(q.sources).split(',') : undefined,

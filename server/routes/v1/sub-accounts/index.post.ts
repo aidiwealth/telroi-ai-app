@@ -14,6 +14,11 @@ export default defineEventHandler(async (event) => {
   const ctx = await requireApiKey(event);
   if (!hasScope(ctx, 'subaccounts:write')) throw apiError('forbidden', 'Key lacks subaccounts:write', 403);
   if (ctx.subAccountId) throw apiError('forbidden', 'A sub-account key cannot create sub-accounts', 403);
+  {
+    const { eq } = await import('drizzle-orm');
+    const [tt] = await useDb().select({ on: schema.tenants.subAccountsEnabled }).from(schema.tenants).where(eq(schema.tenants.id, ctx.tenantId)).limit(1);
+    if (!tt?.on) throw apiError('sub_accounts_disabled', 'Sub-accounts are not enabled for this workspace.', 403);
+  }
   const p = Body.safeParse(await readBody(event));
   if (!p.success) throw apiError('invalid', 'name is required');
   const db = useDb();

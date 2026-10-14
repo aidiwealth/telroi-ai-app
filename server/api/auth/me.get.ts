@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   if (s.tenantId) {
     try {
       const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, s.tenantId)).limit(1);
-      if (t) tenant = { id: t.id, name: t.name, slug: t.slug, timezone: t.timezone, country: t.country, onboardingStep: t.onboardingStep, provisioned: !!t.telroiApiKeyEnc, sandbox: t.sandboxMode };
+      if (t) tenant = { id: t.id, name: t.name, slug: t.slug, timezone: t.timezone, country: t.country, onboardingStep: t.onboardingStep, provisioned: !!t.telroiApiKeyEnc, sandbox: t.sandboxMode, subAccountsEnabled: !!t.subAccountsEnabled };
     } catch (e) {
       console.error('[me] tenant lookup failed:', (e as Error)?.message);
     }

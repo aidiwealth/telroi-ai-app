@@ -14,6 +14,26 @@ export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   const q = getQuery(event);
   const client = await telroiFor(s.tenantId);
+  // Sub-account view: the PBX has no sub-account concept, so for a scoped view we
+  // return ONLY the call_events rows tagged to that sub-account (mapped to the
+  // shape the UI expects). Parent/no-selection keeps the full PBX history below.
+  const _saId = (q.sub_account_id as string) || null;
+  if (_saId) {
+    const { and, eq, gte, desc } = await import('drizzle-orm');
+    const db2 = useDb();
+    const days = q.period === 'day' ? 1 : q.period === 'week' ? 7 : q.period === 'quarter' ? 90 : 30;
+    const since2 = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const rows2 = await db2.select().from(schema.callEvents)
+      .where(and(eq(schema.callEvents.tenantId, s.tenantId), eq(schema.callEvents.subAccountId, _saId), gte(schema.callEvents.startedAt, since2)))
+      .orderBy(desc(schema.callEvents.startedAt)).limit(Number(q.limit) || 500);
+    const data = rows2.map((r: any) => ({
+      uid: r.callid, type: r.direction === 'out' ? 'out' : 'in', direction: r.direction,
+      phone: r.phone, number: r.phone, status: r.status, duration: r.duration || 0,
+      wait: r.wait || 0, start: r.startedAt, user: r.user || null, carrier: r.carrier || null
+    }));
+    return { calls: data };
+  }
+
 
   // Resolve agent sip-usernames to the person's display name so the Agent
   // column shows a name rather than "tnt_ab12cd34". `user` holds the SIP

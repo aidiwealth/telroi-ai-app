@@ -274,6 +274,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 const props = withDefaults(defineProps<{ apiBase?: string; admin?: boolean }>(), { apiBase: '/api/crm', admin: false });
 const api = useApi();
+const _activeSub = useActiveSubAccount();
 const toast = useToast();
 
 const { has, load: loadPlan } = usePlan();
@@ -380,7 +381,7 @@ async function load() {
   pending.value = true;
   try {
     const sources = bucket.value === 'all' ? undefined : (BUCKET_SOURCES[bucket.value] || []).join(',');
-    const r = await api.get<{ contacts: any[] }>(`${props.apiBase}/contacts`, { q: q.value || undefined, status: status.value, sources, archived: showArchived.value ? '1' : undefined });
+    const r = await api.get<{ contacts: any[] }>(`${props.apiBase}/contacts`, _activeSub.scope({ q: q.value || undefined, status: status.value, sources, archived: showArchived.value ? '1' : undefined }));
     contacts.value = r.contacts;
   } catch (e: any) { if (e?.data?.error?.code !== 'feature_locked') toast.err(e?.data?.error?.message || 'Could not load'); }
   finally { pending.value = false; }

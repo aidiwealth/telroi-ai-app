@@ -342,6 +342,14 @@
           </label>
         </div>
         <div class="ad-adjust-row" style="margin-top:12px">
+          <label class="ad-ovr"><span>Sub-accounts (reseller)</span>
+            <select v-model="subAccountsOn" class="ad-ctl" :disabled="ownNumBusy" @change="saveSubAccounts">
+              <option :value="false">Off</option>
+              <option :value="true">On — can create sub-accounts</option>
+            </select>
+          </label>
+        </div>
+        <div class="ad-adjust-row" style="margin-top:12px">
           <label class="ad-ovr"><span>AI daily cap ($)</span>
             <input v-model="aiCapForm" type="number" step="0.01" min="0" class="ad-ctl mono" placeholder="platform default" />
           </label>
@@ -852,6 +860,13 @@ onMounted(async () => {
 const pinnedNum = ref('');
 watch(() => data.value?.tenant?.otpCallerPinned, (v) => { pinnedNum.value = v || ''; }, { immediate: true });
 const otpNotice = ref(true);
+const subAccountsOn = ref(false);
+watch(() => data.value?.tenant?.subAccountsEnabled, (v) => { subAccountsOn.value = !!v; }, { immediate: true });
+async function saveSubAccounts() {
+  ownNumBusy.value = true;
+  try { await $fetch(`/api/admin/clients/${route.params.domain}/use-own-number`, { method: 'POST', body: { subAccountsEnabled: subAccountsOn.value } }); alert(subAccountsOn.value ? 'Sub-accounts enabled.' : 'Sub-accounts disabled.'); }
+  catch (e) { alert((e as any)?.data?.statusMessage || 'Failed'); } finally { ownNumBusy.value = false; }
+}
 watch(() => data.value?.tenant?.otpSecurityNotice, (v) => { otpNotice.value = v !== false; }, { immediate: true });
 async function saveOtpNotice() {
   ownNumBusy.value = true;

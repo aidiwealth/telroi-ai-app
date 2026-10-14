@@ -14,7 +14,7 @@
     </div>
 
     <nav class="sb-nav">
-      <template v-for="section in sections" :key="section.label">
+      <template v-for="section in visibleSections" :key="section.label">
         <!-- Standalone top-level link (no children) -->
         <NuxtLink
           v-if="!section.children"
@@ -124,7 +124,7 @@ const sections = [
       { label: 'Teams', to: '/teams' }
     ]
   },
-  { label: 'Sub-accounts', to: '/sub-accounts', icon: I.team },
+  { label: 'Sub-accounts', to: '/sub-accounts', icon: I.team, gate: 'subaccounts' },
   {
     label: 'Telroi One', icon: I.suite, tour: 'nav-crm', children: [
       { label: 'CRM', to: '/crm' },
@@ -134,6 +134,10 @@ const sections = [
   },
   { label: 'Settings', to: '/settings', icon: I.settings }
 ];
+
+const _auth = useAuthStore();
+const visibleSections = computed(() => sections.filter((sec) =>
+  (sec as any).gate === 'subaccounts' ? !!_auth.tenant?.subAccountsEnabled : true));
 
 // Open the section that contains the current route by default.
 function sectionMatches(section: any) {

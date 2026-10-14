@@ -80,6 +80,7 @@ export default defineEventHandler(async (event) => {
       // reads "their own number" and a save to the shared one looks undone.
       useOwnNumber: tenant.useOwnNumber,
       otpSecurityNotice: tenant.otpSecurityNotice,
+      subAccountsEnabled: tenant.subAccountsEnabled,
       // Or the pin field reads blank on a workspace that is pinned, and an
       // operator would set it twice.
       otpCallerPinned: tenant.otpCallerPinned,

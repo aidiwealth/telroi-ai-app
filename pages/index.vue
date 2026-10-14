@@ -249,7 +249,7 @@ onMounted(async () => {
   if (import.meta.client) window.addEventListener('telroi-env-change', onEnvChange);
   try {
     const [cRes, aRes] = await Promise.all([
-      api.get<{ calls: TelroiCall[] }>('/api/voice/calls', { period: 'today', limit: 200 }),
+      api.get<{ calls: TelroiCall[] }>('/api/voice/calls', _activeSub.scope({ period: 'today', limit: 200 })),
       api.get<{ items: TelroiUser[] }>('/api/voice/agents')
     ]);
     calls.value = cRes.calls || [];
@@ -267,7 +267,7 @@ onMounted(async () => {
 
   // 14-day call-volume trend from history.
   try {
-    const hist = await api.get<{ calls: TelroiCall[] }>('/api/voice/calls', { period: 'month', limit: 1000 });
+    const hist = await api.get<{ calls: TelroiCall[] }>('/api/voice/calls', _activeSub.scope({ period: 'month', limit: 1000 }));
     const buckets = new Map<string, number>();
     const today = new Date();
     for (let i = 13; i >= 0; i--) {

@@ -77,6 +77,7 @@ import type { TelroiCall } from '~/server/utils/telroi/client';
 
 useHead({ title: 'Calls — Telroi' });
 const api = useApi();
+const _activeSub = useActiveSubAccount();
 const toast = useToast();
 
 const pending = ref(true);
@@ -148,7 +149,7 @@ function fmtTime(iso: string) {
 async function reload() {
   pending.value = true;
   try {
-    const res = await api.get<{ calls: TelroiCall[] }>('/api/voice/calls', { period: filters.period, limit: 500 });
+    const res = await api.get('/api/voice/calls', _activeSub.scope({ period: filters.period, limit: 500 }));
     // Verification calls count towards the dashboard's volume but don't belong
     // here — a few million of them would bury the conversations this page is
     // for, and they have their own view under Voice.
