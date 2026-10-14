@@ -124,6 +124,7 @@ const sections = [
       { label: 'Teams', to: '/teams' }
     ]
   },
+  { label: 'Sub-accounts', to: '/sub-accounts', icon: I.team },
   {
     label: 'Telroi One', icon: I.suite, tour: 'nav-crm', children: [
       { label: 'CRM', to: '/crm' },
