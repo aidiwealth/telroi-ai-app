@@ -9,10 +9,11 @@ import { sha256 } from './crypto';
 import { apiError } from './api';
 
 export interface ApiKeyContext {
-  tenantId: string;
+  tenantId: string;              // always the PARENT tenant — billing + resources
   keyId: string;
   scopes: string[];
-  env: 'live' | 'sandbox';   // derived from the key prefix (tlr_live / tlr_test)
+  env: 'live' | 'sandbox';       // derived from the key prefix (tlr_live / tlr_test)
+  subAccountId: string | null;   // set when the key acts for a sub-account
 }
 
 export async function requireApiKey(event: H3Event): Promise<ApiKeyContext> {
@@ -42,7 +43,22 @@ export async function requireApiKey(event: H3Event): Promise<ApiKeyContext> {
   // Environment is determined by the key itself: tlr_test_ = sandbox, tlr_live_ = live.
   const env: 'live' | 'sandbox' = key.prefix === 'tlr_test' || raw.startsWith('tlr_test') ? 'sandbox' : 'live';
 
-  const ctx: ApiKeyContext = { tenantId: key.tenantId, keyId: key.id, scopes: (key.scopes as string[]) || ['*'], env };
+  // A sub-account key acts under its parent tenant. Reject it if the sub-account
+  // has been suspended — the parent can cut one off without revoking the key.
+  const subAccountId = (key as any).subAccountId || null;
+  if (subAccountId) {
+    try {
+      const [sa] = await useDb().select({ status: schema.subAccounts.status, parent: schema.subAccounts.parentTenantId })
+        .from(schema.subAccounts).where(eq(schema.subAccounts.id, subAccountId)).limit(1);
+      if (!sa || sa.parent !== key.tenantId) throw apiError('unauthorized', 'Invalid or revoked API key', 401);
+      if (sa.status !== 'active') throw apiError('sub_account_suspended', 'This sub-account is suspended', 403);
+    } catch (e: any) {
+      if (e?.statusCode) throw e;
+      throw apiError('service_unavailable', 'Key verification temporarily unavailable', 503);
+    }
+  }
+
+  const ctx: ApiKeyContext = { tenantId: key.tenantId, keyId: key.id, scopes: (key.scopes as string[]) || ['*'], env, subAccountId };
 
   // Per-key request rate limit — protects the platform (and the customer's own
   // wallet) from runaway loops or a leaked key hammering costly endpoints.

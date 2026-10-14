@@ -83,7 +83,7 @@ async function checkRate(tenantId: string, toNumber: string, p: OtpPolicy): Prom
 }
 
 // Send a voice OTP: generate, rate-check, place the call, persist (hashed).
-export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string; ownCode?: string; securityNotice?: boolean; fromNumber?: string } = {}): Promise<SendResult> {
+export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { codeLength?: number; language?: string; ownCode?: string; securityNotice?: boolean; fromNumber?: string; subAccountId?: string | null } = {}): Promise<SendResult> {
   const p = await otpPolicy(tenantId);
   const db = useDb();
 
@@ -160,7 +160,7 @@ export async function sendVoiceOtp(tenantId: string, toNumber: string, opts: { c
     effNotice = tt?.n ?? true;
   }
   const [row] = await db.insert(schema.voiceOtps).values({
-    tenantId, toNumber, codeHash: sha256(code), codeLength: ownCode ? ownCode.length : len,
+    tenantId, subAccountId: opts.subAccountId || null, toNumber, codeHash: sha256(code), codeLength: ownCode ? ownCode.length : len,
     clientSupplied: !!ownCode,
     status: 'calling', maxAttempts: p.maxAttempts, expiresAt,
     // Stored, not just passed on: Telnyx speaks when it answers, long after
