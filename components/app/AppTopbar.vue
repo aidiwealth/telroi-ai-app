@@ -8,7 +8,7 @@
     <div class="tb-ws" v-if="auth.tenant" @click="wsOpen = !wsOpen" v-click-outside="() => wsOpen = false">
       <div class="tb-ws-dot" />
       <div class="tb-ws-text">
-        <span class="tb-ws-name">{{ auth.tenant.name }}<template v-if="activeSub.name.value"> › {{ activeSub.name.value }}</template></span>
+        <span class="tb-ws-name">{{ auth.tenant.name }}<template v-if="activeSub.name.value"> › {{ activeSub.name.value }} <span class="tb-ws-report">reporting only</span></template></span>
       </div>
       <svg class="tb-ws-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       <Transition name="pop">
@@ -524,6 +524,8 @@ const vClickOutside = {
 </script>
 
 <style scoped>
+.tb-ws-report { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #1a4b72; background: rgba(26,75,114,.10); padding: 1px 6px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+
 .cmp-steps { display: flex; gap: 6px; margin-bottom: 18px; }
 .cmp-step { flex: 1; font-size: 11.5px; text-align: center; padding: 6px 4px; border-radius: 999px; background: var(--paper-2); color: var(--ink-soft); }
 .cmp-step.on { background: var(--signal-soft); color: var(--signal2); font-weight: 500; }

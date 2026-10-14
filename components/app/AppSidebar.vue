@@ -136,8 +136,14 @@ const sections = [
 ];
 
 const _auth = useAuthStore();
-const visibleSections = computed(() => sections.filter((sec) =>
-  (sec as any).gate === 'subaccounts' ? !!_auth.tenant?.subAccountsEnabled : true));
+const _activeSub = useActiveSubAccount();
+const visibleSections = computed(() => sections.filter((sec) => {
+  const i = sec as any;
+  if (i.gate === 'subaccounts' && !_auth.tenant?.subAccountsEnabled) return false;
+  // Reporting lens: while a sub-account is active, only the per-customer pages show.
+  if (_activeSub.id.value) return !!i.to && isSubaccountAllowed(i.to);
+  return true;
+}));
 
 // Open the section that contains the current route by default.
 function sectionMatches(section: any) {
