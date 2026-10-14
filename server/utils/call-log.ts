@@ -53,6 +53,22 @@ export async function upsertCallEvent(input: CallEventInput) {
     maybeEmitCompleted(input, '', input.status);
     maybeChargeCall(input, '', input.status);
 
+    // call_subaccount_map lookup: an API call placed by a sub-account left its
+    // id here at origination. This is the one place every call_events row is
+    // born, so tagging here catches the outbound row the PBX reports back. The
+    // entry is consumed (deleted) once used. Inbound has no entry and stays null.
+    if (!(input as any).subAccountId && input.callid) {
+      try {
+        const [m] = await db.select({ sa: schema.callSubaccountMap.subAccountId })
+          .from(schema.callSubaccountMap)
+          .where(eq(schema.callSubaccountMap.callid, input.callid)).limit(1);
+        if (m?.sa) {
+          (input as any).subAccountId = m.sa;
+          await db.delete(schema.callSubaccountMap).where(eq(schema.callSubaccountMap.callid, input.callid));
+        }
+      } catch { /* best-effort attribution — never block call logging */ }
+    }
+
     const [row] = await db.insert(schema.callEvents).values({
       tenantId: input.tenantId, callid: input.callid, carrier: input.carrier || null,
       subAccountId: (input as any).subAccountId || null,
