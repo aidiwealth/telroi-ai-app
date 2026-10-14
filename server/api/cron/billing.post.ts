@@ -25,8 +25,8 @@ export default defineEventHandler(async (event) => {
   // already succeeded, and the next run picks up whatever was missed.
   let invoicing: any = null;
   try {
-    const { runInvoicing } = await import('~/server/utils/invoicing');
-    invoicing = await runInvoicing();
+    const { runInvoiceSync } = await import('~/server/utils/invoicing');
+    invoicing = await runInvoiceSync();
   } catch (e: any) {
     console.error('[cron] invoicing failed:', e?.message);
     invoicing = { error: e?.message };

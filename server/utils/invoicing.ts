@@ -12,7 +12,7 @@ export interface InvoiceRunResult {
   considered: number;
   issued: number;
   skipped: number;
-  details: Array<{ tenant: string; outcome: 'issued' | 'nothing-owed' | 'already-issued'; amountMinor?: number; number?: string }>;
+  details: Array<{ tenant: string; outcome: 'issued' | 'updated' | 'nothing-owed' | 'already-issued'; amountMinor?: number; number?: string }>;
 }
 
 function invoiceNumber(seq: number, when: Date): string {
@@ -187,4 +187,111 @@ export async function runDunning(now = new Date()): Promise<DunningResult> {
   }
 
   return out;
+}
+
+
+/* ────────────────────────────────────────────────────────────────────────────
+   LIVE postpaid invoicing.
+
+   The negative wallet balance is the debt (see wallet.ts canSpend). These keep a
+   single OPEN invoice that always states that debt, rather than cutting one only
+   on the monthly billing day. Payment is handled elsewhere: credit() marks open
+   invoices paid the moment the wallet returns to >= 0, after which the next usage
+   opens a fresh invoice here.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export interface SyncResult {
+  outcome: 'issued' | 'updated' | 'nothing-owed';
+  amountMinor?: number;
+  number?: string;
+  id?: string;
+}
+
+/** Bring a single postpaid tenant's open invoice in line with what they owe. */
+export async function syncOpenInvoice(tenantId: string, now: Date = new Date()): Promise<SyncResult> {
+  const db = useDb();
+  const [t] = await db.select().from(schema.tenants).where(eq(schema.tenants.id, tenantId)).limit(1);
+  if (!t || !(t as any).postpaid) return { outcome: 'nothing-owed' };
+
+  const [w] = await db.select().from(schema.wallets).where(eq(schema.wallets.tenantId, tenantId)).limit(1);
+  const balance = w?.balanceMinor ?? 0;
+  const owed = Math.max(0, -balance);
+  const currency = w?.currency || 'NGN';
+
+  // At most one open invoice per tenant.
+  const [open] = await db.select().from(schema.invoices)
+    .where(and(eq(schema.invoices.tenantId, tenantId), eq(schema.invoices.status, 'open')))
+    .orderBy(desc(schema.invoices.createdAt)).limit(1);
+
+  if (owed <= 0) {
+    // Nothing owed. If an open invoice is still lying around while the wallet has
+    // recovered to >= 0, settle it — a safety net for any credit path that didn't
+    // run the settlement in wallet.credit().
+    if (open && balance >= 0) {
+      await db.update(schema.invoices)
+        .set({ status: 'paid', paidAt: now, paidVia: 'wallet' })
+        .where(eq(schema.invoices.id, open.id));
+    }
+    return { outcome: 'nothing-owed' };
+  }
+
+  // Debt exists → keep the running statement current.
+  if (open) {
+    if (open.amountMinor !== owed || (open.periodEnd as any) < now) {
+      await db.update(schema.invoices)
+        .set({ amountMinor: owed, periodEnd: now })
+        .where(eq(schema.invoices.id, open.id));
+    }
+    return { outcome: 'updated', amountMinor: owed, number: open.number, id: open.id };
+  }
+
+  // No open invoice → open a fresh one starting where the last invoice ended.
+  const [last] = await db.select().from(schema.invoices)
+    .where(eq(schema.invoices.tenantId, tenantId))
+    .orderBy(desc(schema.invoices.periodEnd)).limit(1);
+  const periodStart: Date = (last?.periodEnd as any) || (t as any).postpaidSince || (t as any).createdAt;
+
+  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(schema.invoices);
+  const number = invoiceNumber(Number(count) + 1, now);
+  const termsDays = (t as any).paymentTermsDays ?? 7;
+  const dueAt = new Date(now.getTime() + termsDays * 86400000);
+
+  const [created] = await db.insert(schema.invoices).values({
+    tenantId, number, periodStart, periodEnd: now, amountMinor: owed, currency, dueAt
+  }).returning();
+
+  // Email once, on issue only (never on the running updates above).
+  void notifyInvoice(t, { id: created?.id, number, amountMinor: owed, currency, dueAt, periodStart, periodEnd: now }, 'issued')
+    .catch((e) => console.error('[invoicing] issue email failed:', e?.message));
+
+  return { outcome: 'issued', amountMinor: owed, number, id: created?.id };
+}
+
+/** Keep every postpaid tenant's open invoice current. Replaces the monthly-only
+ *  runInvoicing as the cron entry point; runInvoicing stays available as a
+ *  fallback / for the CLI runner. */
+export async function runInvoiceSync(now: Date = new Date()): Promise<InvoiceRunResult> {
+  const db = useDb();
+  const result: InvoiceRunResult = { considered: 0, issued: 0, skipped: 0, details: [] };
+  const tenants = await db.select().from(schema.tenants).where(eq(schema.tenants.postpaid, true));
+  for (const t of tenants as any[]) {
+    result.considered++;
+    try {
+      const r = await syncOpenInvoice(t.id, now);
+      if (r.outcome === 'issued') {
+        result.issued++;
+        result.details.push({ tenant: t.name, outcome: 'issued', amountMinor: r.amountMinor, number: r.number });
+      } else if (r.outcome === 'updated') {
+        result.details.push({ tenant: t.name, outcome: 'updated', amountMinor: r.amountMinor, number: r.number });
+      } else {
+        result.skipped++;
+        result.details.push({ tenant: t.name, outcome: 'nothing-owed' });
+      }
+    } catch (e: any) {
+      result.skipped++;
+      result.details.push({ tenant: t.name, outcome: 'nothing-owed' });
+      console.error('[invoicing] syncOpenInvoice failed for', t.id, e?.message);
+    }
+  }
+  return result;
 }
