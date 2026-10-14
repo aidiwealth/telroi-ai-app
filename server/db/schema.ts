@@ -528,6 +528,7 @@ export const voiceProviders = pgTable('voice_providers', {
 export const callEvents = pgTable('call_events', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  subAccountId: uuid('sub_account_id'),  // sub-account attribution (nullable)
   callid: text('callid').notNull(),
   type: text('type'),         // event type or call type
   direction: text('direction'), // in | out
@@ -656,6 +657,7 @@ export const legalAcceptances = pgTable('legal_acceptances', {
 export const crmContacts = pgTable('crm_contacts', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  subAccountId: uuid('sub_account_id'),  // sub-account attribution (nullable)
   name: text('name'),
   company: text('company'),
   email: text('email'),
@@ -989,6 +991,10 @@ export const sipEndpoints = pgTable('sip_endpoints', {
 export const apiKeys = pgTable('api_keys', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  // When set, this key acts for a sub-account under the tenant. Usage is
+  // billed to the parent tenant's wallet and tagged with this id so the
+  // parent can see per-sub-account activity; the sub-account sees only its own.
+  subAccountId: uuid('sub_account_id'),
   name: text('name').notNull(),
   keyHash: text('key_hash').notNull(),
   prefix: text('prefix').notNull().default('tlr_live'), // tlr_live | tlr_test
@@ -998,6 +1004,22 @@ export const apiKeys = pgTable('api_keys', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   revokedAt: timestamp('revoked_at', { withTimezone: true })
 });
+
+// ---------- Sub-accounts (Termii-style reseller hierarchy) ----------
+// A sub-account is a child of a tenant. The tenant (e.g. Termii) creates and
+// owns them; every sub-account's usage is billed to the tenant's single wallet.
+// Resources (numbers, wallet) are shared from the parent; rows are TAGGED with
+// sub_account_id for reporting and per-sub-account visibility.
+export const subAccounts = pgTable('sub_accounts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  parentTenantId: uuid('parent_tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  reference: text('reference'),            // optional client-supplied external id
+  status: text('status').notNull().default('active'),  // active | suspended
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+}, (t) => ({
+  byParent: index('sub_accounts_parent_idx').on(t.parentTenantId, t.createdAt)
+}));
 
 /* ---------- Voice OTP service ----------
    A dedicated, OTP-ONLY voice service: Telroi places a call to the end-user and
@@ -1013,6 +1035,7 @@ export const voiceOtps = pgTable('voice_otps', {
   securityNotice: boolean('security_notice').notNull().default(true),
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  subAccountId: uuid('sub_account_id'),  // sub-account attribution (nullable)
   toNumber: text('to_number').notNull(),          // E.164 destination
   codeHash: text('code_hash').notNull(),
   // Held only between placing the call and speaking the code, then cleared. The

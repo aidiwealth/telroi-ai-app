@@ -190,14 +190,20 @@ const recent = computed(() => calls.value.slice(0, 10));
 const agentsOnline = computed(() => agents.value.filter((a) => a.status === 'online').length);
 const agentsTotal = computed(() => agents.value.length);
 
+// Real counts from the database (includes OTP, not capped by the history fetch).
+// Falls back to deriving from the loaded calls if the stats endpoint is slow.
+const statsData = ref<any>(null);
 const stats = computed(() => {
+  if (statsData.value) return statsData.value;
   const all = calls.value;
-  const inbound = all.filter((c) => c.type === 'in');
-  const outbound = all.filter((c) => c.type === 'out');
-  const missed = all.filter((c) => c.status === 'missed');
   const answered = all.filter((c) => c.duration > 0);
-  const avgWait = answered.length ? Math.round(answered.reduce((s, c) => s + (c.wait || 0), 0) / answered.length) : 0;
-  return { total: all.length, inbound: inbound.length, outbound: outbound.length, missed: missed.length, avgWait };
+  return {
+    total: all.length,
+    inbound: all.filter((c) => c.type === 'in').length,
+    outbound: all.filter((c) => c.type === 'out').length,
+    missed: all.filter((c) => c.status === 'missed').length,
+    avgWait: answered.length ? Math.round(answered.reduce((s, c) => s + (c.wait || 0), 0) / answered.length) : 0
+  };
 });
 const missedPct = computed(() => stats.value.inbound ? Math.round((stats.value.missed / stats.value.inbound) * 100) : 0);
 
@@ -247,6 +253,7 @@ onMounted(async () => {
     ]);
     calls.value = cRes.calls || [];
     agents.value = aRes.items || [];
+    api.get<any>('/api/voice/stats', { period: 'today' }).then((st) => { statsData.value = st; }).catch(() => {});
   } catch (e: any) {
     toast.err(e.message);
   } finally {
