@@ -237,10 +237,22 @@ export async function syncOpenInvoice(tenantId: string, now: Date = new Date()):
 
   // Debt exists → keep the running statement current.
   if (open) {
-    if (open.amountMinor !== owed || (open.periodEnd as any) < now) {
-      await db.update(schema.invoices)
-        .set({ amountMinor: owed, periodEnd: now })
-        .where(eq(schema.invoices.id, open.id));
+    const patch: Record<string, any> = {};
+    if (open.amountMinor !== owed) patch.amountMinor = owed;
+    if ((open.periodEnd as any) < now) patch.periodEnd = now;
+    // If the corrected figure GREW and the invoice is already past due, give
+    // fresh terms on the larger amount instead of leaving it retroactively
+    // overdue — otherwise the very next dunning run would suspend the client for
+    // a balance they were never invoiced for. Collections still works: a STABLE
+    // unpaid invoice (no new usage) keeps its due date and is suspended on
+    // schedule; only a growing balance rolls the date, and the credit limit
+    // stays the hard stop for active accounts.
+    if (owed > open.amountMinor && new Date(open.dueAt as any) < now) {
+      const termsDays = (t as any).paymentTermsDays ?? 7;
+      patch.dueAt = new Date(now.getTime() + termsDays * 86400000);
+    }
+    if (Object.keys(patch).length) {
+      await db.update(schema.invoices).set(patch).where(eq(schema.invoices.id, open.id));
     }
     return { outcome: 'updated', amountMinor: owed, number: open.number, id: open.id };
   }
