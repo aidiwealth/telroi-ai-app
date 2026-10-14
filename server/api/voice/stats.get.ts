@@ -9,6 +9,7 @@ import { useDb, schema } from '~/server/db';
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   const period = String(getQuery(event).period || 'today');
+  const saId = (getQuery(event).sub_account_id as string) || null;
   const since = period === 'month' ? new Date(Date.now() - 30 * 864e5)
     : period === 'week' ? new Date(Date.now() - 7 * 864e5)
     : new Date(new Date().setHours(0, 0, 0, 0)); // today
@@ -21,12 +22,12 @@ export default defineEventHandler(async (event) => {
     wait: schema.callEvents.wait,
     duration: schema.callEvents.duration
   }).from(schema.callEvents)
-    .where(and(eq(schema.callEvents.tenantId, s.tenantId), gte(schema.callEvents.createdAt, since)));
+    .where(and(eq(schema.callEvents.tenantId, s.tenantId), gte(schema.callEvents.createdAt, since), ...(saId ? [eq(schema.callEvents.subAccountId, saId)] : [])));
 
   // OTP calls (outbound voice) from voice_otps.
   const [{ otp }] = await db.select({ otp: sql<number>`count(*)` })
     .from(schema.voiceOtps)
-    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since)));
+    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since), ...(saId ? [eq(schema.voiceOtps.subAccountId, saId)] : [])));
 
   const inbound = ce.filter((c) => c.direction === 'in').length;
   const callOut = ce.filter((c) => c.direction === 'out').length;

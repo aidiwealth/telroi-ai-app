@@ -8,15 +8,22 @@
     <div class="tb-ws" v-if="auth.tenant" @click="wsOpen = !wsOpen" v-click-outside="() => wsOpen = false">
       <div class="tb-ws-dot" />
       <div class="tb-ws-text">
-        <span class="tb-ws-name">{{ auth.tenant.name }}</span>
+        <span class="tb-ws-name">{{ auth.tenant.name }}<template v-if="activeSub.name.value"> › {{ activeSub.name.value }}</template></span>
       </div>
       <svg class="tb-ws-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       <Transition name="pop">
         <div v-if="wsOpen" class="tb-ws-pop">
           <div class="tb-ws-pop-label">Workspace</div>
-          <div class="tb-ws-pop-item active">
+          <div class="tb-ws-pop-item" :class="{ active: !activeSub.id.value }" @click.stop="pickSub(null, null)">
             <div class="tb-ws-dot" /> {{ auth.tenant.name }}
           </div>
+          <template v-if="subAccounts.length">
+            <div class="tb-ws-pop-label">View as sub-account</div>
+            <div v-for="sa in subAccounts" :key="sa.id" class="tb-ws-pop-item"
+                 :class="{ active: activeSub.id.value === sa.id }" @click.stop="pickSub(sa.id, sa.name)">
+              <div class="tb-ws-dot" /> {{ sa.name }}
+            </div>
+          </template>
         </div>
       </Transition>
     </div>
@@ -240,6 +247,18 @@ function startTour() {
   startTourEngine(CLIENT_TOUR_ID, clientTour, (r) => router.push(r));
 }
 const wsOpen = ref(false);
+if (import.meta.client) loadSubs?.();
+const activeSub = useActiveSubAccount();
+const subAccounts = ref<any[]>([]);
+async function loadSubs() {
+  try { const r = await $fetch<any>('/api/tenant/sub-accounts'); subAccounts.value = r.subAccounts || []; }
+  catch { subAccounts.value = []; }
+}
+function pickSub(id: string | null, name: string | null) {
+  activeSub.set(id, name); wsOpen.value = false;
+  // Reload so every view re-fetches scoped to the selection.
+  if (import.meta.client) window.location.reload();
+}
 const dialerOpen = ref(false);
 const env = ref<'live' | 'sandbox'>('sandbox');
 const envBusy = ref(false);

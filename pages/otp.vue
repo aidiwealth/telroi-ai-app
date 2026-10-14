@@ -80,6 +80,7 @@
 import { ref, reactive, onMounted } from 'vue';
 useHead({ title: 'OTP verification calls — Telroi' });
 const api = useApi();
+const _activeSub = useActiveSubAccount();
 
 const days = ref(30);
 const page = ref(Number(useRoute().query.otp) || 1);
@@ -125,7 +126,7 @@ function when(v: string | null) {
 async function load() {
   loading.value = true;
   try {
-    const r = await api.get<any>('/api/voice/otp', { days: days.value, page: page.value });
+    const r = await api.get<any>('/api/voice/otp', _activeSub.scope({ days: days.value, page: page.value }));
     items.value = r.items || [];
     meta.value = { page: r.page || 1, pages: r.pages || 1, total: r.total || 0, perPage: r.perPage || 50 };
     Object.assign(summary, r.summary || {});

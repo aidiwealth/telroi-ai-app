@@ -193,6 +193,7 @@ const agentsTotal = computed(() => agents.value.length);
 // Real counts from the database (includes OTP, not capped by the history fetch).
 // Falls back to deriving from the loaded calls if the stats endpoint is slow.
 const statsData = ref<any>(null);
+const _activeSub = useActiveSubAccount();
 const stats = computed(() => {
   if (statsData.value) return statsData.value;
   const all = calls.value;
@@ -253,7 +254,7 @@ onMounted(async () => {
     ]);
     calls.value = cRes.calls || [];
     agents.value = aRes.items || [];
-    api.get<any>('/api/voice/stats', { period: 'today' }).then((st) => { statsData.value = st; }).catch(() => {});
+    api.get<any>('/api/voice/stats', _activeSub.scope({ period: 'today' })).then((st) => { statsData.value = st; }).catch(() => {});
   } catch (e: any) {
     toast.err(e.message);
   } finally {

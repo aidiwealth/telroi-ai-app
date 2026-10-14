@@ -12,6 +12,8 @@ import { useDb, schema } from '~/server/db';
 export default defineEventHandler(async (event) => {
   const s = await requireTenant(event);
   const q = getQuery(event);
+  const saId = (q.sub_account_id as string) || null;
+  const saCond = saId ? [eq(schema.voiceOtps.subAccountId, saId)] : [];
   const days = Math.max(1, Math.min(Number(q.days) || 30, 90));
   // limit is now pageParams business; q still carries the days window.
   const since = new Date(Date.now() - days * 24 * 3600 * 1000);
@@ -20,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const p = pageParams(event);
   const [{ total }] = await db.select({ total: sql<number>`count(*)` })
     .from(schema.voiceOtps)
-    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since)));
+    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since), ...saCond));
 
   const rows = await db.select({
     id: schema.voiceOtps.id,
@@ -35,7 +37,7 @@ export default defineEventHandler(async (event) => {
     expiresAt: schema.voiceOtps.expiresAt,
     reason: schema.voiceOtps.reason
   }).from(schema.voiceOtps)
-    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since)))
+    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since), ...saCond))
     .orderBy(desc(schema.voiceOtps.createdAt))
     .limit(p.limit).offset(p.offset);
 
@@ -65,7 +67,7 @@ export default defineEventHandler(async (event) => {
   // what OTP actually cost in the period.
   const byStatus = await db.select({ status: schema.voiceOtps.status, c: sql<number>`count(*)` })
     .from(schema.voiceOtps)
-    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since)))
+    .where(and(eq(schema.voiceOtps.tenantId, s.tenantId), gte(schema.voiceOtps.createdAt, since), ...saCond))
     .groupBy(schema.voiceOtps.status);
   const cnt = (pred: (st: string) => boolean) =>
     byStatus.filter((r) => pred(String(r.status))).reduce((n, r) => n + Number(r.c), 0);
